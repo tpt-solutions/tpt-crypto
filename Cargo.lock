@@ -831,6 +831,10 @@ version = "0.1.0"
 [[package]]
 name = "tpt-crypto-field"
 version = "0.1.0"
+dependencies = [
+ "proptest",
+ "tpt-crypto-ct",
+]
 
 [[package]]
 name = "tpt-crypto-hash"

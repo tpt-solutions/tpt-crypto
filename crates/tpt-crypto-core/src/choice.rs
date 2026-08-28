@@ -1,11 +1,12 @@
-//! A boolean that encodes `false` as `0x00` and `true` as `0xff`.
+//! A boolean whose internal representation is `0x00` for false and `0x01` for
+//! true.
 //!
-//! The all-ones/all-zeros encoding lets bitwise operators implement
-//! constant-time boolean logic without secret-dependent branches. The concrete
-//! comparison/selection algorithms are provided by `tpt-crypto-ct`; this module
-//! only provides the type and its boolean algebra.
+//! The encoding is self-consistent for branch-free arithmetic: `is_true` checks
+//! `self.0 == 0x01`, and `ct_select` turns `0x01` into a `0xff` mask via
+//! `wrapping_sub`. The concrete comparison/selection algorithms live in
+//! `tpt-crypto-ct`; this module only provides the type and its boolean algebra.
 
-/// A constant-time boolean: `0x00` for false, `0xff` for true.
+/// A constant-time boolean: `0x00` for false, `0x01` for true.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct Choice(pub(crate) u8);
 
@@ -13,13 +14,20 @@ impl Choice {
     /// The `false` choice.
     pub const FALSE: Choice = Choice(0x00);
     /// The `true` choice.
-    pub const TRUE: Choice = Choice(0xff);
+    pub const TRUE: Choice = Choice(0x01);
+
+    /// Build a [`Choice`] from the low bit of `v` (`1` ⇒ true, `0` ⇒ false).
+    #[inline]
+    #[must_use]
+    pub const fn from_u8_lsb(v: u8) -> Choice {
+        Choice(v & 1)
+    }
 
     /// Build a [`Choice`] from a `bool`.
     #[inline]
     #[must_use]
     pub const fn from_bool(b: bool) -> Choice {
-        Choice(if b { 0xff } else { 0x00 })
+        Choice(if b { 0x01 } else { 0x00 })
     }
 
     /// Build a [`Choice`] from the integer mask convention `0 == false`,
@@ -27,10 +35,9 @@ impl Choice {
     #[inline]
     #[must_use]
     pub const fn from_mask(mask: u8) -> Choice {
-        // (mask - 1) & !mask sets bit 7 iff mask == 0. Shift to 0x80/0x00 and
-        // negate to all-ones/all-zeros.
+        // (mask - 1) & !mask sets bit 7 iff mask == 0. Shift to select 0xff/0x00.
         let is_zero = ((mask.wrapping_sub(1)) & !mask) >> 7;
-        Choice((!is_zero).wrapping_add(1))
+        Choice(!is_zero)
     }
 
     /// Constant-time equality of two [`Choice`] values.
@@ -45,10 +52,10 @@ impl Choice {
     #[inline]
     #[must_use]
     pub const fn is_true(self) -> bool {
-        self.0 == 0xff
+        self.0 == 0x01
     }
 
-    /// Return the underlying byte (`0x00` or `0xff`).
+    /// Return the underlying byte (`0x00` for false, `0x01` for true).
     #[inline]
     #[must_use]
     pub const fn to_u8(self) -> u8 {

@@ -21,7 +21,7 @@ pub fn ct_lookup<T: Copy + CtSelect>(table: &[T], index: usize, default: T) -> T
     let mut out = default;
     for (i, item) in table.iter().enumerate() {
         let eq = ct_eq_usize(i, index);
-        out = T::ct_select(eq, out, *item);
+        out = T::ct_select(eq, *item, out);
     }
     out
 }
@@ -39,7 +39,7 @@ pub fn ct_lookup_limbs(table: &[crate::Limb], index: usize, width: usize, out: &
         for c in 0..width {
             let src = table.get(r * width + c).copied().unwrap_or(0);
             let cur = out.get(c).copied().unwrap_or(0);
-            out[c] = crate::Limb::ct_select(eq, cur, src);
+            out[c] = crate::Limb::ct_select(eq, src, cur);
         }
     }
 }

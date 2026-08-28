@@ -114,7 +114,10 @@ fn leakage_ct_select() {
         w.add(class, t);
     }
     let t = w.t();
-    println!("leakage_ct_select: Welch t = {t:.3} (threshold {:.1})", threshold());
+    println!(
+        "leakage_ct_select: Welch t = {t:.3} (threshold {:.1})",
+        threshold()
+    );
     assert!(
         t.abs() < threshold(),
         "ct_select shows timing dependence on cond (t = {t:.3})"
@@ -137,7 +140,10 @@ fn leakage_ct_eq() {
         w.add(class, t);
     }
     let t = w.t();
-    println!("leakage_ct_eq: Welch t = {t:.3} (threshold {:.1})", threshold());
+    println!(
+        "leakage_ct_eq: Welch t = {t:.3} (threshold {:.1})",
+        threshold()
+    );
     assert!(
         t.abs() < threshold(),
         "ct_eq shows timing dependence on equality (t = {t:.3})"
@@ -148,7 +154,9 @@ fn leakage_ct_eq() {
 fn leakage_ct_lookup() {
     let reps = 64u32;
     // A fixed window table; the index is secret.
-    let table: Vec<u64> = (0..16u64).map(|i| i.wrapping_mul(0x9e37_79b9_7f4a_7c15)).collect();
+    let table: Vec<u64> = (0..16u64)
+        .map(|i| i.wrapping_mul(0x9e37_79b9_7f4a_7c15))
+        .collect();
     let last = table.len() - 1;
     let mut w = Welch::new();
     for _ in 0..samples() {
@@ -162,7 +170,10 @@ fn leakage_ct_lookup() {
         w.add(class, t);
     }
     let t = w.t();
-    println!("leakage_ct_lookup: Welch t = {t:.3} (threshold {:.1})", threshold());
+    println!(
+        "leakage_ct_lookup: Welch t = {t:.3} (threshold {:.1})",
+        threshold()
+    );
     assert!(
         t.abs() < threshold(),
         "ct_lookup shows timing dependence on index (t = {t:.3})"
@@ -173,7 +184,7 @@ fn leakage_ct_lookup() {
 fn rand_u64() -> u64 {
     use std::cell::Cell;
     thread_local! {
-        static S: Cell<u64> = Cell::new(0x1234_5678_9abc_def1);
+        static S: Cell<u64> = const { Cell::new(0x1234_5678_9abc_def1) };
     }
     S.with(|s| {
         let mut x = s.get();

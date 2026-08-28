@@ -155,9 +155,6 @@ impl<T> CtOption<T> {
     #[inline]
     #[must_use]
     pub fn unwrap_or(self, default: T) -> T {
-        // If is_some == 1 keep value, else take default.
-        let mask = self.is_some.mask_u64();
-        // We cannot XOR arbitrary T; use a select on the whole value via a closure.
         self.unwrap_or_else(|| default)
     }
 

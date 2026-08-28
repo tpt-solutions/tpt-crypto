@@ -1,21 +1,21 @@
 //! Streaming traits shared by every hash in this crate.
 
-/// A fixed-output streaming hash.
+/// A fixed-output streaming hash parameterized by its output length `OUT`.
 ///
 /// Every implementation is constant-trace: [`Hasher::update`] and the
 /// `finalize` methods never branch or index on secret data.
-pub trait Hasher {
+pub trait Hasher<const OUT: usize> {
     /// The size of the fixed digest in bytes.
-    const OUTPUT_SIZE: usize;
+    const OUTPUT_SIZE: usize = OUT;
 
     /// Absorb `data` into the running hash.
     fn update(&mut self, data: &[u8]);
 
     /// Finalize and return the digest, leaving `self` in its initial state.
-    fn finalize_reset(&mut self) -> [u8; Self::OUTPUT_SIZE];
+    fn finalize_reset(&mut self) -> [u8; OUT];
 
     /// Finalize, consuming `self`, and return the digest.
-    fn finalize(self) -> [u8; Self::OUTPUT_SIZE]
+    fn finalize(self) -> [u8; OUT]
     where
         Self: Sized;
 

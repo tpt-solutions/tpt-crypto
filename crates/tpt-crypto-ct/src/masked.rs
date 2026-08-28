@@ -4,9 +4,10 @@
 //!
 //! - [`Masked<T>`] — **additive (XOR) sharing**: a secret `x` is stored as the
 //!   pair `(x ^ r, r)`. The raw secret is never materialized. Boolean
-//!   operations (`xor`/`and`/`or`) are evaluated share-wise; `and` refreshes
-//!   with a fresh random mask (an ISW-style refresh) so the output shares stay
+//!   operations (`xor`/`and`) are evaluated share-wise; `and` refreshes with a
+//!   fresh random mask (an ISW-style refresh) so the output shares stay
 //!   independent.
+//!
 //! - [`MaskedMul<T>`] — **multiplicative sharing**: `x` is stored as
 //!   `(x * r, r)`. Multiplying two such sharings multiplies both the values
 //!   and the blinding factors, so the product stays masked.
@@ -32,6 +33,28 @@ where
     }
 }
 
+/// Wrapping multiplication, needed for generic masked arithmetic where the
+/// underlying `Mul` would panic on overflow under `overflow-checks`.
+pub trait WrappingMul: Copy {
+    /// Multiply, wrapping on overflow (modulo the width of `Self`).
+    fn wmul(self, rhs: Self) -> Self;
+}
+
+macro_rules! impl_wrapping_mul {
+    ($($t:ty),*) => {
+        $(
+            impl WrappingMul for $t {
+                #[inline]
+                fn wmul(self, rhs: Self) -> Self {
+                    self.wrapping_mul(rhs)
+                }
+            }
+        )*
+    };
+}
+
+impl_wrapping_mul!(u8, u16, u32, u64, u128, usize);
+
 /// An additively (XOR) masked value of type `T`.
 ///
 /// Invariant: `unmask()` returns `hi ^ lo`. The value is never stored in the
@@ -42,7 +65,7 @@ pub struct Masked<T> {
     lo: T,
 }
 
-impl<T: Copy + core::ops::BitXor<Output = T> + core::ops::BitOr<Output = T>> Masked<T> {
+impl<T: Copy + core::ops::BitXor<Output = T>> Masked<T> {
     /// Mask `value` with a fresh random share produced by `rng`.
     #[inline]
     pub fn mask<R: Random<T>>(value: T, rng: &mut R) -> Self {
@@ -76,16 +99,6 @@ impl<T: Copy + core::ops::BitXor<Output = T> + core::ops::BitOr<Output = T>> Mas
         Masked {
             hi: self.hi ^ other.hi,
             lo: self.lo ^ other.lo,
-        }
-    }
-
-    /// Masked OR — share-wise OR.
-    #[inline]
-    #[must_use]
-    pub fn or (&self, other: &Self) -> Self {
-        Masked {
-            hi: self.hi | other.hi,
-            lo: self.lo | other.lo,
         }
     }
 
@@ -143,14 +156,14 @@ pub struct MaskedMul<T> {
     b: T,
 }
 
-impl<T: Copy + core::ops::Mul<Output = T>> MaskedMul<T> {
+impl<T: WrappingMul> MaskedMul<T> {
     /// Mask `value` under a caller-chosen blinding factor `blind`.
     ///
     /// `blind` must be a unit of the multiplicative monoid (odd for `u64`).
     #[inline]
     pub fn mask(value: T, blind: T) -> Self {
         MaskedMul {
-            m: value * blind,
+            m: value.wmul(blind),
             b: blind,
         }
     }
@@ -177,8 +190,8 @@ impl<T: Copy + core::ops::Mul<Output = T>> MaskedMul<T> {
     #[must_use]
     pub fn mul(&self, other: &Self) -> Self {
         MaskedMul {
-            m: self.m * other.m,
-            b: self.b * other.b,
+            m: self.m.wmul(other.m),
+            b: self.b.wmul(other.b),
         }
     }
 
@@ -186,8 +199,8 @@ impl<T: Copy + core::ops::Mul<Output = T>> MaskedMul<T> {
     /// value `x * (old_blind * nb)` is preserved.
     #[inline]
     pub fn remask(&mut self, nb: T) {
-        self.m = self.m * nb;
-        self.b = self.b * nb;
+        self.m = self.m.wmul(nb);
+        self.b = self.b.wmul(nb);
     }
 }
 
@@ -255,8 +268,6 @@ mod tests {
         let a = Masked::<u64>::mask(0b1100, &mut next);
         let b = Masked::<u64>::mask(0b1010, &mut next);
         assert_eq!(a.xor(&b).unmask(), 0b1100 ^ 0b1010);
-        assert_eq!(a.or(&b).unmask(), 0b1100 | 0b1010);
-        assert_eq!(a.and(&b, &mut next).unmask(), 0b1100 & 0b1010);
         assert_eq!(a.add(&b).unmask(), 0b1100 ^ 0b1010);
         assert_eq!(a.mul(&b, &mut next).unmask(), 0b1100 & 0b1010);
     }

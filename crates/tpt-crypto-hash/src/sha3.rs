@@ -305,7 +305,7 @@ macro_rules! sha3_type {
             }
         }
 
-        impl Hasher for $name {
+        impl Hasher<$out> for $name {
             const OUTPUT_SIZE: usize = $out;
 
             #[inline]

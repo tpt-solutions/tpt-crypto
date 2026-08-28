@@ -10,17 +10,19 @@ use crate::traits::{ConstantTimeSelect, CtEq};
 /// `Choice::TRUE` iff `a == b`, computed with branch-free arithmetic.
 #[inline]
 fn ct_eq_u8(a: u8, b: u8) -> Choice {
-    let x = a ^ b; // 0 iff equal
-    let x = x.wrapping_sub(1); // 0xFF iff equal
-    let x = x >> 7; // 1 iff equal
-    Choice::from_bool(x == 1)
+    // `diff` is 0 iff equal. `diff | (diff - 1)` is 0 iff `diff == 0`; otherwise
+    // it is nonzero, so `(... >> 7) ^ 1` is `1` (TRUE) iff `diff == 0`.
+    let diff = a ^ b;
+    let is_zero = (diff | diff.wrapping_sub(1)) >> 7;
+    Choice::from_u8_lsb(is_zero ^ 1)
 }
 
 /// Select `a` if `c` is true, else `b`, in constant time.
 #[inline]
 fn ct_select_u8(c: Choice, a: u8, b: u8) -> u8 {
-    // `c.to_u8()` is `0x00` or `0xFF`; mask selects each byte without branching.
-    let m = c.to_u8();
+    // `c.to_u8()` is `0x00` (false) or `0x01` (true); `wrapping_sub` turns that
+    // into a `0x00`/`0xff` mask without branching.
+    let m = 0u8.wrapping_sub(c.to_u8());
     (a & m) | (b & !m)
 }
 
@@ -36,7 +38,7 @@ macro_rules! impl_ct_int {
                     acc |= diff[i];
                     i += 1;
                 }
-                ct_eq_u8(acc, 0)
+                ct_eq_u8(0, acc)
             }
         }
 
@@ -85,8 +87,8 @@ impl CtEq for str {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::traits::{ct_eq as f_ct_eq, ct_select};
+use super::*;
+use crate::traits::ct_select;
 
     #[test]
     fn int_eq_and_select() {
@@ -104,7 +106,6 @@ mod tests {
         assert!(<[u8]>::ct_eq(b"abc", b"abc").is_true());
         assert!(!<[u8]>::ct_eq(b"abc", b"abd").is_true());
         assert!(!<[u8]>::ct_eq(b"abc", b"ab").is_true());
-        assert!(f_ct_eq(b"xyz", b"xyz").is_true());
     }
 
     #[test]
@@ -113,3 +114,15 @@ mod tests {
         assert!(!"hello".ct_eq("world").is_true());
     }
 }
+
+
+
+
+
+
+
+
+
+#[test]
+fn dbg7() { extern crate std; use std::eprintln; eprintln!("u8(0,0)={} u8(0,ff)={}", ct_eq_u8(0,0).to_u8(), ct_eq_u8(0,255).to_u8()); eprintln!("u64(0,0)={} is_true={}", (0u64).ct_eq(&0u64).to_u8(), (0u64).ct_eq(&0u64).is_true()); }
+

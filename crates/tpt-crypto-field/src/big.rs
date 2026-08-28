@@ -6,7 +6,14 @@
 //! not on any secret-dependent path and is only exercised when building tower
 //! square roots/inverses.
 
-use std::cmp::Ordering;
+#![allow(dead_code, unused_mut)]
+
+use core::cmp::Ordering;
+
+use alloc::vec;
+use alloc::vec::Vec;
+
+use crate::field::FieldParams;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Big(Vec<u64>);

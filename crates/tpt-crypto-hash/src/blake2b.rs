@@ -134,7 +134,7 @@ impl<const OUT: usize> Default for Blake2b<OUT> {
     }
 }
 
-impl<const OUT: usize> Hasher for Blake2b<OUT> {
+impl<const OUT: usize> Hasher<OUT> for Blake2b<OUT> {
     const OUTPUT_SIZE: usize = OUT;
 
     #[inline]

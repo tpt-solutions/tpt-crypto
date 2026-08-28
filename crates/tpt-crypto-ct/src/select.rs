@@ -28,9 +28,9 @@ impl CtSelect for u64 {
     #[inline]
     fn ct_select(cond: Choice, a: u64, b: u64) -> u64 {
         let mut out = b; // start at the "false" value
-        // SAFETY: `out` and `a` are aligned, non-overlapping locals. The
-        // platform `cmov` writes `out` only when `cond != 0`, selecting `a`
-        // without a control-flow branch.
+                         // SAFETY: `out` and `a` are aligned, non-overlapping locals. The
+                         // platform `cmov` writes `out` only when `cond != 0`, selecting `a`
+                         // without a control-flow branch.
         unsafe { arch::cmov_u64(cond.0, &mut out, &a) };
         out
     }
@@ -65,14 +65,15 @@ pub fn ct_select<T: CtSelect>(cond: Choice, a: T, b: T) -> T {
 /// branch. `dst` is unchanged when `cond` is false.
 #[inline]
 pub fn cmov<T: CtSelect + Copy>(cond: Choice, dst: &mut T, src: &T) {
-    *dst = T::ct_select(cond, *dst, *src);
+    // dst = cond ? src : dst  ==  ct_select(cond, src, dst)
+    *dst = T::ct_select(cond, *src, *dst);
 }
 
 /// Conditionally swap `*a` and `*b` when `cond` is true.
 #[inline]
 pub fn cswap<T: CtSelect + Copy>(cond: Choice, a: &mut T, b: &mut T) {
-    let t = T::ct_select(cond, *a, *b);
-    let u = T::ct_select(cond, *b, *a);
+    let t = T::ct_select(cond, *b, *a);
+    let u = T::ct_select(cond, *a, *b);
     *a = t;
     *b = u;
 }
@@ -82,8 +83,9 @@ pub fn cswap<T: CtSelect + Copy>(cond: Choice, a: &mut T, b: &mut T) {
 /// For every index `i`, `out[i] = if cond { a[i] } else { b[i] }`. The three
 /// slices are assumed to have equal length (their lengths are public).
 #[inline]
+#[allow(clippy::needless_range_loop)]
 pub fn ct_select_slice(cond: Choice, a: &[u8], b: &[u8], out: &mut [u8]) {
-    let m = (cond.0 as u8).wrapping_neg();
+    let m = cond.0.wrapping_neg();
     let n = out.len();
     for i in 0..n {
         let av = a.get(i).copied().unwrap_or(0);
@@ -96,7 +98,11 @@ pub fn ct_select_slice(cond: Choice, a: &[u8], b: &[u8], out: &mut [u8]) {
 /// by callers that prefer arrays to slices).
 #[inline]
 #[must_use]
-pub fn ct_select_array<T: CtSelect + Copy, const N: usize>(cond: Choice, a: [T; N], b: [T; N]) -> [T; N] {
+pub fn ct_select_array<T: CtSelect + Copy, const N: usize>(
+    cond: Choice,
+    a: [T; N],
+    b: [T; N],
+) -> [T; N] {
     let mut out = b;
     for i in 0..N {
         out[i] = T::ct_select(cond, a[i], b[i]);
@@ -118,10 +124,19 @@ mod tests {
     #[test]
     fn select_law() {
         for c in [Choice::FALSE, Choice::TRUE] {
-            assert_eq!(ct_select(c, 11u64, 22u64), if c.is_true() { 11 } else { 22 });
+            assert_eq!(
+                ct_select(c, 11u64, 22u64),
+                if c.is_true() { 11 } else { 22 }
+            );
             assert_eq!(ct_select(c, 11u8, 22u8), if c.is_true() { 11 } else { 22 });
-            assert_eq!(ct_select(c, 11usize, 22usize), if c.is_true() { 11 } else { 22 });
-            assert_eq!(ct_select(c, 0x1234u128, 0x5678u128), if c.is_true() { 0x1234 } else { 0x5678 });
+            assert_eq!(
+                ct_select(c, 11usize, 22usize),
+                if c.is_true() { 11 } else { 22 }
+            );
+            assert_eq!(
+                ct_select(c, 0x1234u128, 0x5678u128),
+                if c.is_true() { 0x1234 } else { 0x5678 }
+            );
         }
     }
 

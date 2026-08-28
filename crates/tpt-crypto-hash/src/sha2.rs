@@ -380,7 +380,7 @@ macro_rules! sha2_type {
             }
         }
 
-        impl Hasher for $name {
+        impl Hasher<$out> for $name {
             const OUTPUT_SIZE: usize = $out;
 
             #[inline]

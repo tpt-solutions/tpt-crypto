@@ -1,9 +1,11 @@
 //! Concrete prime-field parameters.
 //!
-//! Each struct implements [`FieldParams`] by giving the modulus (little-endian
-//! limbs) and the exponent `S` of `p - 1`; the remaining Montgomery constants
-//! are derived at compile time by the [`FieldElement`] impl.
+//! Each struct implements [`FieldParams`] by giving the modulus (padded to
+//! [`MAX_LIMBS`] little-endian limbs), the limb count, and the exponent `S` of
+//! `p - 1`; the remaining Montgomery constants are derived at compile time by the
+//! [`FieldElement`] impl.
 
+use crate::consts::MAX_LIMBS;
 use crate::field::{FieldElement, FieldParams};
 
 macro_rules! declare_params {
@@ -12,8 +14,9 @@ macro_rules! declare_params {
         #[derive(Copy, Clone, Default, Eq, PartialEq, Debug)]
         pub struct $name;
 
-        impl FieldParams<$limbs> for $name {
-            const MODULUS: [u64; $limbs] = $modulus;
+        impl FieldParams for $name {
+            const LIMBS: usize = $limbs;
+            const MODULUS: [u64; MAX_LIMBS] = $modulus;
             const S: u32 = crate::consts::s_of(&Self::MODULUS);
         }
     };
@@ -27,6 +30,8 @@ declare_params!(
         0x0000_0000_FFFF_FFFF,
         0x0000_0000_0000_0000,
         0xFFFF_FFFF_0000_0001,
+        0,
+        0,
     ]
 );
 
@@ -38,6 +43,8 @@ declare_params!(
         0xBCE6_FAAD_A717_9E84,
         0xFFFF_FFFF_FFFF_FFFF,
         0xFFFF_FFFF_0000_0000,
+        0,
+        0,
     ]
 );
 
@@ -88,21 +95,55 @@ declare_params!(
         0x53bd_a402_fffe_5bfe,
         0x3339_d808_09a1_d805,
         0x73ed_a753_299d_7d48,
+        0,
+        0,
+    ]
+);
+
+// Ed25519 base field: p = 2^255 - 19 (little-endian limbs).
+declare_params!(
+    Ed25519FieldParams,
+    4,
+    [
+        0xFFFF_FFFF_FFFF_FFED,
+        0xFFFF_FFFF_FFFF_FFFF,
+        0xFFFF_FFFF_FFFF_FFFF,
+        0x7FFF_FFFF_FFFF_FFFF,
+        0,
+        0,
+    ]
+);
+
+// Ed25519 scalar field: L = 2^252 + 27742317777372353535851937790883648493.
+declare_params!(
+    Ed25519ScalarParams,
+    4,
+    [
+        0xEDD3_F55C_1A63_1258,
+        0xD69C_F7A2_DEF9_DE14,
+        0x0000_0000_0000_0000,
+        0x0000_0000_0000_0010,
+        0,
+        0,
     ]
 );
 
 /// NIST P-256 base field `GF(p)`.
-pub type P256Base = FieldElement<P256BaseParams, 4>;
+pub type P256Base = FieldElement<P256BaseParams>;
 /// NIST P-256 scalar field `GF(n)`.
-pub type P256Scalar = FieldElement<P256ScalarParams, 4>;
+pub type P256Scalar = FieldElement<P256ScalarParams>;
 /// NIST P-384 base field `GF(p)`.
-pub type P384Base = FieldElement<P384BaseParams, 6>;
+pub type P384Base = FieldElement<P384BaseParams>;
 /// NIST P-384 scalar field `GF(n)`.
-pub type P384Scalar = FieldElement<P384ScalarParams, 6>;
+pub type P384Scalar = FieldElement<P384ScalarParams>;
 /// BLS12-381 base field `GF(p)`.
-pub type Bls12381Fp = FieldElement<Bls12381FpParams, 6>;
+pub type Bls12381Fp = FieldElement<Bls12381FpParams>;
 /// BLS12-381 scalar field `GF(r)`.
-pub type Bls12381Fr = FieldElement<Bls12381FrParams, 4>;
+pub type Bls12381Fr = FieldElement<Bls12381FrParams>;
+/// Ed25519 base field `GF(2^255 - 19)`.
+pub type Ed25519Field = FieldElement<Ed25519FieldParams>;
+/// Ed25519 scalar field `GF(L)` (the prime-order subgroup scalar field).
+pub type Ed25519Scalar = FieldElement<Ed25519ScalarParams>;
 
 #[cfg(test)]
 mod tests {

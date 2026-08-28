@@ -382,7 +382,7 @@ fn tonelli_shanks_field<F: Field + CtEq>(
     tp1: &[u64],
     z: &F,
 ) -> CtOption<F> {
-    let c = z.pow_vartime(t);
+    let mut c = z.pow_vartime(t);
     let mut x = a.pow_vartime(tp1);
     let mut b = a.pow_vartime(t);
     let mut i = s;

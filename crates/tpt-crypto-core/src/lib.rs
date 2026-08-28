@@ -41,15 +41,22 @@ extern crate alloc;
 pub mod choice;
 pub mod constant_time;
 pub mod error;
+pub mod impls;
 pub mod rng;
 pub mod secret;
 pub mod traits;
 pub mod zeroize;
+
+#[cfg(feature = "rand_core")]
+pub mod rand_core_bridge;
 
 /// Convenience re-exports of the most-used items.
 pub use choice::Choice;
 pub use error::{Error, Result};
 pub use rng::{CryptoRng, DrbgCore};
 pub use secret::SecretBox;
-pub use traits::{ConstantTimeSelect, CtEq};
+pub use traits::{ct_eq, ct_ne, ct_select, ConstantTimeSelect, CtEq};
 pub use zeroize::{Zeroize, Zeroizing};
+
+#[cfg(feature = "rand_core")]
+pub use rand_core_bridge::{CoreRng, RandCoreRng};

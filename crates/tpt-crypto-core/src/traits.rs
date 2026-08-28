@@ -51,14 +51,14 @@ pub trait ConstantTimeSelect {
 /// Constant-time equality: a set [`Choice`] iff `a == b`.
 #[inline]
 #[must_use]
-pub fn ct_eq<T: CtEq>(a: &T, b: &T) -> Choice {
+pub fn ct_eq<T: CtEq + ?Sized>(a: &T, b: &T) -> Choice {
     a.ct_eq(b)
 }
 
 /// Constant-time inequality: a set [`Choice`] iff `a != b`.
 #[inline]
 #[must_use]
-pub fn ct_ne<T: CtEq>(a: &T, b: &T) -> Choice {
+pub fn ct_ne<T: CtEq + ?Sized>(a: &T, b: &T) -> Choice {
     a.ct_eq(b).not()
 }
 

@@ -15,7 +15,7 @@ categories = ["cryptography", "no-std"]
 
 [dependencies]
 serde = { version = "1", optional = true, default-features = false, features = ["derive"] }
-rand_core = { version = "0.6", optional = true, default-features = false }
+rand_core_06 = { package = "rand_core", version = "0.6", optional = true, default-features = false }
 
 [dev-dependencies]
 proptest = "1"
@@ -27,7 +27,7 @@ default = ["std"]
 std = ["alloc"]
 alloc = []
 serde = ["dep:serde"]
-rand_core = ["dep:rand_core"]
+rand_core = ["dep:rand_core_06"]
 
 [[bench]]
 name = "core_bench"

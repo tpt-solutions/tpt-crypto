@@ -1,29 +1,29 @@
 //! Property tests for the constant-time primitives and secret wrappers.
 
 use proptest::prelude::*;
-use tpt_crypto_core::ct::{ct_eq, ct_ne, ct_select, Choice};
+use tpt_crypto_core::{ct_eq, ct_ne, ct_select, Choice};
 use tpt_crypto_core::secret::SecretBox;
 use tpt_crypto_core::zeroize::{Zeroize, Zeroizing};
 
 proptest! {
     #[test]
     fn ct_select_matches_branch(a in any::<u64>(), b in any::<u64>(), pick in prop::bool::ANY) {
-        let c = Choice::from_u8(pick as u8);
-        let got = ct_select(&c, &a, &b);
+        let c = Choice::from_bool(pick);
+        let got = ct_select(&a, &b, c);
         let want = if pick { a } else { b };
         prop_assert_eq!(got, want);
     }
 
     #[test]
     fn ct_eq_matches_equality(a in any::<u64>(), b in any::<u64>()) {
-        prop_assert_eq!(ct_eq(&a, &b).is_set(), a == b);
-        prop_assert_eq!(ct_ne(&a, &b).is_set(), a != b);
+        prop_assert_eq!(ct_eq(&a, &b).is_true(), a == b);
+        prop_assert_eq!(ct_ne(&a, &b).is_true(), a != b);
     }
 
     #[test]
     fn ct_eq_slice_matches_equality(a in proptest::collection::vec(any::<u8>(), 0..64),
                                     b in proptest::collection::vec(any::<u8>(), 0..64)) {
-        prop_assert_eq!(ct_eq(a.as_slice(), b.as_slice()).is_set(), a == b);
+        prop_assert_eq!(ct_eq(a.as_slice(), b.as_slice()).is_true(), a == b);
     }
 
     #[test]

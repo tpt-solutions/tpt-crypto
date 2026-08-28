@@ -54,8 +54,10 @@ impl_ct_eq_int!(u8, u16, u32, u64, u128, usize);
 /// Constant-time "not-equal" mask for a `u64` limb: `0xFF` iff `a != b`.
 #[inline]
 fn neq_mask_u64(a: u64, b: u64) -> u8 {
-    let neq = a ^ b;
-    ((neq | neq.wrapping_sub(1)) >> 7) as u8
+    // `a ^ b != 0` lowers to a flag-setting compare (no control-flow branch);
+    // the resulting 0/1 then broadcasts to a full mask via wrapping negation.
+    let ne = (a ^ b) != 0;
+    u8::from(ne).wrapping_neg()
 }
 
 /// Constant-time equality for two byte slices.
@@ -145,4 +147,7 @@ mod tests {
     fn ct_ne_bytes(a: &[u8], b: &[u8]) -> Choice {
         ct_eq_bytes(a, b).not()
     }
-    fn ct_ne_
+    fn ct_ne_limbs(a: &[Limb], b: &[Limb]) -> Choice {
+        ct_eq_limbs(a, b).not()
+    }
+}
