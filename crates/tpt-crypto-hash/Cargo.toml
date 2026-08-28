@@ -1,0 +1,30 @@
+[package]
+name = "tpt-crypto-hash"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Constant-time hashes: SHA-2, SHA-3/SHAKE, BLAKE2b/BLAKE3, KangarooTwelve, HMAC/HKDF, HMAC-DRBG. no_std."
+keywords = ["crypto", "hash", "sha2", "sha3", "blake", "no-std"]
+categories = ["cryptography", "no-std"]
+
+[dependencies]
+tpt-crypto-core = { workspace = true }
+tpt-crypto-ct = { workspace = true }
+digest = { workspace = true, optional = true }
+
+[features]
+default = ["std"]
+std = ["alloc", "tpt-crypto-core/std", "tpt-crypto-ct/std"]
+alloc = ["tpt-crypto-core/alloc"]
+digest = ["dep:digest", "alloc", "tpt-crypto-core/alloc"]
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+hex = "0.4"
+proptest = "1"

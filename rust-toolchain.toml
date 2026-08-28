@@ -1,0 +1,9 @@
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+# NOTE: the `no_std` / wasm build targets (thumbv6m-none-eabi,
+# thumbv7em-none-eabihf, wasm32-unknown-unknown) are installed by CI explicitly
+# via `dtolnay/rust-toolchain` (see `.github/workflows/ci.yml`), and are expected
+# to be present in a dev environment. They are intentionally NOT listed here so
+# that this file does not prune unrelated targets a developer may have installed
+# for other work. `miri` is nightly-only and is invoked via `cargo +nightly miri`.

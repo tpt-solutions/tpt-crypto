@@ -1,0 +1,158 @@
+name: CI
+
+# See todo.md → "CI" section for the authoritative job list.
+# `RUSTFLAGS: -D warnings` turns compiler warnings into errors.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - run: cargo nextest run --workspace --all-features
+      - run: cargo test --workspace --all-features --doc
+
+  no_std:
+    name: no_std (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - thumbv6m-none-eabi # no alloc
+          - thumbv7em-none-eabihf
+          - wasm32-unknown-unknown
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: cargo xtask no-std
+
+  target-feature-matrix:
+    name: target-feature-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features:
+          - "" # baseline (portable, pure-Rust paths)
+          - "aes,sha,avx2,sse4.1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build+test -aead / -hash with/without SIMD target-features
+        run: |
+          for feat in "${{ matrix.features }}"; do
+            for crate in tpt-crypto-aead tpt-crypto-hash; do
+              if [ -z "$feat" ]; then
+                cargo build  -p "$crate" --no-default-features --features std
+                cargo test   -p "$crate" --no-default-features --features std
+              else
+                cargo build  -p "$crate" --no-default-features --features std \
+                  --target-feature "$feat"
+                cargo test   -p "$crate" --no-default-features --features std \
+                  --target-feature "$feat"
+              fi
+            done
+          done
+
+  cargo-deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check
+
+  miri:
+    name: miri (tpt-crypto-ct)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - run: cargo +nightly miri test -p tpt-crypto-ct
+
+  leakage:
+    name: leakage (dudect Welch t-test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo xtask leakage
+
+  feature-powerset:
+    name: feature-powerset (facade)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+      - run: cargo hack test --feature-powerset -p tpt-crypto
+
+  telos-verify:
+    name: telos-verify
+    runs-on: ubuntu-latest
+    continue-on-error: true # non-blocking → blocking per primitive as it lands
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo xtask verify
+
+  bench-smoke:
+    name: bench-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo bench --no-run
+
+  fuzz-smoke:
+    name: fuzz-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo +nightly fuzz build
+
+  semver-checks:
+    name: semver-checks
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: obi1kenobi/cargo-semver-checks-action@v2

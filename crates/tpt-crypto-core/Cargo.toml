@@ -1,0 +1,51 @@
+[package]
+name = "tpt-crypto-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Shared traits, error types, and secret-handling wrappers for the tpt-crypto constant-time substrate."
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/tpt-crypto-core"
+keywords = ["cryptography", "no-std", "constant-time", "secret", "crypto"]
+categories = ["cryptography", "no-std"]
+
+[dependencies]
+serde = { version = "1", optional = true, default-features = false, features = ["derive"] }
+rand_core = { version = "0.6", optional = true, default-features = false }
+
+[dev-dependencies]
+proptest = "1"
+trybuild = "1"
+criterion = "0.5"
+
+[features]
+default = ["std"]
+std = ["alloc"]
+alloc = []
+serde = ["dep:serde"]
+rand_core = ["dep:rand_core"]
+
+[[bench]]
+name = "core_bench"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+# `unsafe_code = "forbid"` at the workspace level is intentionally *not*
+# inherited here. The `zeroize` module must use `core::ptr::write_volatile` to
+# perform a non-optimizable byte-wipe of secrets on `Drop`. This is the one
+# place raw `unsafe` is permitted in an otherwise `#![no_std]` foundation crate;
+# every `unsafe` block there carries a `// SAFETY:` note and the rationale is
+# recorded in `SECURITY.md`. `tpt-crypto-ct` uses the same local override.
+[lints.rust]
+unsafe_code = "allow"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = "warn"

@@ -1,0 +1,142 @@
+Design Document: tpt-crypto
+The High-Assurance, Constant-Time Cryptographic Substrate
+1. Vision
+To provide the definitive, pure-Rust, no_std-first cryptographic library for the post-quantum era. tpt-crypto is not another wrapper around OpenSSL or libsodium. It is a mathematically verified, constant-time-by-construction implementation of next-generation primitives (ML-KEM, ML-DSA, BLS12-381, Bulletproofs) that runs everywhere from smartcards to cloud HSMs, with a 100% MIT-compatible dependency chain.
+The Core Thesis: Existing Rust crypto crates (dalek, pqcrypto, arkworks) are either tied to std, lack formal constant-time guarantees, or rely on C-FFI for performance. tpt-crypto solves all three by combining tpt-math (for field arithmetic), tpt-telos (for proving invariants), and Rust's type system (for encoding security properties at compile time).
+2. Workspace Architecture (10 Crates)
+The workspace is layered strictly: lower crates never depend on higher ones, and every crate is #![no_std] + alloc (or fully heapless where possible).
+
+Crate
+Purpose
+no_std
+tpt-crypto-core
+Shared traits, error types, secret-handling wrappers (SecretBox<T>), constant-time primitives (ct_eq, ct_select).
+yes
+tpt-crypto-ct
+Constant-time arithmetic: conditional moves, blinding, masked operations, limb-level primitives.
+yes
+tpt-crypto-field
+Prime field arithmetic (P-256, P-381, BLS12-381 base/scalar fields). Built on tpt-math-exact and tpt-math-linalg-fixed.
+yes
+tpt-crypto-curve
+Elliptic curve operations: Ed25519, P-256, P-384, BLS12-381 (G1/G2/GT), pairing.
+yes
+tpt-crypto-hash
+SHA-2, SHA-3/SHAKE, BLAKE2b/BLAKE3, KangarooTwelve. All constant-time, all no_std.
+yes
+tpt-crypto-aead
+Authenticated encryption: AES-GCM (AES-NI and portable), ChaCha20-Poly1305, XChaCha20, AES-GCM-SIV (nonce-misuse resistant).
+yes
+tpt-crypto-kem
+Post-quantum Key Encapsulation: ML-KEM (Kyber, FIPS 203), FrodoKEM, Classic McEliece (for long-term secrets).
+yes
+tpt-crypto-sig
+Signatures: ML-DSA (Dilithium, FIPS 204), Ed25519, ECDSA (P-256/P-384), BLS12-381 (aggregatable signatures).
+yes
+tpt-crypto-zk
+Zero-knowledge proofs: Bulletproofs (range proofs), a minimal PLONK-style verifier, Pedersen commitments.
+yes (alloc)
+tpt-crypto-mpc
+Secure multi-party computation: additive secret sharing, Beaver triples, oblivious transfer (OT) primitives.
+yes (alloc)
+3. Technical Deep Dive: The "Secret Sauce"
+A. Constant-Time by Construction (Not by Hope)
+The #1 vulnerability in Rust crypto isn't memory safety—it's side-channel leaks from compiler optimizations. Existing crates use black_box and volatile reads as band-aids, which LLVM routinely defeats.
+tpt-crypto-ct takes a fundamentally different approach:
+Masked Arithmetic: All secret-dependent operations use additive/multiplicative masking. The secret x is never held directly; only (x ⊕ r, r) exists, where r is a random mask refreshed per operation.
+Type-Enforced Secrecy: SecretBox<T> is a wrapper that cannot be logged, printed, or compared with ==. Any attempt to branch on a secret value requires going through an explicit ct_select primitive, which the compiler cannot optimize away because it's implemented via inline assembly or core::arch intrinsics.
+tpt-telos Verification: Every ct_select, every masked operation, is specified in tpt-telos with a contract: "the execution trace (branch pattern, memory access pattern) is independent of the secret input." The SMT solver discharges this for all limb sizes.
+B. Leveraging tpt-math for Field Arithmetic
+Instead of hand-rolling Montgomery multiplication for every curve (as dalek and arkworks do), tpt-crypto-field is built directly on tpt-math-exact and tpt-math-linalg-fixed:
+Const-Generic Field Sizes: FieldElement<P, LIMBS> where P is the prime modulus encoded as a const generic. The compiler monomorphizes a completely unrolled, optimized multiplication routine per curve.
+Zero Allocation: All field operations happen on the stack. No Vec, no Box. This is critical for smartcard and HSM targets.
+Formally Verified Reduction: tpt-telos proves that the Barrett/Montgomery reduction in tpt-crypto-field produces the mathematically correct result for all possible inputs within the field bounds.
+C. Post-Quantum as a First-Class Citizen
+Most Rust crypto crates treat PQC as an afterthought. tpt-crypto implements the NIST FIPS 203/204/205 finalized standards (ML-KEM, ML-DSA, SLH-DSA) as core primitives, not experimental features:
+Lattice Arithmetic: ML-KEM and ML-DSA require polynomial ring arithmetic over Z_q[X]/(X^n + 1). This is implemented in tpt-crypto-kem/tpt-crypto-sig using tpt-math-linalg-fixed for the polynomial vectors, with NTT (Number Theoretic Transform) fully unrolled at compile time.
+Deterministic Sampling: The "sample error from discrete Gaussian" step in PQC is a major side-channel risk. We implement rejection sampling with constant-time fallback verified by tpt-telos to ensure the timing reveals nothing about the secret polynomial.
+D. Zero-Knowledge Without the Bloat
+arkworks is powerful but massive. tpt-crypto-zk is laser-focused on the primitives needed for real-world privacy (credentials, anonymous payments, compliance proofs):
+Bulletproofs Range Proofs: For proving "this value is between 0 and 2^64" without revealing it. Used in confidential transactions and age-gating.
+Minimal PLONK Verifier: We don't implement a full prover (that's what tpt-telos is for). We implement a verifier that can check proofs generated by any compliant PLONK prover, in ~500 lines of code.
+Pairing-Friendly Curves: BLS12-381 pairing operations are implemented in tpt-crypto-curve and reused here, avoiding duplication.
+4. Target API
+
+use tpt_crypto::prelude::*;
+
+// --- Constant-time secret handling ---
+let secret_key = SecretBox::new(private_key_bytes);
+// secret_key == other  // COMPILE ERROR: cannot compare secrets directly
+// println!("{:?}", secret_key);  // COMPILE ERROR: cannot print secrets
+
+// --- Post-quantum KEM (ML-KEM / Kyber) ---
+let (pk, sk) = ml_kem::keygen::<MlKem768>(&mut rng);
+let (ciphertext, shared_secret) = ml_kem::encapsulate(&pk, &mut rng)?;
+let recovered_secret = ml_kem::decapsulate(&sk, &ciphertext)?;
+assert_eq!(shared_secret.as_ref(), recovered_secret.as_ref());
+
+// --- Post-quantum signatures (ML-DSA / Dilithium) ---
+let (pk, sk) = ml_dsa::keygen::<MlDsa65>(&mut rng);
+let signature = ml_dsa::sign(&sk, &message, &ctx)?;
+ml_dsa::verify(&pk, &message, &signature, &ctx)?;
+
+// --- Zero-knowledge range proof ---
+let commitment = bulletproofs::commit(value, &blinding);
+let proof = bulletproofs::prove_range(&commitment, value, &blinding, 0..2u64.pow(32))?;
+// Verifier learns nothing except "value is in [0, 2^32)"
+bulletproofs::verify_range(&commitment, &proof, 0..2u64.pow(32))?;
+
+// --- BLS aggregatable signatures (for consensus / `tpt-sync`) ---
+let sig1 = bls::sign(&sk1, &message);
+let sig2 = bls::sign(&sk2, &message);
+let agg_sig = bls::aggregate(&[sig1, sig2]);
+bls::verify_aggregate(&[pk1, pk2], &message, &agg_sig)?;
+
+5. Integration with tpt-telos
+This is where tpt-crypto becomes untouchable. Every critical primitive has a tpt-telos specification that is verified before the Rust code is generated:
+Primitive
+tpt-telos Contract
+ct_select(cond, a, b)
+ensures: execution_trace is independent of cond
+FieldElement::mul(a, b)
+ensures: result == (a * b) mod P for all a, b < P
+ml_kem::decapsulate(sk, ct)
+ensures: timing is independent of sk
+bulletproofs::verify(...)
+ensures: returns true iff proof is valid for commitment
+bls::aggregate(sigs)
+ensures: result is valid iff all input sigs are valid
+The tpt-telos-uir-bridge additionally proves that stack usage is bounded for every function, ensuring no stack overflow on embedded targets—a property no other Rust crypto library can claim.
+6. Execution Roadmap
+Phase 1: The Constant-Time Foundation (Months 1-2)
+tpt-crypto-core + tpt-crypto-ct + tpt-crypto-hash
+Deliverable: A constant-time SHA-256/BLAKE3 that is formally proven to be side-channel resistant. This alone is worth publishing—it becomes the reference implementation for the ecosystem.
+Phase 2: Classical Curves & AEAD (Months 3-4)
+tpt-crypto-field + tpt-crypto-curve (Ed25519, P-256) + tpt-crypto-aead
+Deliverable: A drop-in replacement for ring's core functionality, but pure Rust and no_std.
+Phase 3: The Post-Quantum Core (Months 5-7)
+tpt-crypto-kem (ML-KEM) + tpt-crypto-sig (ML-DSA, Ed25519)
+Deliverable: The first fully verified, pure-Rust FIPS 203/204 implementation. This is the headline feature.
+Phase 4: Advanced Primitives (Months 8-10)
+tpt-crypto-curve (BLS12-381, pairings) + tpt-crypto-zk + tpt-crypto-mpc
+Deliverable: The substrate for tpt-sync (consensus), private credentials, and confidential computing.
+7. Why This Disrupts the Ecosystem
+Existing Option
+Weakness
+tpt-crypto Answer
+ring
+Not no_std, closed to contributions, C-FFI for some primitives
+Pure Rust, no_std, fully open
+dalek
+std-heavy, constant-time is best-effort
+no_std, constant-time is proven
+pqcrypto
+Auto-generated from C, massive binary size, hard to audit
+Hand-written Rust, minimal, auditable
+arkworks
+Powerful but bloated, steep learning curve
+Laser-focused on needed primitives
+rustls (crypto layer)
+Relies on ring/aws-lc-rs
+Can swap in tpt-crypto as backend
+

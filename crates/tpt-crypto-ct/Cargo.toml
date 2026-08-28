@@ -1,0 +1,30 @@
+[package]
+name = "tpt-crypto-ct"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Constant-time arithmetic primitives: conditional moves, blinding, masked operations, and limb-level primitives for side-channel-resistant crypto."
+readme = "README.md"
+keywords = ["crypto", "constant-time", "no-std", "side-channel", "cryptography"]
+categories = ["cryptography", "no-std"]
+documentation = "https://docs.rs/tpt-crypto-ct"
+
+[dependencies]
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[features]
+default = ["std"]
+std = []
+leakage = ["std"]
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = "warn"
