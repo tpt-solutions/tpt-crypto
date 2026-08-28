@@ -17,41 +17,41 @@
 
 (one-time; seed from `tpt-rust-map/template/`, cross-check against `tpt-math/`)
 
-- [ ] Root `Cargo.toml`: `[workspace]` `resolver = "2"`,
+- [x] Root `Cargo.toml`: `[workspace]` `resolver = "2"`,
       `members = ["crates/*", "xtask", "examples"]`
-- [ ] `[workspace.package]`: `edition = "2021"`, `rust-version = "1.84"`,
+- [x] `[workspace.package]`: `edition = "2021"`, `rust-version = "1.84"`,
       `license = "MIT OR Apache-2.0"`, `authors = ["TPT Solutions"]`,
       `homepage`/`repository` = `https://github.com/tpt-solutions/tpt-crypto`
-- [ ] `[workspace.dependencies]`: all 11 internal crates as
+- [x] `[workspace.dependencies]`: all 11 internal crates as
       `{ version = "0.1.0", path = "crates/<name>", default-features = false }`;
       external: `tpt-math-exact`, `tpt-math-linalg-fixed` (crates.io, `no_std`)
-- [ ] `[workspace.lints.rust]` `unsafe_code = "forbid"`,
+- [x] `[workspace.lints.rust]` `unsafe_code = "forbid"`,
       `unsafe_op_in_unsafe_fn = "deny"`; `[workspace.lints.clippy] all = "warn"`
       (`tpt-crypto-ct` overrides `unsafe_code` locally — see its section)
-- [ ] `[profile.release]`: `opt-level=3`, `lto="fat"`, `codegen-units=1`,
+- [x] `[profile.release]`: `opt-level=3`, `lto="fat"`, `codegen-units=1`,
       `strip="symbols"`, `overflow-checks=true`
-- [ ] `rust-toolchain.toml`: stable + rustfmt + clippy + miri; targets
+- [x] `rust-toolchain.toml`: stable + rustfmt + clippy + miri; targets
       `thumbv6m-none-eabi`, `thumbv7em-none-eabihf`, `wasm32-unknown-unknown`
-- [ ] `rustfmt.toml` (copy from `tpt-math`)
-- [ ] `deny.toml`: license allowlist = MIT, Apache-2.0, Apache-2.0 WITH
+- [x] `rustfmt.toml` (copy from `tpt-math`)
+- [x] `deny.toml`: license allowlist = MIT, Apache-2.0, Apache-2.0 WITH
       LLVM-exception, BSD-2/3-Clause, ISC, Unicode-3.0, CC0-1.0, 0BSD;
       `[bans]` deny `openssl*`, `ring`, `*-sys` C-FFI crates
-- [ ] `LICENSE-MIT` + `LICENSE-APACHE` at root
-- [ ] `.gitignore` (Rust: `/target`, `Cargo.lock` kept, `*.log`, `/fuzz/target`)
-- [ ] `README.md`: vision, layering diagram, crate table, links to `spec.txt`
+- [x] `LICENSE-MIT` + `LICENSE-APACHE` at root
+- [x] `.gitignore` (Rust: `/target`, `Cargo.lock` kept, `*.log`, `/fuzz/target`)
+- [x] `README.md`: vision, layering diagram, crate table, links to `spec.txt`
       and `tpt-rust-map`; constant-time / no_std / MIT-chain guarantees
-- [ ] `CONTRIBUTING.md` (copy + adapt from `tpt-telos`): no new deps without a
+- [x] `CONTRIBUTING.md` (copy + adapt from `tpt-telos`): no new deps without a
       license note, KAT required for every primitive, ct review checklist
-- [ ] `SECURITY.md`: disclosure policy, threat model (side channels in scope,
+- [x] `SECURITY.md`: disclosure policy, threat model (side channels in scope,
       physical/fault out of scope for v1), what "constant-time" guarantees,
       supported versions
-- [ ] `AGENTS.md` / `CLAUDE.md` stub (build commands, layering rules)
-- [ ] `crates/` dir; `xtask/` skeleton; `examples/` skeleton; `specs/` dir;
+- [x] `AGENTS.md` / `CLAUDE.md` stub (build commands, layering rules)
+- [x] `crates/` dir; `xtask/` skeleton; `examples/` skeleton; `specs/` dir;
       `benches/BUDGET.md` stub
-- [ ] `.github/workflows/ci.yml` (see **CI** section)
-- [ ] `git init` (local only); initial commit
+- [x] `.github/workflows/ci.yml` (see **CI** section)
+- [x] `git init` (local only); initial commit
 - [ ] Sanity: `cargo build` succeeds on the empty workspace
-- [ ] Register the repo in `tpt-rust-map/registry.toml` (new `[[repo]]` entry,
+- [x] Register the repo in `tpt-rust-map/registry.toml` (new `[[repo]]` entry,
       pillar prefix `tpt-crypto-`) and add `tpt-rust-map/repos/tpt-crypto/`
 
 ---
