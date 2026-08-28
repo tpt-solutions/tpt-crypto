@@ -1,8 +1,8 @@
 //! Developer task runner for `tpt-crypto`.
 //!
 //! Run with `cargo xtask <command>`. This pass implements `leakage`
-//! (the dudect-style Welch t-test harness) and stubs the remaining
-//! cross-cutting commands declared in `todo.md` so the workspace builds.
+//! (the dudect-style Welch t-test harness), `check` (fmt + clippy + deny),
+//! and the cross-cutting commands declared in `todo.md`.
 
 use std::process::Command;
 
@@ -11,6 +11,15 @@ fn main() {
     let cmd = args.first().map(String::as_str).unwrap_or("help");
 
     let code = match cmd {
+        "check" => {
+            let f = fmt();
+            let c = clippy();
+            let d = deny();
+            f.max(c).max(d)
+        }
+        "fmt" => fmt(),
+        "clippy" => clippy(),
+        "test" => test(),
         "leakage" => leakage(),
         "no-std" => no_std(),
         "kat-check" => kat_check(),
@@ -32,8 +41,53 @@ fn main() {
 
 fn print_help() {
     println!(
-        "usage: cargo xtask <command>\n\ncommands:\n  leakage        run the dudect-style Welch t-test harness (tpt-crypto-ct)\n  no-std         build no_std crates for thumbv6m-none-eabi\n  kat-check     verify tests/kat/PROVENANCE.md sha256s\n  verify        run tpt-telos over specs/*.telos\n  release-dry-run  cargo publish --dry-run in topo order\n  sbom          emit an SBOM artifact\n"
+        "usage: cargo xtask <command>\n\ncommands:\n  \
+         check            fmt --check + clippy -D warnings + cargo deny\n  \
+         fmt              cargo fmt --check\n  \
+         clippy           clippy --all-targets --all-features -D warnings\n  \
+         test             cargo test --workspace --all-features\n  \
+         leakage          run the dudect-style Welch t-test harness (tpt-crypto-ct)\n  \
+         no-std           build no_std crates for thumbv6m-none-eabi\n  \
+         kat-check        verify tests/kat/PROVENANCE.md sha256s\n  \
+         verify           run tpt-telos over specs/*.telos\n  \
+         release-dry-run  cargo publish --dry-run in topo order\n  \
+         sbom             emit a SBOM artifact\n"
     );
+}
+
+fn cargo(args: &[&str]) -> i32 {
+    let status = Command::new("cargo").args(args).status();
+    match status {
+        Ok(s) if s.success() => 0,
+        Ok(_) => 1,
+        Err(e) => {
+            eprintln!("xtask: could not invoke cargo: {e}");
+            1
+        }
+    }
+}
+
+fn fmt() -> i32 {
+    println!("xtask fmt: cargo fmt --check");
+    cargo(&["fmt", "--check"])
+}
+
+fn clippy() -> i32 {
+    println!("xtask clippy: clippy --all-targets --all-features -D warnings");
+    cargo(&[
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings",
+    ])
+}
+
+fn test() -> i32 {
+    println!("xtask test: cargo test --workspace --all-features");
+    cargo(&["test", "--workspace", "--all-features"])
 }
 
 /// Run `tests/leakage.rs` for `tpt-crypto-ct` under the `leakage` feature.
@@ -71,13 +125,13 @@ fn leakage() -> i32 {
 }
 
 fn no_std() -> i32 {
-    println!("xtask no-std: building tpt-crypto-ct for thumbv6m-none-eabi (no alloc) ...");
-    // The ct crate is fully heapless; build it without default (std) features.
+    println!("xtask no-std: building tpt-crypto-core for thumbv6m-none-eabi (no alloc) ...");
+    // tpt-crypto-core is fully heapless; build it without default (std) features.
     let status = Command::new("cargo")
         .args([
             "build",
             "-p",
-            "tpt-crypto-ct",
+            "tpt-crypto-core",
             "--no-default-features",
             "--target",
             "thumbv6m-none-eabi",
@@ -94,7 +148,7 @@ fn no_std() -> i32 {
 }
 
 fn kat_check() -> i32 {
-    println!("xtask kat-check: not yet wired (no KAT corpus for tpt-crypto-ct).");
+    println!("xtask kat-check: not yet wired (no KAT corpus for tpt-crypto-core).");
     0
 }
 
@@ -104,9 +158,9 @@ fn verify() -> i32 {
 }
 
 fn release_dry_run() -> i32 {
-    println!("xtask release-dry-run: run `cargo publish --dry-run -p tpt-crypto-ct`.");
+    println!("xtask release-dry-run: run `cargo publish --dry-run -p tpt-crypto-core`.");
     let status = Command::new("cargo")
-        .args(["publish", "--dry-run", "-p", "tpt-crypto-ct"])
+        .args(["publish", "--dry-run", "-p", "tpt-crypto-core"])
         .status();
     match status {
         Ok(s) if s.success() => 0,
@@ -121,4 +175,39 @@ fn release_dry_run() -> i32 {
 fn sbom() -> i32 {
     println!("xtask sbom: not yet implemented.");
     0
+}
+
+fn deny() -> i32 {
+    println!("xtask deny: cargo deny check");
+    // `cargo-deny` may be installed as the standalone `cargo-deny` binary or as
+    // the cargo subcommand `cargo deny`.
+    let has_standalone = which("cargo-deny");
+    let mut cmd = Command::new(if has_standalone {
+        "cargo-deny"
+    } else {
+        "cargo"
+    });
+    if !has_standalone {
+        cmd.arg("deny");
+    }
+    cmd.args(["check"]);
+    match cmd.status() {
+        Ok(s) if s.success() => 0,
+        Ok(_) => 1,
+        Err(e) => {
+            eprintln!("deny: could not invoke cargo-deny: {e}");
+            1
+        }
+    }
+}
+
+/// Cheap `Path::exists`-style probe for an executable on `PATH`.
+fn which(name: &str) -> bool {
+    Command::new(if cfg!(windows) { "where" } else { "which" })
+        .arg(name)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }

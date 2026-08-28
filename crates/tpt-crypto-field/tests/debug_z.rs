@@ -83,12 +83,25 @@ fn rand_fe<P: FieldParams>(limbs: [u64; N]) -> FieldElement<P> {
 
 #[test]
 fn debug_rt() {
-    for val in [0u64, 1, 2, 5, 12345, 0xFFFF_FFFF, 0x1_0000_0000, u64::MAX / 2] {
+    for val in [
+        0u64,
+        1,
+        2,
+        5,
+        12345,
+        0xFFFF_FFFF,
+        0x1_0000_0000,
+        u64::MAX / 2,
+    ] {
         let x = FieldElement::<P256BaseParams>::from_u64(val);
-        let y = FieldElement::<P256BaseParams>::from_bytes(&x.to_bytes()).unwrap();
+        let xb = x.to_bytes();
+        let y = FieldElement::<P256BaseParams>::from_bytes(&xb).unwrap();
+        let yb = y.to_bytes();
         eprintln!("val={} rt eq: {}", val, x.ct_eq(&y).into_bool());
+        eprintln!("  x.to_bytes() = {:?}", &xb[..]);
+        eprintln!("  y.to_bytes() = {:?}", &yb[..]);
         assert!(x.ct_eq(&y).into_bool(), "round trip failed for {}", val);
-        assert_eq!(x.to_bytes(), y.to_bytes());
+        assert_eq!(xb, yb);
     }
     // random
     let x = rand_fe::<P256BaseParams>([0x1234_5678, 0x9ABC_DEF0, 0x0FED_CBA9, 0x1234_5678, 0, 0]);

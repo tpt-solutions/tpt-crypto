@@ -185,8 +185,7 @@ impl Big {
         for i in 0..self.0.len() {
             let mut carry: u128 = 0;
             for j in 0..o.0.len() {
-                let prod =
-                    (self.0[i] as u128) * (o.0[j] as u128) + (t[i + j] as u128) + carry;
+                let prod = (self.0[i] as u128) * (o.0[j] as u128) + (t[i + j] as u128) + carry;
                 t[i + j] = prod as u64;
                 carry = prod >> 64;
             }
@@ -318,9 +317,7 @@ pub(crate) fn tower_info(k: u32) -> TowerInfo {
 }
 
 /// Smallest quadratic non-residue `z >= 2` in a tower field, via Euler's criterion.
-pub(crate) fn find_nonresidue_field<F: crate::field::Field + crate::ct::CtEq>(
-    half: &[u64],
-) -> F {
+pub(crate) fn find_nonresidue_field<F: crate::field::Field + crate::ct::CtEq>(half: &[u64]) -> F {
     let minus_one = F::one().neg();
     let mut zc = 2u64;
     loop {

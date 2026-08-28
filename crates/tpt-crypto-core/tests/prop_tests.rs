@@ -1,9 +1,9 @@
 //! Property tests for the constant-time primitives and secret wrappers.
 
 use proptest::prelude::*;
-use tpt_crypto_core::{ct_eq, ct_ne, ct_select, Choice};
 use tpt_crypto_core::secret::SecretBox;
 use tpt_crypto_core::zeroize::{Zeroize, Zeroizing};
+use tpt_crypto_core::{ct_eq, ct_ne, ct_select, Choice};
 
 proptest! {
     #[test]

@@ -91,23 +91,23 @@ variant (feature-gated re-exports instead of steps 3–6).
 ## Phase 1 — Constant-Time Foundation  (v0.1 publishable slice)
 
 ### crates/tpt-crypto-core
-- [ ] `Error` enum (non-secret, carries no timing/oracle info): `Verification`,
+- [x] `Error` enum (non-secret, carries no timing/oracle info): `Verification`,
       `InvalidLength`, `InvalidEncoding`, `RngFailure`, `NotOnCurve`, …
-- [ ] `SecretBox<T>`: owns `T`, zero-on-`Drop`; **no** `Debug`/`Display`/
+- [x] `SecretBox<T>`: owns `T`, zero-on-`Drop`; **no** `Debug`/`Display`/
       `PartialEq`/`Hash`/`Serialize`; `as_ref`/`expose_secret` gated behind an
       explicit method; `From`/`new`
-- [ ] `Zeroizing<T>` wrapper — `core::ptr::write_volatile` byte-wipe, no `unsafe`
+- [x] `Zeroizing<T>` wrapper — `core::ptr::write_volatile` byte-wipe, no `unsafe`
       leak to callers (any `unsafe` lives here with `// SAFETY:`; if unavoidable,
       this module gets the same local override as `-ct` — decide during impl)
-- [ ] Traits: `CtEq` (→ `Choice`), `ConstantTimeSelect`; re-export `ct_eq` /
+- [x] Traits: `CtEq` (→ `Choice`), `ConstantTimeSelect`; re-export `ct_eq` /
       `ct_select` facades (impl in `-ct`, so `-core` defines only the traits)
-- [ ] `CryptoRng` trait (fill_bytes, try_fill_bytes) + `DrbgCore`
+- [x] `CryptoRng` trait (fill_bytes, try_fill_bytes) + `DrbgCore`
       (reseed, generate); `HmacDrbg` / `CtrDrbg` live in `-hash`/`-aead`
-- [ ] `rand_core` bridge behind `rand_core` feature (`impl CryptoRng for R: RngCore + CryptoRng`)
-- [ ] `constant_time` doc module: what is guaranteed, threat model, how to review
-- [ ] KATs: n/a; proptest: `SecretBox` never derives leaky traits (compile-fail
+- [x] `rand_core` bridge behind `rand_core` feature (`impl CryptoRng for R: RngCore + CryptoRng`)
+- [x] `constant_time` doc module: what is guaranteed, threat model, how to review
+- [x] KATs: n/a; proptest: `SecretBox` never derives leaky traits (compile-fail
       tests via `trybuild`)
-- [ ] `specs/secret_no_branch.telos` (types encoding no secret-dependent branch)
+- [x] `specs/secret_no_branch.telos` (types encoding no secret-dependent branch)
 
 ### crates/tpt-crypto-ct
 - [ ] Local lint override: `#![deny(unsafe_op_in_unsafe_fn)]`,

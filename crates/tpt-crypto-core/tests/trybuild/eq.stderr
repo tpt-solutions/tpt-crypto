@@ -1,0 +1,13 @@
+error[E0369]: binary operation `==` cannot be applied to type `SecretBox<[u8; 4]>`
+ --> tests/trybuild/eq.rs:5:15
+  |
+5 |     let _ = a == b;
+  |             - ^^ - SecretBox<[u8; 4]>
+  |             |
+  |             SecretBox<[u8; 4]>
+  |
+note: the foreign item type `SecretBox<[u8; 4]>` doesn't implement `PartialEq`
+ --> src/secret.rs
+  |
+  | pub struct SecretBox<T: Zeroize> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not implement `PartialEq`

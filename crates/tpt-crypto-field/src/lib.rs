@@ -24,25 +24,25 @@
 
 extern crate alloc;
 
-pub mod ct;
-pub mod limb;
 pub mod consts;
-pub mod field;
-pub mod params;
+pub mod ct;
 pub mod extension;
+pub mod field;
+pub mod limb;
+pub mod params;
 
 mod big;
 
 pub use consts::MAX_LIMBS;
 pub use ct::{Choice, CtEq, CtOption};
+pub use extension::{Fp12, Fp2, Fp6};
 pub use field::{Field, FieldElement, FieldParams};
 pub use limb::Limb;
 pub use params::{
-    Bls12381Fp, Bls12381FpParams, Bls12381Fr, Bls12381FrParams, Ed25519Field,
-    Ed25519FieldParams, Ed25519Scalar, Ed25519ScalarParams, P256Base, P256BaseParams,
-    P256Scalar, P256ScalarParams, P384Base, P384BaseParams, P384Scalar, P384ScalarParams,
+    Bls12381Fp, Bls12381FpParams, Bls12381Fr, Bls12381FrParams, Ed25519Field, Ed25519FieldParams,
+    Ed25519Scalar, Ed25519ScalarParams, P256Base, P256BaseParams, P256Scalar, P256ScalarParams,
+    P384Base, P384BaseParams, P384Scalar, P384ScalarParams,
 };
-pub use extension::{Fp12, Fp2, Fp6};
 
 /// Error type for field operations.
 ///

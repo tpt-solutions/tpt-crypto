@@ -5,8 +5,8 @@
 //! performance targets.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use tpt_crypto_core::ct::{ct_eq, ct_select, Choice};
 use tpt_crypto_core::zeroize::Zeroize;
+use tpt_crypto_core::{ct_eq, ct_select, Choice};
 
 fn bench_ct_select_u64(c: &mut Criterion) {
     let a = 0xDEAD_BEEF_1234_5678u64;
@@ -14,10 +14,10 @@ fn bench_ct_select_u64(c: &mut Criterion) {
     let set = Choice::from_u8(1);
     let unset = Choice::from_u8(0);
     c.bench_function("ct_select/u64/set", |bench| {
-        bench.iter(|| ct_select(&set, &a, &b))
+        bench.iter(|| ct_select(&a, &b, set))
     });
     c.bench_function("ct_select/u64/unset", |bench| {
-        bench.iter(|| ct_select(&unset, &a, &b))
+        bench.iter(|| ct_select(&a, &b, unset))
     });
 }
 
@@ -33,15 +33,24 @@ fn bench_ct_eq_slice(c: &mut Criterion) {
 
 fn bench_zeroize(c: &mut Criterion) {
     for len in [16usize, 64, 256] {
-        c.bench_with_input(BenchmarkId::new("zeroize/array", len), &len, |bench, &len| {
-            bench.iter(|| {
-                let mut buf = vec![0xFFu8; len];
-                buf.zeroize();
-                buf
-            });
-        });
+        c.bench_with_input(
+            BenchmarkId::new("zeroize/array", len),
+            &len,
+            |bench, &len| {
+                bench.iter(|| {
+                    let mut buf = vec![0xFFu8; len];
+                    buf.zeroize();
+                    buf
+                });
+            },
+        );
     }
 }
 
-criterion_group!(benches, bench_ct_select_u64, bench_ct_eq_slice, bench_zeroize);
+criterion_group!(
+    benches,
+    bench_ct_select_u64,
+    bench_ct_eq_slice,
+    bench_zeroize
+);
 criterion_main!(benches);

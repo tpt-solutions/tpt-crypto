@@ -9,7 +9,7 @@
 ///
 /// ```
 /// use tpt_crypto_core::secret::SecretBox;
-/// use tpt_crypto_core::ct::{ct_eq, ct_select, Choice};
+/// use tpt_crypto_core::{ct_eq, ct_select, Choice};
 /// use tpt_crypto_core::zeroize::Zeroizing;
 ///
 /// // A key we want to keep out of logs and equality checks.
@@ -20,13 +20,13 @@
 ///
 /// // Comparing secrets must go through the constant-time primitives — never `==`.
 /// let other = SecretBox::new([0x42u8; 32]);
-/// assert!(ct_eq(key.expose_secret(), other.expose_secret()).is_set());
+/// assert!(ct_eq(key.expose_secret().as_slice(), other.expose_secret().as_slice()).is_true());
 ///
 /// // Constant-time selection: `picked` is `a` when `cond` is set, else `b`.
-/// let a = [1u8; 32];
-/// let b = [2u8; 32];
-/// let cond = Choice::from_u8(1);
-/// let picked = ct_select(&cond, &a, &b);
+/// let a = 1u64;
+/// let b = 2u64;
+/// let cond = Choice::from_bool(true);
+/// let picked = ct_select(&a, &b, cond);
 /// assert_eq!(picked, a);
 ///
 /// // Move a secret out with a guaranteed wipe on scope exit.
@@ -37,13 +37,13 @@ pub fn secret_handling_snippet() {}
 
 #[cfg(test)]
 mod tests {
-    use tpt_crypto_core::ct::ct_eq;
+    use tpt_crypto_core::ct_eq;
     use tpt_crypto_core::secret::SecretBox;
 
     #[test]
     fn secret_box_is_not_observable_by_accident() {
         let key = SecretBox::new([7u8; 16]);
         // The only read path is explicit:
-        assert!(ct_eq(key.expose_secret(), &[7u8; 16]).is_set());
+        assert!(ct_eq(key.expose_secret().as_slice(), &[7u8; 16]).is_true());
     }
 }

@@ -186,7 +186,7 @@ impl Blake3 {
     fn root_cv(&self) -> [u8; 32] {
         if self.stack_len == 0 {
             // No chunks: the (empty) chunk is the root.
-            let mut block = [0u8; 64];
+            let block = [0u8; 64];
             let mut flags = CHUNK_START | CHUNK_END | ROOT;
             if self.keyed {
                 flags |= KEYED_HASH;
@@ -198,7 +198,7 @@ impl Blake3 {
         }
         let mut cv = self.stack[0];
         for i in 1..self.stack_len {
-            let is_root = (i == self.stack_len - 1);
+            let is_root = i == self.stack_len - 1;
             let mut flags = PARENT;
             if is_root {
                 flags |= ROOT;

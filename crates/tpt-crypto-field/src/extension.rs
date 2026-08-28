@@ -193,7 +193,10 @@ impl Field for Fp6 {
     }
     #[inline]
     fn is_zero(&self) -> Choice {
-        self.c0.is_zero().and(self.c1.is_zero()).and(self.c2.is_zero())
+        self.c0
+            .is_zero()
+            .and(self.c1.is_zero())
+            .and(self.c2.is_zero())
     }
     #[inline]
     fn add(&self, o: &Self) -> Self {
@@ -453,7 +456,10 @@ mod enc {
             let c0 = Fp::from_bytes(&slice[0..bl]);
             let c1 = Fp::from_bytes(&slice[bl..2 * bl]);
             let valid = c0.is_some().and(c1.is_some());
-            CtOption::new(Fp2::new(c0.unwrap_or_default(), c1.unwrap_or_default()), valid)
+            CtOption::new(
+                Fp2::new(c0.unwrap_or_default(), c1.unwrap_or_default()),
+                valid,
+            )
         }
     }
 
@@ -478,7 +484,11 @@ mod enc {
             let c2 = Fp2::from_bytes(&slice[2 * bl..3 * bl]);
             let valid = c0.is_some().and(c1.is_some()).and(c2.is_some());
             CtOption::new(
-                Fp6::new(c0.unwrap_or_default(), c1.unwrap_or_default(), c2.unwrap_or_default()),
+                Fp6::new(
+                    c0.unwrap_or_default(),
+                    c1.unwrap_or_default(),
+                    c2.unwrap_or_default(),
+                ),
                 valid,
             )
         }
@@ -502,7 +512,10 @@ mod enc {
             let c0 = Fp6::from_bytes(&slice[0..bl]);
             let c1 = Fp6::from_bytes(&slice[bl..2 * bl]);
             let valid = c0.is_some().and(c1.is_some());
-            CtOption::new(Fp12::new(c0.unwrap_or_default(), c1.unwrap_or_default()), valid)
+            CtOption::new(
+                Fp12::new(c0.unwrap_or_default(), c1.unwrap_or_default()),
+                valid,
+            )
         }
     }
 }

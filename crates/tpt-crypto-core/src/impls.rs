@@ -10,11 +10,15 @@ use crate::traits::{ConstantTimeSelect, CtEq};
 /// `Choice::TRUE` iff `a == b`, computed with branch-free arithmetic.
 #[inline]
 fn ct_eq_u8(a: u8, b: u8) -> Choice {
-    // `diff` is 0 iff equal. `diff | (diff - 1)` is 0 iff `diff == 0`; otherwise
-    // it is nonzero, so `(... >> 7) ^ 1` is `1` (TRUE) iff `diff == 0`.
     let diff = a ^ b;
-    let is_zero = (diff | diff.wrapping_sub(1)) >> 7;
-    Choice::from_u8_lsb(is_zero ^ 1)
+    // Collapse all bits of `diff` into bit 0: bit 0 is 1 iff `diff != 0`.
+    // (A bare `(diff - 1) >> 7` does NOT work: it is 1 for both `diff == 0`
+    // and `diff >= 128`.)
+    let x = diff | (diff >> 4);
+    let x = x | (x >> 2);
+    let x = x | (x >> 1);
+    // Invert so that 1 means equal.
+    Choice::from_u8_lsb((x & 1) ^ 1)
 }
 
 /// Select `a` if `c` is true, else `b`, in constant time.
@@ -87,8 +91,8 @@ impl CtEq for str {
 
 #[cfg(test)]
 mod tests {
-use super::*;
-use crate::traits::ct_select;
+    use super::*;
+    use crate::traits::ct_select;
 
     #[test]
     fn int_eq_and_select() {
@@ -114,15 +118,3 @@ use crate::traits::ct_select;
         assert!(!"hello".ct_eq("world").is_true());
     }
 }
-
-
-
-
-
-
-
-
-
-#[test]
-fn dbg7() { extern crate std; use std::eprintln; eprintln!("u8(0,0)={} u8(0,ff)={}", ct_eq_u8(0,0).to_u8(), ct_eq_u8(0,255).to_u8()); eprintln!("u64(0,0)={} is_true={}", (0u64).ct_eq(&0u64).to_u8(), (0u64).ct_eq(&0u64).is_true()); }
-

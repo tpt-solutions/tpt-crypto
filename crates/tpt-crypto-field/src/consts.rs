@@ -19,30 +19,39 @@
 pub const MAX_LIMBS: usize = 6;
 
 /// `a - b` over `N` limbs, returning the result and a borrow flag (`1` if `a < b`).
+///
+/// The borrow is applied as two separate single-limb subtractions so that a
+/// borrow propagating through a limb equal to `0xFF..FF` is never lost to a
+/// wrapping add.
 #[inline]
 pub(crate) const fn sub_limbs<const N: usize>(a: &[u64; N], b: &[u64; N]) -> ([u64; N], u8) {
     let mut out = [0u64; N];
     let mut borrow = 0u64;
     let mut i = 0;
     while i < N {
-        let (d, bo) = a[i].overflowing_sub(b[i].wrapping_add(borrow));
+        let (d1, b1) = a[i].overflowing_sub(b[i]);
+        let (d, b2) = d1.overflowing_sub(borrow);
         out[i] = d;
-        borrow = bo as u64;
+        borrow = (b1 | b2) as u64;
         i += 1;
     }
     (out, borrow as u8)
 }
 
 /// `a + b` over `N` limbs, returning the result and a carry flag.
+///
+/// The carry is applied as two separate single-limb additions so that a carry
+/// propagating into a limb equal to `0xFF..FF` is never lost to a wrapping add.
 #[inline]
 pub(crate) const fn add_limbs<const N: usize>(a: &[u64; N], b: &[u64; N]) -> ([u64; N], u8) {
     let mut out = [0u64; N];
     let mut carry = 0u64;
     let mut i = 0;
     while i < N {
-        let (s, co) = a[i].overflowing_add(b[i].wrapping_add(carry));
+        let (s1, c1) = a[i].overflowing_add(b[i]);
+        let (s, c2) = s1.overflowing_add(carry);
         out[i] = s;
-        carry = co as u64;
+        carry = (c1 | c2) as u64;
         i += 1;
     }
     (out, carry as u8)
@@ -79,7 +88,11 @@ pub(crate) const fn limbs_eq<const N: usize>(a: &[u64; N], b: &[u64; N]) -> bool
 
 /// `a - b mod m`, assuming `a < m` and `b < m`.
 #[inline]
-pub(crate) const fn sub_mod(a: &[u64; MAX_LIMBS], b: &[u64; MAX_LIMBS], m: &[u64; MAX_LIMBS]) -> [u64; MAX_LIMBS] {
+pub(crate) const fn sub_mod(
+    a: &[u64; MAX_LIMBS],
+    b: &[u64; MAX_LIMBS],
+    m: &[u64; MAX_LIMBS],
+) -> [u64; MAX_LIMBS] {
     let (mut r, borrow) = sub_limbs(a, b);
     if borrow == 1 {
         let (s, _) = add_limbs(&r, m);
@@ -90,7 +103,11 @@ pub(crate) const fn sub_mod(a: &[u64; MAX_LIMBS], b: &[u64; MAX_LIMBS], m: &[u64
 
 /// `a + b mod m`, assuming `a < m` and `b < m`.
 #[inline]
-pub(crate) const fn add_mod(a: &[u64; MAX_LIMBS], b: &[u64; MAX_LIMBS], m: &[u64; MAX_LIMBS]) -> [u64; MAX_LIMBS] {
+pub(crate) const fn add_mod(
+    a: &[u64; MAX_LIMBS],
+    b: &[u64; MAX_LIMBS],
+    m: &[u64; MAX_LIMBS],
+) -> [u64; MAX_LIMBS] {
     let (r, _) = add_limbs(a, b);
     if limbs_ge(&r, m) {
         sub_mod(&r, m, m)
@@ -123,8 +140,7 @@ pub(crate) const fn shl_bits(m: &[u64; MAX_LIMBS], bits: u32) -> [u64; 2 * MAX_L
             out[limb_shift + i] = out[limb_shift + i].wrapping_add(v << bit_shift);
         }
         if bit_shift > 0 && limb_shift + i + 1 < 2 * MAX_LIMBS {
-            out[limb_shift + i + 1] =
-                out[limb_shift + i + 1].wrapping_add(v >> (64 - bit_shift));
+            out[limb_shift + i + 1] = out[limb_shift + i + 1].wrapping_add(v >> (64 - bit_shift));
         }
         i += 1;
     }
@@ -132,15 +148,23 @@ pub(crate) const fn shl_bits(m: &[u64; MAX_LIMBS], bits: u32) -> [u64; 2 * MAX_L
 }
 
 /// Plain `2*MAX_LIMBS`-limb subtraction (assumes `a >= b`).
+///
+/// The borrow is applied as two separate single-limb subtractions so that a
+/// borrow propagating through a limb equal to `0xFF..FF` is never lost to a
+/// wrapping add.
 #[inline]
-pub(crate) const fn sub_big(a: &[u64; 2 * MAX_LIMBS], b: &[u64; 2 * MAX_LIMBS]) -> [u64; 2 * MAX_LIMBS] {
+pub(crate) const fn sub_big(
+    a: &[u64; 2 * MAX_LIMBS],
+    b: &[u64; 2 * MAX_LIMBS],
+) -> [u64; 2 * MAX_LIMBS] {
     let mut out = [0u64; 2 * MAX_LIMBS];
     let mut borrow = 0u64;
     let mut i = 0;
     while i < 2 * MAX_LIMBS {
-        let (d, bo) = a[i].overflowing_sub(b[i].wrapping_add(borrow));
+        let (d1, b1) = a[i].overflowing_sub(b[i]);
+        let (d, b2) = d1.overflowing_sub(borrow);
         out[i] = d;
-        borrow = bo as u64;
+        borrow = (b1 | b2) as u64;
         i += 1;
     }
     out
@@ -175,7 +199,11 @@ pub(crate) const fn mod_reduce(t: &[u64; 2 * MAX_LIMBS], m: &[u64; MAX_LIMBS]) -
 
 /// Schoolbook multiplication followed by modular reduction: `(a * b) mod m`.
 #[inline]
-pub(crate) const fn mul_mod(a: &[u64; MAX_LIMBS], b: &[u64; MAX_LIMBS], m: &[u64; MAX_LIMBS]) -> [u64; MAX_LIMBS] {
+pub(crate) const fn mul_mod(
+    a: &[u64; MAX_LIMBS],
+    b: &[u64; MAX_LIMBS],
+    m: &[u64; MAX_LIMBS],
+) -> [u64; MAX_LIMBS] {
     let mut t = [0u64; 2 * MAX_LIMBS];
     let mut i = 0;
     while i < MAX_LIMBS {
@@ -205,7 +233,11 @@ pub(crate) const fn mul_mod(a: &[u64; MAX_LIMBS], b: &[u64; MAX_LIMBS], m: &[u64
 
 /// Left-to-right square-and-multiply exponentiation: `base^exp mod m`.
 #[inline]
-pub(crate) const fn pow_mod(base: &[u64; MAX_LIMBS], exp: &[u64; MAX_LIMBS], m: &[u64; MAX_LIMBS]) -> [u64; MAX_LIMBS] {
+pub(crate) const fn pow_mod(
+    base: &[u64; MAX_LIMBS],
+    exp: &[u64; MAX_LIMBS],
+    m: &[u64; MAX_LIMBS],
+) -> [u64; MAX_LIMBS] {
     let mut result = [0u64; MAX_LIMBS];
     result[0] = 1;
     let mut limb = MAX_LIMBS;

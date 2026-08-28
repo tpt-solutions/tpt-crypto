@@ -55,7 +55,8 @@ impl<R: CryptoRng> rand_core_06::RngCore for CoreRng<R> {
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core_06::Error> {
         self.0.try_fill_bytes(dest).map_err(|_| {
             rand_core_06::Error::from(
-                core::num::NonZeroU32::new(rand_core_06::Error::CUSTOM_START).expect("CUSTOM_START nonzero"),
+                core::num::NonZeroU32::new(rand_core_06::Error::CUSTOM_START)
+                    .expect("CUSTOM_START nonzero"),
             )
         })
     }

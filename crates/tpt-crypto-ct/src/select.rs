@@ -50,7 +50,7 @@ macro_rules! impl_ct_select_int {
     };
 }
 
-impl_ct_select_int!(u8, u16, u32, u128, usize);
+impl_ct_select_int!(u8, u16, u32, u128, usize, i8, i16, i32, i64, i128, isize);
 
 /// Generic constant-time selection for any [`CtSelect`] type.
 #[inline]

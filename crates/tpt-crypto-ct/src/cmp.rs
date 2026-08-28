@@ -49,7 +49,7 @@ macro_rules! impl_ct_eq_int {
     };
 }
 
-impl_ct_eq_int!(u8, u16, u32, u64, u128, usize);
+impl_ct_eq_int!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
 
 /// Constant-time "not-equal" mask for a `u64` limb: `0xFF` iff `a != b`.
 #[inline]

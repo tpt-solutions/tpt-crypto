@@ -397,7 +397,10 @@ macro_rules! sha2_type {
 
             #[inline]
             fn finalize(self) -> [u8; $out] {
-                self.e.clone().finalize_reset()
+                let full = self.e.clone().finalize_reset();
+                let mut out = [0u8; $out];
+                out.copy_from_slice(&full[..$out]);
+                out
             }
 
             fn reset(&mut self) {

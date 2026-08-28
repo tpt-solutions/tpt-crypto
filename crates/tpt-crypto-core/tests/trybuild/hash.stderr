@@ -1,0 +1,29 @@
+error[E0277]: the trait bound `SecretBox<[u8; 4]>: Eq` is not satisfied
+ --> tests/trybuild/hash.rs:5:9
+  |
+5 |     set.insert(tpt_crypto_core::secret::SecretBox::new([1u8; 4]));
+  |         ^^^^^^ the trait `Eq` is not implemented for `SecretBox<[u8; 4]>`
+  |
+note: required by a bound in `HashSet::<T, S>::insert`
+ --> $RUST/std/src/collections/hash/set.rs
+  |
+  |     T: Eq + Hash,
+  |        ^^ required by this bound in `HashSet::<T, S>::insert`
+...
+  |     pub fn insert(&mut self, value: T) -> bool {
+  |            ------ required by a bound in this associated function
+
+error[E0277]: the trait bound `SecretBox<[u8; 4]>: Hash` is not satisfied
+ --> tests/trybuild/hash.rs:5:9
+  |
+5 |     set.insert(tpt_crypto_core::secret::SecretBox::new([1u8; 4]));
+  |         ^^^^^^ the trait `Hash` is not implemented for `SecretBox<[u8; 4]>`
+  |
+note: required by a bound in `HashSet::<T, S>::insert`
+ --> $RUST/std/src/collections/hash/set.rs
+  |
+  |     T: Eq + Hash,
+  |             ^^^^ required by this bound in `HashSet::<T, S>::insert`
+...
+  |     pub fn insert(&mut self, value: T) -> bool {
+  |            ------ required by a bound in this associated function

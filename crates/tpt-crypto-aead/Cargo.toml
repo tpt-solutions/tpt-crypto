@@ -1,0 +1,38 @@
+[package]
+name = "tpt-crypto-aead"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Constant-time AEAD: AES-GCM, ChaCha20-Poly1305, XChaCha20-Poly1305, AES-GCM-SIV, and AES-256 CTR-DRBG. no_std, pure Rust."
+readme = "README.md"
+keywords = ["crypto", "aead", "aes-gcm", "chacha20", "no-std"]
+categories = ["cryptography", "no-std"]
+documentation = "https://docs.rs/tpt-crypto-aead"
+
+[dependencies]
+tpt-crypto-core = { workspace = true }
+tpt-crypto-ct = { workspace = true }
+# Trait-compat behind a feature; `aead` is MIT OR Apache-2.0 (https://crates.io/crates/aead).
+aead = { version = "0.6", default-features = false, optional = true }
+
+[features]
+default = ["std"]
+std = ["alloc", "tpt-crypto-core/std", "tpt-crypto-ct/std"]
+alloc = ["tpt-crypto-core/alloc"]
+# Enable `aead`-crate trait implementations for the AEAD types.
+aead-trait = ["dep:aead", "alloc", "tpt-crypto-core/alloc"]
+
+[dev-dependencies]
+hex = "0.4"
+proptest = "1"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

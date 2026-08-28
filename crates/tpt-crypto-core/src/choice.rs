@@ -30,6 +30,13 @@ impl Choice {
         Choice(if b { 0x01 } else { 0x00 })
     }
 
+    /// Build a [`Choice`] from a `u8` convention: `0` ⇒ false, any nonzero ⇒ true.
+    #[inline]
+    #[must_use]
+    pub const fn from_u8(v: u8) -> Choice {
+        Choice((v != 0) as u8)
+    }
+
     /// Build a [`Choice`] from the integer mask convention `0 == false`,
     /// non-zero == `true`.
     #[inline]
@@ -91,6 +98,6 @@ impl core::ops::Not for Choice {
     type Output = Choice;
     #[inline]
     fn not(self) -> Choice {
-        Choice(!self.0)
+        Choice(self.0 ^ 1)
     }
 }

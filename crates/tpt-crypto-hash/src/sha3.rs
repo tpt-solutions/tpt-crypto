@@ -93,6 +93,9 @@ struct Keccak {
     squeeze_pos: usize,
     prefix: [u8; 512],
     prefix_len: usize,
+    /// Set once padding has been applied; the sponge is then in the squeezing
+    /// phase and may only be squeezed (or reset).
+    finalized: bool,
 }
 
 impl Keccak {
@@ -107,6 +110,7 @@ impl Keccak {
             squeeze_pos: rate,
             prefix: [0; 512],
             prefix_len: 0,
+            finalized: false,
         }
     }
 
@@ -150,6 +154,10 @@ impl Keccak {
     }
 
     fn update(&mut self, data: &[u8]) {
+        debug_assert!(
+            !self.finalized,
+            "absorbing into a Keccak sponge that is already squeezing"
+        );
         self.absorb(data);
     }
 
@@ -190,6 +198,7 @@ impl Keccak {
             self.squeeze_buf[8 * k..8 * k + 8].copy_from_slice(&self.state[k].to_le_bytes());
         }
         self.squeeze_pos = 0;
+        self.finalized = true;
     }
 
     fn squeeze(&mut self, out: &mut [u8]) {
@@ -217,11 +226,21 @@ impl Keccak {
         self.reset();
     }
 
+    /// Squeeze `out.len()` bytes, applying the padding on the first call and
+    /// continuing the same output stream on every later call.
+    fn squeeze_stream(&mut self, out: &mut [u8]) {
+        if !self.finalized {
+            self.finish(&[]);
+        }
+        self.squeeze(out);
+    }
+
     fn reset(&mut self) {
         self.state = [0; 25];
         self.buf = [0; 200];
         self.buflen = 0;
         self.squeeze_pos = self.rate;
+        self.finalized = false;
         if self.prefix_len > 0 {
             let p = self.prefix;
             self.absorb(&p[..self.prefix_len]);
@@ -248,6 +267,30 @@ fn left_encode(mut x: u64, out: &mut [u8; 9]) -> usize {
         out[1 + i] = tmp[n - 1 - i];
     }
     n + 1
+}
+
+/// `right_encode(x)` per NIST SP 800-185: big-endian bytes of `x` followed by
+/// a single byte holding the number of bytes used. Returns `(len, bytes)`.
+fn right_encode(mut x: usize) -> (usize, [u8; 9]) {
+    let mut out = [0u8; 9];
+    if x == 0 {
+        out[0] = 0;
+        out[1] = 1;
+        return (2, out);
+    }
+    let mut tmp = [0u8; 8];
+    let mut n = 0;
+    while x > 0 {
+        tmp[n] = (x & 0xff) as u8;
+        x >>= 8;
+        n += 1;
+    }
+    // big-endian order, then the length byte.
+    for i in 0..n {
+        out[i] = tmp[n - 1 - i];
+    }
+    out[n] = n as u8;
+    (n + 1, out)
 }
 
 fn encode_string(s: &[u8], out: &mut [u8; 256]) -> usize {
@@ -321,7 +364,10 @@ macro_rules! sha3_type {
 
             #[inline]
             fn finalize(self) -> [u8; $out] {
-                self.e.clone().finalize_reset()
+                let mut e = self.e.clone();
+                let mut out = [0u8; $out];
+                e.digest_out(&[], &mut out);
+                out
             }
 
             fn reset(&mut self) {
@@ -375,6 +421,22 @@ impl Shake128 {
             e: Keccak::new(168, 0x1f),
         }
     }
+
+    /// Squeeze `out.len()` more bytes from the XOF stream **without** resetting.
+    ///
+    /// The first call applies the SHAKE padding and ends the absorbing phase;
+    /// each later call continues the same output stream, so
+    /// `squeeze(&mut a); squeeze(&mut b)` yields exactly the same bytes as a
+    /// single squeeze of `a.len() + b.len()`. This is what the FIPS 203/204/205
+    /// rejection samplers need: they consume the stream a few bytes at a time
+    /// and cannot know the total length up front.
+    ///
+    /// Calling [`Xof::update`] after the first `squeeze` is a logic error
+    /// (`debug_assert` in debug builds).
+    #[inline]
+    pub fn squeeze(&mut self, out: &mut [u8]) {
+        self.e.squeeze_stream(out);
+    }
 }
 impl Shake256 {
     /// Create a new SHAKE256 XOF.
@@ -383,6 +445,14 @@ impl Shake256 {
         Shake256 {
             e: Keccak::new(136, 0x1f),
         }
+    }
+
+    /// Squeeze `out.len()` more bytes from the XOF stream **without** resetting.
+    ///
+    /// See [`Shake128::squeeze`] for the streaming contract.
+    #[inline]
+    pub fn squeeze(&mut self, out: &mut [u8]) {
+        self.e.squeeze_stream(out);
     }
 }
 impl Default for Shake128 {
@@ -406,7 +476,8 @@ impl Xof for Shake128 {
     }
     #[inline]
     fn finalize_xof(self, out: &mut [u8]) {
-        self.e.clone().finalize_xof_reset(out);
+        let mut e = self.e.clone();
+        e.digest_out(&[], out);
     }
     fn reset(&mut self) {
         self.e.reset();
@@ -422,7 +493,8 @@ impl Xof for Shake256 {
     }
     #[inline]
     fn finalize_xof(self, out: &mut [u8]) {
-        self.e.clone().finalize_xof_reset(out);
+        let mut e = self.e.clone();
+        e.digest_out(&[], out);
     }
     fn reset(&mut self) {
         self.e.reset();
@@ -526,7 +598,8 @@ impl Xof for CShake128 {
     }
     #[inline]
     fn finalize_xof(self, out: &mut [u8]) {
-        self.e.clone().finalize_xof_reset(out);
+        let mut e = self.e.clone();
+        e.digest_out(&[], out);
     }
     fn reset(&mut self) {
         self.e.reset();
@@ -542,7 +615,8 @@ impl Xof for CShake256 {
     }
     #[inline]
     fn finalize_xof(self, out: &mut [u8]) {
-        self.e.clone().finalize_xof_reset(out);
+        let mut e = self.e.clone();
+        e.digest_out(&[], out);
     }
     fn reset(&mut self) {
         self.e.reset();
@@ -634,14 +708,17 @@ impl Xof for Kmac128 {
         self.e.update(data);
     }
     fn finalize_xof_reset(&mut self, out: &mut [u8]) {
-        let mut extra = [0u8; 256];
-        let elen = encode_string(self.msg_len.wrapping_mul(8), &mut extra);
+        let bitlen = self.msg_len.wrapping_mul(8);
+        let (elen, extra) = right_encode(bitlen as usize);
         self.e.digest_out(&extra[..elen], out);
         self.msg_len = 0;
     }
     #[inline]
     fn finalize_xof(self, out: &mut [u8]) {
-        self.e.clone().finalize_xof_reset(out);
+        let bitlen = self.msg_len.wrapping_mul(8);
+        let (elen, extra) = right_encode(bitlen as usize);
+        let mut e = self.e.clone();
+        e.digest_out(&extra[..elen], out);
     }
     fn reset(&mut self) {
         self.e.reset();
@@ -655,14 +732,17 @@ impl Xof for Kmac256 {
         self.e.update(data);
     }
     fn finalize_xof_reset(&mut self, out: &mut [u8]) {
-        let mut extra = [0u8; 256];
-        let elen = encode_string(self.msg_len.wrapping_mul(8), &mut extra);
+        let bitlen = self.msg_len.wrapping_mul(8);
+        let (elen, extra) = right_encode(bitlen as usize);
         self.e.digest_out(&extra[..elen], out);
         self.msg_len = 0;
     }
     #[inline]
     fn finalize_xof(self, out: &mut [u8]) {
-        self.e.clone().finalize_xof_reset(out);
+        let bitlen = self.msg_len.wrapping_mul(8);
+        let (elen, extra) = right_encode(bitlen as usize);
+        let mut e = self.e.clone();
+        e.digest_out(&extra[..elen], out);
     }
     fn reset(&mut self) {
         self.e.reset();

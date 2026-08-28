@@ -156,7 +156,7 @@ mod tests {
     fn zeroizing_wipes_on_drop() {
         let mut sink = [0xFFu8; 8];
         {
-            let z = Zeroizing::new(core::mem::replace(&mut sink, [0u8; 8]));
+            let z = Zeroizing::new(core::mem::take(&mut sink));
             assert_eq!(*z, [0xFFu8; 8]);
         }
         // After drop the (moved) value was wiped into `sink`, which we can only

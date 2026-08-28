@@ -7,9 +7,9 @@
 //! and needs no `proptest`/network dependency.
 
 use tpt_crypto_field::{
-    Bls12381Fp, Bls12381FpParams, Bls12381Fr, Bls12381FrParams, Choice, CtEq, Field,
-    FieldElement, FieldParams, Fp12, Fp2, Fp6, P256Base, P256BaseParams, P256Scalar,
-    P256ScalarParams, P384Base, P384BaseParams, P384Scalar, P384ScalarParams,
+    Bls12381Fp, Bls12381FpParams, Bls12381Fr, Bls12381FrParams, Choice, CtEq, Field, FieldElement,
+    FieldParams, Fp12, Fp2, Fp6, P256Base, P256BaseParams, P256Scalar, P256ScalarParams, P384Base,
+    P384BaseParams, P384Scalar, P384ScalarParams,
 };
 
 // ---------------------------------------------------------------------------
@@ -176,11 +176,7 @@ impl Rng {
 }
 
 // Per-field test harness.
-fn check_field<P: FieldParams>(
-    name: &str,
-    moduli: &[[u64; MAX]; 1],
-) {
-    let m = &moduli[0];
+fn check_field<P: FieldParams>(name: &str, m: &[u64; MAX]) {
     let mut rng = Rng::new(0x1234_5678 ^ (name.len() as u64));
     let mut fails = 0;
     for _ in 0..200 {
@@ -191,21 +187,21 @@ fn check_field<P: FieldParams>(
         let fb = FieldElement::<P>::from_u64(b);
         let prod = fa.mul(&fb);
         let expected = ref_mul_mod(&[a, 0, 0, 0, 0, 0], &[b, 0, 0, 0, 0, 0], m);
-        let expected_fe = FieldElement::<P>::from_u64(le_u64(&expected));
+        let expected_fe = FieldElement::<P>::from_limbs(expected);
         if !prod.ct_eq(&expected_fe).into_bool() {
             fails += 1;
         }
         // add cross-check
         let sum = fa.add(&fb);
         let (exp_add, _) = ref_add(&[a, 0, 0, 0, 0, 0], &[b, 0, 0, 0, 0, 0]);
-        let exp_add_fe = FieldElement::<P>::from_u64(le_u64(&exp_add));
+        let exp_add_fe = FieldElement::<P>::from_limbs(exp_add);
         if !sum.ct_eq(&exp_add_fe).into_bool() {
             fails += 1;
         }
         // sub cross-check
         let diff = fa.sub(&fb);
         let (exp_sub, _) = ref_sub(&[a, 0, 0, 0, 0, 0], &[b, 0, 0, 0, 0, 0]);
-        let exp_sub_fe = FieldElement::<P>::from_u64(le_u64(&exp_sub));
+        let exp_sub_fe = FieldElement::<P>::from_limbs(exp_sub);
         if !diff.ct_eq(&exp_sub_fe).into_bool() {
             fails += 1;
         }
@@ -224,7 +220,7 @@ fn check_field<P: FieldParams>(
         // pow: a^2 via pow_vartime
         let sq = fa.pow_vartime(&[2, 0, 0, 0, 0, 0]);
         let sq_exp = ref_mul_mod(&[a, 0, 0, 0, 0, 0], &[a, 0, 0, 0, 0, 0], m);
-        if !sq.ct_eq(&FieldElement::<P>::from_u64(le_u64(&sq_exp))).into_bool() {
+        if !sq.ct_eq(&FieldElement::<P>::from_limbs(sq_exp)).into_bool() {
             fails += 1;
         }
         // to_bytes/from_bytes round trip
@@ -244,14 +240,13 @@ fn check_field<P: FieldParams>(
     }
     // from_bytes must reject the modulus itself (non-canonical).
     let p_bytes = encode_big_endian(m);
-    if FieldElement::<P>::from_bytes(&p_bytes).is_some().into_bool() {
+    if FieldElement::<P>::from_bytes(&p_bytes)
+        .is_some()
+        .into_bool()
+    {
         fails += 1;
     }
     assert_eq!(fails, 0, "{name}: {fails} cross-check failures");
-}
-
-fn le_u64(a: &[u64; MAX]) -> u64 {
-    a[0]
 }
 
 fn encode_big_endian(m: &[u64; MAX]) -> [u8; MAX * 8] {
@@ -267,12 +262,12 @@ fn encode_big_endian(m: &[u64; MAX]) -> [u8; MAX * 8] {
 
 #[test]
 fn prime_fields_cross_check() {
-    check_field::<P256BaseParams>("P256Base", &[P256BaseParams::MODULUS]);
-    check_field::<P256ScalarParams>("P256Scalar", &[P256ScalarParams::MODULUS]);
-    check_field::<P384BaseParams>("P384Base", &[P384BaseParams::MODULUS]);
-    check_field::<P384ScalarParams>("P384Scalar", &[P384ScalarParams::MODULUS]);
-    check_field::<Bls12381FpParams>("BlsFp", &[Bls12381FpParams::MODULUS]);
-    check_field::<Bls12381FrParams>("BlsFr", &[Bls12381FrParams::MODULUS]);
+    check_field::<P256BaseParams>("P256Base", &P256BaseParams::MODULUS);
+    check_field::<P256ScalarParams>("P256Scalar", &P256ScalarParams::MODULUS);
+    check_field::<P384BaseParams>("P384Base", &P384BaseParams::MODULUS);
+    check_field::<P384ScalarParams>("P384Scalar", &P384ScalarParams::MODULUS);
+    check_field::<Bls12381FpParams>("BlsFp", &Bls12381FpParams::MODULUS);
+    check_field::<Bls12381FrParams>("BlsFr", &Bls12381FrParams::MODULUS);
 }
 
 // ---------------------------------------------------------------------------
@@ -287,10 +282,24 @@ fn basic_kats() {
             let o = <$t>::one();
             assert!(z.ct_eq(&z.add(&z)).into_bool());
             assert!(o.ct_eq(&o.mul(&o)).into_bool());
-            assert!(<$t>::from_u64(2).add(&<$t>::from_u64(3)).ct_eq(&<$t>::from_u64(5)).into_bool());
-            assert!(<$t>::from_u64(2).mul(&<$t>::from_u64(3)).ct_eq(&<$t>::from_u64(6)).into_bool());
-            assert!(<$t>::from_u64(5).sub(&<$t>::from_u64(3)).ct_eq(&<$t>::from_u64(2)).into_bool());
-            assert!(<$t>::from_u64(4).sqrt().unwrap().square().ct_eq(&<$t>::from_u64(4)).into_bool());
+            assert!(<$t>::from_u64(2)
+                .add(&<$t>::from_u64(3))
+                .ct_eq(&<$t>::from_u64(5))
+                .into_bool());
+            assert!(<$t>::from_u64(2)
+                .mul(&<$t>::from_u64(3))
+                .ct_eq(&<$t>::from_u64(6))
+                .into_bool());
+            assert!(<$t>::from_u64(5)
+                .sub(&<$t>::from_u64(3))
+                .ct_eq(&<$t>::from_u64(2))
+                .into_bool());
+            assert!(<$t>::from_u64(4)
+                .sqrt()
+                .unwrap()
+                .square()
+                .ct_eq(&<$t>::from_u64(4))
+                .into_bool());
             // invert of 2 gives 2^{-1}; 2 * 2^{-1} == 1
             let inv2 = <$t>::from_u64(2).invert().unwrap();
             assert!(<$t>::from_u64(2).mul(&inv2).ct_eq(&o).into_bool());
@@ -325,7 +334,10 @@ fn fp2_properties() {
         let b = Fp2::new(b0, b1);
         // u^2 == -1
         let u = Fp2::new(Bls12381Fp::zero(), Bls12381Fp::one());
-        assert!(u.square().ct_eq(&Fp2::new(Bls12381Fp::one().neg(), Bls12381Fp::zero())).into_bool());
+        assert!(u
+            .square()
+            .ct_eq(&Fp2::new(Bls12381Fp::one().neg(), Bls12381Fp::zero()))
+            .into_bool());
         // associativity of mul
         let c0 = Bls12381Fp::from_u64(rng.next() % (1 << 30));
         let c1 = Bls12381Fp::from_u64(rng.next() % (1 << 30));
@@ -368,7 +380,8 @@ fn fp6_fp12_properties() {
         // associativity
         assert!(a.mul(&b).mul(&c).ct_eq(&a.mul(&b.mul(&c))).into_bool());
         // distributivity
-        assert!(a.mul(&b.add(&c))
+        assert!(a
+            .mul(&b.add(&c))
             .ct_eq(&a.mul(&b).add(&a.mul(&c)))
             .into_bool());
         if a.is_zero().not().into_bool() {
@@ -379,10 +392,7 @@ fn fp6_fp12_properties() {
         let v = Fp6::new(Fp2::zero(), Fp2::one(), Fp2::zero());
         assert!(w.square().ct_eq(&Fp12::new(v, Fp6::zero())).into_bool());
         // Fp12 associativity
-        let mut e = || Fp12::new(
-            Fp6::new(r(), r(), r()),
-            Fp6::new(r(), r(), r()),
-        );
+        let mut e = || Fp12::new(Fp6::new(r(), r(), r()), Fp6::new(r(), r(), r()));
         let x = e();
         let y = e();
         let z = e();
@@ -397,8 +407,14 @@ fn fp6_fp12_properties() {
             assert!(s12.unwrap().square().ct_eq(&x).into_bool());
         }
         // encoding round trips
-        assert!(Fp6::from_bytes(&a.to_bytes()).unwrap().ct_eq(&a).into_bool());
-        assert!(Fp12::from_bytes(&x.to_bytes()).unwrap().ct_eq(&x).into_bool());
+        assert!(Fp6::from_bytes(&a.to_bytes())
+            .unwrap()
+            .ct_eq(&a)
+            .into_bool());
+        assert!(Fp12::from_bytes(&x.to_bytes())
+            .unwrap()
+            .ct_eq(&x)
+            .into_bool());
     }
 }
 
@@ -418,7 +434,10 @@ fn noncanonical_rejection() {
     assert!(P256Base::from_bytes(&[0u8; 32]).is_none().into_bool());
     assert!(P256Base::from_bytes(&[0u8; 64]).is_none().into_bool());
     // A canonical all-zero is accepted as zero.
-    assert!(P256Base::from_bytes(&[0u8; 48]).unwrap().is_zero().into_bool());
+    assert!(P256Base::from_bytes(&[0u8; 48])
+        .unwrap()
+        .is_zero()
+        .into_bool());
     // Choice from a boolean is consistent.
     let ch = Choice::from_bool(true);
     assert!(ch.into_bool());
