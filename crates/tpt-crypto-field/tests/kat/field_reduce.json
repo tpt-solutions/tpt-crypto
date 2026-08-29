@@ -1,0 +1,396 @@
+{
+  "field_reduce": [
+    {
+      "label": "P256_zero",
+      "input": [
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "P256_one",
+      "input": [
+        "0x0000000000000001",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0x0000000000000001",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "P256_p-1",
+      "input": [
+        "0xfffffffffffffffe",
+        "0x00000000ffffffff",
+        "0x0000000000000000",
+        "0xffffffff00000001"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0xfffffffffffffffe",
+        "0x00000000ffffffff",
+        "0x0000000000000000",
+        "0xffffffff00000001"
+      ]
+    },
+    {
+      "label": "P256_p",
+      "input": [
+        "0xffffffffffffffff",
+        "0x00000000ffffffff",
+        "0x0000000000000000",
+        "0xffffffff00000001"
+      ],
+      "canonical": false,
+      "reduced": [
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "P256_p+1",
+      "input": [
+        "0x0000000000000000",
+        "0x0000000100000000",
+        "0x0000000000000000",
+        "0xffffffff00000001"
+      ],
+      "canonical": false,
+      "reduced": [
+        "0x0000000000000001",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "P256_2p-1",
+      "input": [
+        "0xfffffffffffffffd",
+        "0x00000001ffffffff",
+        "0x0000000000000000",
+        "0xfffffffe00000002"
+      ],
+      "canonical": false,
+      "reduced": [
+        "0xfffffffffffffffe",
+        "0x00000000ffffffff",
+        "0x0000000000000000",
+        "0xffffffff00000001"
+      ]
+    },
+    {
+      "label": "P256_large_canonical",
+      "input": [
+        "0xffffffffffffffff",
+        "0x000000007fffffff",
+        "0x8000000000000000",
+        "0x7fffffff80000000"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0xffffffffffffffff",
+        "0x000000007fffffff",
+        "0x8000000000000000",
+        "0x7fffffff80000000"
+      ]
+    },
+    {
+      "label": "P384_zero",
+      "input": [
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "P384_one",
+      "input": [
+        "0x0000000000000001",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0x0000000000000001",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "P384_p-1",
+      "input": [
+        "0x00000000fffffffe",
+        "0xffffffff00000000",
+        "0xfffffffffffffffe",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0x00000000fffffffe",
+        "0xffffffff00000000",
+        "0xfffffffffffffffe",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff"
+      ]
+    },
+    {
+      "label": "P384_p",
+      "input": [
+        "0x00000000ffffffff",
+        "0xffffffff00000000",
+        "0xfffffffffffffffe",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff"
+      ],
+      "canonical": false,
+      "reduced": [
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "P384_p+1",
+      "input": [
+        "0x0000000100000000",
+        "0xffffffff00000000",
+        "0xfffffffffffffffe",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff"
+      ],
+      "canonical": false,
+      "reduced": [
+        "0x0000000000000001",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "P384_2p-1",
+      "input": [
+        "0x00000001fffffffd",
+        "0xfffffffe00000000",
+        "0xfffffffffffffffd",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff"
+      ],
+      "canonical": false,
+      "reduced": [
+        "0x00000000fffffffe",
+        "0xffffffff00000000",
+        "0xfffffffffffffffe",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff"
+      ]
+    },
+    {
+      "label": "P384_large_canonical",
+      "input": [
+        "0x000000007fffffff",
+        "0x7fffffff80000000",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff",
+        "0x7fffffffffffffff"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0x000000007fffffff",
+        "0x7fffffff80000000",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff",
+        "0xffffffffffffffff",
+        "0x7fffffffffffffff"
+      ]
+    },
+    {
+      "label": "BLS381Fp_zero",
+      "input": [
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "BLS381Fp_one",
+      "input": [
+        "0x0000000000000001",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0x0000000000000001",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "BLS381Fp_p-1",
+      "input": [
+        "0xb9feffffffffaaaa",
+        "0x1eabfffeb153ffff",
+        "0x6730d2a0f6b0f624",
+        "0x64774b84f38512bf",
+        "0x4b1ba7b6434bacd7",
+        "0x1a0111ea397fe69a"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0xb9feffffffffaaaa",
+        "0x1eabfffeb153ffff",
+        "0x6730d2a0f6b0f624",
+        "0x64774b84f38512bf",
+        "0x4b1ba7b6434bacd7",
+        "0x1a0111ea397fe69a"
+      ]
+    },
+    {
+      "label": "BLS381Fp_p",
+      "input": [
+        "0xb9feffffffffaaab",
+        "0x1eabfffeb153ffff",
+        "0x6730d2a0f6b0f624",
+        "0x64774b84f38512bf",
+        "0x4b1ba7b6434bacd7",
+        "0x1a0111ea397fe69a"
+      ],
+      "canonical": false,
+      "reduced": [
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "BLS381Fp_p+1",
+      "input": [
+        "0xb9feffffffffaaac",
+        "0x1eabfffeb153ffff",
+        "0x6730d2a0f6b0f624",
+        "0x64774b84f38512bf",
+        "0x4b1ba7b6434bacd7",
+        "0x1a0111ea397fe69a"
+      ],
+      "canonical": false,
+      "reduced": [
+        "0x0000000000000001",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000",
+        "0x0000000000000000"
+      ]
+    },
+    {
+      "label": "BLS381Fp_2p-1",
+      "input": [
+        "0x73fdffffffff5555",
+        "0x3d57fffd62a7ffff",
+        "0xce61a541ed61ec48",
+        "0xc8ee9709e70a257e",
+        "0x96374f6c869759ae",
+        "0x340223d472ffcd34"
+      ],
+      "canonical": false,
+      "reduced": [
+        "0xb9feffffffffaaaa",
+        "0x1eabfffeb153ffff",
+        "0x6730d2a0f6b0f624",
+        "0x64774b84f38512bf",
+        "0x4b1ba7b6434bacd7",
+        "0x1a0111ea397fe69a"
+      ]
+    },
+    {
+      "label": "BLS381Fp_large_canonical",
+      "input": [
+        "0xdcff7fffffffd555",
+        "0x0f55ffff58a9ffff",
+        "0xb39869507b587b12",
+        "0xb23ba5c279c2895f",
+        "0x258dd3db21a5d66b",
+        "0x0d0088f51cbff34d"
+      ],
+      "canonical": true,
+      "reduced": [
+        "0xdcff7fffffffd555",
+        "0x0f55ffff58a9ffff",
+        "0xb39869507b587b12",
+        "0xb23ba5c279c2895f",
+        "0x258dd3db21a5d66b",
+        "0x0d0088f51cbff34d"
+      ]
+    }
+  ]
+}

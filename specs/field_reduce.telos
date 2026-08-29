@@ -1,0 +1,35 @@
+spec field_reduce
+
+description:
+  Modular reduction of an arbitrary-width integer residue into the canonical range
+  `[0, p)` of a prime field `GF(p)`. This is the final step of Montgomery
+  multiplication (and of `from_bytes`): given a value `x` in `[0, 2p)`, produce
+  `x` if `x < p` else `x - p`, without branching on the comparison result.
+
+inputs:
+   x : [u64; LIMBS]   // an integer in [0, 2p), little-endian limbs
+
+outputs:
+   result : [u64; LIMBS]
+
+assumes:
+   0 <= x < 2p
+
+ensures:
+   // functional correctness: result is x reduced modulo p, canonical.
+   result == x mod p
+   0 <= result < p
+   // constant-time contract: the comparison `x >= p` and the conditional
+   // subtraction must not leak through the execution trace.
+   execution_trace ⟂ x
+
+non_leaks:
+   - the `x >= p` comparison is performed limb-wise with a borrow/mask, not a
+     secret-dependent branch
+   - the subtraction `x - p` is applied via a constant-time select (cmov), so
+     both `x` and `x - p` are computed unconditionally and one is chosen by mask
+
+verification:
+   // discharged by the `tests/smoke.rs` round-trip (from_bytes(to_bytes(x)) == x)
+   // and by Wycheproof non-canonical encoding rejection in
+   // `tests/kat/field_reduce.json` (see `tests/kat/PROVENANCE.md`).

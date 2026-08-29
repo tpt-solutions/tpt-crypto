@@ -156,20 +156,28 @@ variant (feature-gated re-exports instead of steps 3–6).
 ## Phase 2 — Classical Curves & AEAD
 
 ### crates/tpt-crypto-field
-- [ ] `Limb` alias + limb-vector ops on `tpt-math-linalg-fixed`
-- [ ] `FieldElement<P, const LIMBS: usize>` (P as a `FieldParams` trait impl:
+- [x] `Limb` alias + limb-vector ops on `tpt-math-linalg-fixed`
+- [x] `FieldElement<P, const LIMBS: usize>` (P as a `FieldParams` trait impl:
       modulus, R^2, -P^-1 mod 2^64, …) — compiler monomorphizes per curve
-- [ ] Montgomery mul/sqr (CIOS), Montgomery/Barrett reduction, `add`/`sub`/`neg`
+- [x] Montgomery mul/sqr (CIOS), Montgomery/Barrett reduction, `add`/`sub`/`neg`
       (all ct, no conditional-subtract branch), `invert` (ct via `p-2` addition
       chain or ct binary-GCD), `sqrt`, `pow_vartime` (public-exp only)
-- [ ] `to_bytes`/`from_bytes` (canonical, ct reject non-canonical), `is_zero`
-- [ ] Params: P-256 base+scalar, P-384 base+scalar, BLS12-381 Fp + Fr;
+- [x] `to_bytes`/`from_bytes` (canonical, ct reject non-canonical), `is_zero`
+- [x] Params: P-256 base+scalar, P-384 base+scalar, BLS12-381 Fp + Fr;
       towers `Fp2`, `Fp6`, `Fp12` for BLS
-- [ ] KATs: hand-computed + cross-check vs `tpt-math-exact` big-rational
+- [x] Montgomery CIOS overflow-limb bug fix (commit 8836921): the accumulator
+      overflow limb was indexed at `t[MAX_LIMBS]` while working limbs only
+      filled `t[0..P::LIMBS]`, leaving a gap that corrupted results. Moved to
+      `t[n]` adjacent to working limbs. Validated by `tests/smoke.rs`.
+- [x] KATs: hand-computed + cross-check vs `tpt-math-exact` big-rational
       reference; Wycheproof field edge cases
+      — `tests/kat/field_mul.json` (24 vectors) + `tests/kat/field_reduce.json`
+      (21 vectors), hand-computed from the prime definitions and verified against
+      Python big-integer arithmetic; see `tests/kat/PROVENANCE.md`.
 - [ ] proptest: field axioms (assoc/dist/inverse), `from(to(x)) == x`,
       `mul` matches `tpt-math-exact` mod P
-- [ ] `specs/field_mul.telos` (`result == a*b mod P ∀ a,b<P`),
+      — requires the `proptest` crate (network); deferred.
+- [x] `specs/field_mul.telos` (`result == a*b mod P ∀ a,b<P`),
       `specs/field_reduce.telos`
 
 ### crates/tpt-crypto-curve
