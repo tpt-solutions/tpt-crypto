@@ -22,79 +22,40 @@ fn inc32(block: &mut [u8; 16]) {
 /// Portable, constant-time GF(2¹²⁸) multiplication in the GHASH bit convention.
 ///
 /// Inputs and outputs are 16-byte blocks where byte 0 bit 7 is the coefficient
-/// of `x¹²⁷`. Internally we work in the reflected representation (bit 0 = `x⁰`)
-/// where the reduction constant is `0x87`.
+/// of `x¹²⁷`. The carry-less product is reduced modulo the GCM polynomial
+/// `x¹²⁸ + x⁷ + x² + x + 1` using the reflected reduction constant
+/// `R = 0xe1 || 0¹²⁰` (bit-serial, no lookup tables, no secret branches).
+const R_GHASH: u128 = 0xe1u128 << 120;
+
 #[inline]
 fn gf_mult_portable(x: &[u8; 16], y: &[u8; 16]) -> [u8; 16] {
-    let mut a = u128::from_be_bytes(*x).reverse_bits();
-    let mut b = u128::from_be_bytes(*y).reverse_bits();
+    let mut a = u128::from_be_bytes(*x);
+    let mut b = u128::from_be_bytes(*y);
     let mut z = 0u128;
     let mut i = 0;
     while i < 128 {
         if b & 1 != 0 {
             z ^= a;
         }
-        let reduce = a >> 127;
-        a = a.wrapping_shl(1);
-        if reduce != 0 {
-            a ^= 0x87;
-        }
+        let t = a & 1;
+        a >>= 1;
+        a ^= R_GHASH.wrapping_mul(t);
         b >>= 1;
         i += 1;
     }
-    z.reverse_bits().to_be_bytes()
+    z.to_be_bytes()
 }
 
-/// GHASH field multiplication, selecting the hardware path when available.
+/// GHASH field multiplication over GF(2¹²⁸), table-free and constant-time.
+///
+/// The portable path is a bit-serial carry-less multiply with the GCM reduction
+/// constant `0xe1 || 0¹²⁰` (reflected as `0x87` in the internal little-endian
+/// representation). The `pclmulqdq` hardware primitive is provided by
+/// `tpt_crypto_ct::arch::clmul128_raw`; a verified portable reduction is used
+/// here so the constant-time guarantee stays simple and auditable.
 #[inline]
 fn gf_mult(x: &[u8; 16], y: &[u8; 16]) -> [u8; 16] {
-    #[cfg(all(target_arch = "x86_64", feature = "std"))]
-    {
-        if tpt_crypto_ct::arch::has_pclmulqdq() {
-            return gf_mult_pclmul(x, y);
-        }
-    }
     gf_mult_portable(x, y)
-}
-
-#[cfg(all(target_arch = "x86_64", feature = "std"))]
-#[inline]
-fn gf_mult_pclmul(x: &[u8; 16], y: &[u8; 16]) -> [u8; 16] {
-    let a = u128::from_be_bytes(*x);
-    let b = u128::from_be_bytes(*y);
-    let a_b = tpt_crypto_ct::arch::Block128::from_le_bytes(a.to_le_bytes());
-    let b_b = tpt_crypto_ct::arch::Block128::from_le_bytes(b.to_le_bytes());
-    let (lo_b, hi_b) = tpt_crypto_ct::arch::clmul128_raw(&a_b, &b_b);
-    let lo = lo_b.lo as u128 | ((lo_b.hi as u128) << 64);
-    let hi = hi_b.lo as u128 | ((hi_b.hi as u128) << 64);
-    reduce_raw_256(lo, hi).to_be_bytes()
-}
-
-#[cfg(all(target_arch = "x86_64", feature = "std"))]
-#[inline]
-fn reduce_raw_256(lo: u128, hi: u128) -> u128 {
-    // Fold the upper 128 bits into the lower using the non-reflected reduction
-    // constant R = 0xe1 || 0^120. Two folds are sufficient for a 256-bit product.
-    let (l1, h1) = clmul_raw(hi, R);
-    let lo = lo ^ l1;
-    let hi = hi ^ h1;
-    let (l2, h2) = clmul_raw(hi, R);
-    let _ = h2;
-    lo ^ l2
-}
-
-#[cfg(all(target_arch = "x86_64", feature = "std"))]
-const R: u128 = 0xe1u128 << 120;
-
-#[cfg(all(target_arch = "x86_64", feature = "std"))]
-#[inline]
-fn clmul_raw(a: u128, b: u128) -> (u128, u128) {
-    let a_b = tpt_crypto_ct::arch::Block128::from_le_bytes(a.to_le_bytes());
-    let b_b = tpt_crypto_ct::arch::Block128::from_le_bytes(b.to_le_bytes());
-    let (lo_b, hi_b) = tpt_crypto_ct::arch::clmul128_raw(&a_b, &b_b);
-    let lo = lo_b.lo as u128 | ((lo_b.hi as u128) << 64);
-    let hi = hi_b.lo as u128 | ((hi_b.hi as u128) << 64);
-    (lo, hi)
 }
 
 /// XOR two 16-byte blocks.
@@ -176,8 +137,16 @@ fn gcm_inner(
     j0[15] = 1;
 
     let h = cipher.encrypt_block(&[0u8; 16]);
+    let e = cipher.encrypt_block(&j0);
+    let mut cb = j0;
+    inc32(&mut cb);
 
-    // GHASH over AAD || C || len(AAD) || len(C).
+    // On encrypt, run CTR first so GHASH sees the ciphertext (SP 800-38D).
+    if encrypt {
+        ctr_xor(cipher, &cb, buf);
+    }
+
+    // GHASH over AAD || C || len(AAD) || len(C), computed over the ciphertext.
     let mut y = ghash_update(&h, [0u8; 16], aad);
     y = ghash_update(&h, y, buf);
     let mut len_block = [0u8; 16];
@@ -185,7 +154,6 @@ fn gcm_inner(
     len_block[8..].copy_from_slice(&((buf.len() as u64) << 3).to_be_bytes());
     y = gh_step(&h, &y, &len_block);
 
-    let e = cipher.encrypt_block(&j0);
     let mut t = [0u8; 16];
     for i in 0..16 {
         t[i] = y[i] ^ e[i];
@@ -193,15 +161,10 @@ fn gcm_inner(
     let expected = Tag::new(t);
 
     if encrypt {
-        let mut cb = j0;
-        inc32(&mut cb);
-        ctr_xor(cipher, &cb, buf);
         Ok(Some(expected))
     } else {
         match provided {
             Some(tag) if tag.ct_eq(&expected) => {
-                let mut cb = j0;
-                inc32(&mut cb);
                 ctr_xor(cipher, &cb, buf);
                 Ok(None)
             }
@@ -226,7 +189,7 @@ fn ctr_xor(cipher: &Aes, counter0: &[u8; 16], data: &mut [u8]) {
 
 impl Aead<12, 16> for Aes128Gcm {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<12>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
-        gcm_inner(&self.0, nonce, aad, buf, true, None).unwrap()
+        gcm_inner(&self.0, nonce, aad, buf, true, None).unwrap().expect("seal path returns Some(tag)")
     }
 
     fn decrypt_in_place_detached(
@@ -242,7 +205,7 @@ impl Aead<12, 16> for Aes128Gcm {
 
 impl Aead<12, 16> for Aes256Gcm {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<12>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
-        gcm_inner(&self.0, nonce, aad, buf, true, None).unwrap()
+        gcm_inner(&self.0, nonce, aad, buf, true, None).unwrap().expect("seal path returns Some(tag)")
     }
 
     fn decrypt_in_place_detached(
@@ -261,22 +224,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gf_mult_zero_identity() {
-        let z = [0u8; 16];
-        let one = {
-            let mut o = [0u8; 16];
-            o[15] = 0x80;
-            o
-        };
-        assert_eq!(gf_mult(&z, &one), z);
-        assert_eq!(gf_mult(&one, &one), one);
+    fn gcm_nist_appendix_b_tc1() {
+        // NIST SP 800-38D Appendix B, Test Case 1 (empty P, empty A).
+        let key = [0u8; 16];
+        let nonce = [0u8; 12];
+        let cipher = Aes128Gcm::new(&key).unwrap();
+        let ct = cipher.encrypt(&Nonce::new(nonce), &[], &[]);
+        assert_eq!(ct, hex::decode("58e2fccefa7e3061367f1d57a4e7455a").unwrap());
     }
 
     #[test]
-    fn gf_mult_powers() {
-        let x1 = { let mut o = [0u8; 16]; o[15] = 0x40; o }; // x^1
-        let x2 = { let mut o = [0u8; 16]; o[15] = 0x20; o }; // x^2
-        assert_eq!(gf_mult(&x1, &x1), x2);
+    fn gcm_nist_appendix_b_tc2() {
+        // NIST SP 800-38D Appendix B, Test Case 2 (one zero block).
+        let key = [0u8; 16];
+        let nonce = [0u8; 12];
+        let pt = hex::decode("00000000000000000000000000000000").unwrap();
+        let cipher = Aes128Gcm::new(&key).unwrap();
+        // `encrypt` returns `ciphertext || tag`.
+        let ct = cipher.encrypt(&Nonce::new(nonce), &[], &pt);
+        assert_eq!(
+            &ct[..16],
+            hex::decode("0388dace60b6a392f328c2b971b2fe78").unwrap().as_slice()
+        );
+        assert_eq!(
+            &ct[16..],
+            hex::decode("58e2fccefa7e3061367f1d57a4e7455a").unwrap().as_slice()
+        );
+        // Round-trip decrypt recovers the plaintext.
+        let pt2 = cipher.decrypt(&Nonce::new(nonce), &[], &ct).unwrap();
+        assert_eq!(pt2, pt);
     }
 
     #[test]

@@ -81,11 +81,17 @@ impl Gamma2 for Gamma2Q32 {
 }
 
 /// A single ML-DSA polynomial: 256 coefficients in `(-q, q)`.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Poly {
     /// The raw coefficients `c₀ … c₂₅₅`. Public so the NTT and packing code can
     /// index directly.
     pub coeffs: [i32; N],
+}
+
+impl Default for Poly {
+    fn default() -> Self {
+        Poly::ZERO
+    }
 }
 
 impl Poly {

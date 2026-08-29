@@ -6,10 +6,10 @@
 //! in [`super::mod.rs`] is a clean pointwise multiply.
 
 use tpt_crypto_hash::sha3::{Shake128, Shake256};
-use tpt_crypto_hash::traits::Xof;
+use tpt_crypto_hash::Xof;
 
 use crate::ml_dsa::MlDsaParams;
-use crate::poly::{poly_uniform, poly_uniform_eta, poly_uniform_gamma1, poly_challenge, Poly};
+use crate::poly::Poly;
 
 /// SHAKE-128 rate.
 const SHAKE128_RATE: usize = 168;

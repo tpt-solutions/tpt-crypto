@@ -7,7 +7,7 @@
 
 use tpt_crypto_core::{CryptoRng, Error};
 use tpt_crypto_hash::sha3::Shake256;
-use tpt_crypto_hash::traits::Xof;
+use tpt_crypto_hash::Xof;
 
 /// A deterministic, seedable RNG for tests and examples.
 pub struct TestRng {

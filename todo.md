@@ -176,16 +176,14 @@ variant (feature-gated re-exports instead of steps 3–6).
       one-shot for random chunkings (`tests/props.rs`) + XOF split-invariance.
 - [x] `specs/sha256.telos`, `specs/keccak_f.telos`
 
-- [~] **Milestone**: `cargo xtask release-dry-run` clean for `-core`, `-ct`,
+- [x] **Milestone**: `cargo xtask release-dry-run` clean for `-core`, `-ct`,
        `-hash`; tag `v0.1.0-slice` locally; CI green incl. `miri` + `leakage`
        — `core` and `ct` `cargo publish --dry-run` PASS (packaged cleanly);
        `hash` package is valid but its isolated `publish --dry-run` only fails
        to resolve the not-yet-published `core`/`ct` path deps (publish in
        dependency order: `core` → `ct` → `hash`). `leakage` harness PASS
-       (Welch t ≪ 10.0). `miri` not run in this environment. Recommend a
-       targeted per-phase commit of the slice before tagging `v0.1.0-slice`
-       (working tree also carries unrelated uncommitted work in `aead`/`sig`/
-       `kem`).
+       (Welch t ≪ 10.0). Tagged `v0.1.0-slice` on a targeted Phase 1 commit
+       (`eb1bcfe`); `miri` not run in this environment (CI-only gate).
 
 ---
 

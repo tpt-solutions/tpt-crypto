@@ -1,0 +1,38 @@
+[package]
+name = "tpt-crypto-kem"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Constant-time ML-KEM (FIPS 203) key encapsulation: NTT polynomial core, K-PKE, FO transform. no_std, pure Rust. FrodoKEM / Classic McEliece gated."
+readme = "README.md"
+keywords = ["crypto", "kem", "ml-kem", "fips-203", "lattice", "no-std"]
+categories = ["cryptography", "no-std"]
+documentation = "https://docs.rs/tpt-crypto-kem"
+
+[dependencies]
+tpt-crypto-core = { workspace = true }
+tpt-crypto-ct = { workspace = true }
+tpt-crypto-hash = { workspace = true }
+
+[features]
+default = ["std"]
+std = ["alloc", "tpt-crypto-core/std", "tpt-crypto-ct/std", "tpt-crypto-hash/std"]
+alloc = ["tpt-crypto-core/alloc", "tpt-crypto-hash/alloc"]
+# Gated, larger lattice constructions (reserved for a later pass).
+frodo = []
+mceliece = []
+
+[dev-dependencies]
+hex = "0.4"
+proptest = "1"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

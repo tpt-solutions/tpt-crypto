@@ -9,7 +9,7 @@
 //! constant-time and the secret key is zeroized on drop.
 
 use crate::aes::Aes;
-use tpt_crypto_core::{DrbgCore, Error, Result, Zeroizing};
+use tpt_crypto_core::{DrbgCore, Result, Zeroizing};
 
 const SEED_LEN: usize = 48; // AES-256 key (32) + counter (16)
 
@@ -40,7 +40,7 @@ impl CtrDrbg {
     /// One AES-256-CTR keystream block: encrypt the counter `v` and increment it.
     #[inline]
     fn block(&mut self) -> [u8; 16] {
-        let cipher = Aes::new_256(&self.key);
+        let cipher = Aes::new_256(&self.key[..]);
         let out = cipher.encrypt_block(&self.v);
         inc32(&mut self.v);
         out
@@ -54,12 +54,14 @@ impl CtrDrbg {
             let b = self.block();
             chunk.copy_from_slice(&b);
         }
+        let mut new_key = [0u8; 32];
         for i in 0..32 {
-            self.key[i] ^= temp[i] ^ provided_data.get(i).copied().unwrap_or(0);
+            new_key[i] = self.key[i] ^ temp[i] ^ provided_data.get(i).copied().unwrap_or(0);
         }
         for i in 0..16 {
             self.v[i] ^= temp[32 + i] ^ provided_data.get(32 + i).copied().unwrap_or(0);
         }
+        self.key = Zeroizing::new(new_key);
     }
 }
 
@@ -100,14 +102,6 @@ impl DrbgCore for CtrDrbg {
         }
         self.update(&[]);
         Ok(())
-    }
-}
-
-    #[test]
-    fn reseed_changes_output() {
-    fn drop(&mut self) {
-        // Zeroizing handles the key; ensure the counter is also scrubbed.
-        self.v = [0u8; 16];
     }
 }
 

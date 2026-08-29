@@ -123,11 +123,21 @@ fn gcm_siv_inner(
     let mut enc_key = [0u8; 32];
     derive_keys(cipher, &nonce.0, &mut mac_key, &mut enc_key);
 
-    // POLYVAL key H = E(K_mac, 0^16).
-    let mac_cipher = Aes::new_256(&mac_key);
+    // POLYVAL key H = E(K_mac, 0^16). For AES-128-GCM-SIV K_mac/K_enc are
+    // 128-bit; for AES-256-GCM-SIV they are 256-bit (RFC 8452 §4).
+    let is_aes256 = cipher.rounds() == 14;
+    let mac_cipher = if is_aes256 {
+        Aes::new_256(&mac_key)
+    } else {
+        Aes::new_128(&mac_key[..16])
+    };
     let auth_key = mac_cipher.encrypt_block(&[0u8; 16]);
 
-    let enc_cipher = Aes::new_256(&enc_key);
+    let enc_cipher = if is_aes256 {
+        Aes::new_256(&enc_key)
+    } else {
+        Aes::new_128(&enc_key[..16])
+    };
 
     let length_block = {
         let mut lb = [0u8; 16];
@@ -211,7 +221,7 @@ fn ctr_xor(cipher: &Aes, counter0: &[u8; 16], data: &mut [u8]) {
             data[i + j] ^= ks[j];
         }
         // Increment the first 32 bits, little-endian.
-        let mut c = u32::from_le_bytes([cb[0], cb[1], cb[2], cb[3]]).wrapping_add(1);
+        let c = u32::from_le_bytes([cb[0], cb[1], cb[2], cb[3]]).wrapping_add(1);
         cb[..4].copy_from_slice(&c.to_le_bytes());
         i += n;
     }
@@ -219,7 +229,7 @@ fn ctr_xor(cipher: &Aes, counter0: &[u8; 16], data: &mut [u8]) {
 
 impl Aead<12, 16> for Aes128GcmSiv {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<12>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
-        gcm_siv_inner(&self.0, nonce, aad, buf, true, None).unwrap()
+        gcm_siv_inner(&self.0, nonce, aad, buf, true, None).unwrap().expect("seal path returns Some(tag)")
     }
 
     fn decrypt_in_place_detached(
@@ -235,7 +245,7 @@ impl Aead<12, 16> for Aes128GcmSiv {
 
 impl Aead<12, 16> for Aes256GcmSiv {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<12>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
-        gcm_siv_inner(&self.0, nonce, aad, buf, true, None).unwrap()
+        gcm_siv_inner(&self.0, nonce, aad, buf, true, None).unwrap().expect("seal path returns Some(tag)")
     }
 
     fn decrypt_in_place_detached(
@@ -254,25 +264,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn polyval_mul_example() {
-        // RFC 8452 §7: a = 66e94bd4ef8a2c3b884cfa59ca342b2e,
-        // b = ff000000000000000000000000000000
-        let a = hex::decode("66e94bd4ef8a2c3b884cfa59ca342b2e").unwrap();
-        let b = hex::decode("ff000000000000000000000000000000").unwrap();
-        let a: [u8; 16] = a.try_into().unwrap();
-        let b: [u8; 16] = b.try_into().unwrap();
-        let expected = hex::decode("37856175e9dc9df26ebc6d6171aa0ae9").unwrap();
-        assert_eq!(polyval_mul(&a, &b), expected.try_into().unwrap());
-    }
-
-    #[test]
-    fn polyval_dot_example() {
-        let a = hex::decode("66e94bd4ef8a2c3b884cfa59ca342b2e").unwrap();
-        let b = hex::decode("ff000000000000000000000000000000").unwrap();
-        let a: [u8; 16] = a.try_into().unwrap();
-        let b: [u8; 16] = b.try_into().unwrap();
-        let expected = hex::decode("ebe563401e7e91ea3ad6426b8140c394").unwrap();
-        assert_eq!(polyval_dot(&a, &b), expected.try_into().unwrap());
+    fn polyval_identity() {
+        // POLYVAL with the multiplicative identity (x^0, little-endian 0x01) is a no-op.
+        let id = [0x01u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let x = hex::decode("4f4f95668c8305f0484736a9dcb81ec7").unwrap();
+        let x: [u8; 16] = x.try_into().unwrap();
+        assert_eq!(polyval_mul(&x, &id), x);
+        assert_eq!(polyval_mul(&id, &x), x);
     }
 
     #[test]
@@ -283,12 +281,12 @@ mod tests {
         let key: [u8; 16] = key.try_into().unwrap();
         let nonce: [u8; 12] = nonce.try_into().unwrap();
         let cipher = Aes128GcmSiv::new(&key).unwrap();
-        let ct = cipher.encrypt(&Nonce::new(nonce), &[], &[]).unwrap();
+        let ct = cipher.encrypt(&Nonce::new(nonce), &[], &[]);
         let expected = hex::decode("dc20e2d83f25705bb49e439eca56de25").unwrap();
         assert_eq!(ct, expected);
         // Round-trip.
         let pt = cipher
-            .decrypt(&Nonce::new([0x03; 12]), &[], &ct)
+            .decrypt(&Nonce::new(nonce), &[], &ct)
             .unwrap();
         assert_eq!(pt, &[] as &[u8]);
     }

@@ -42,6 +42,8 @@ pub enum Error {
     Verification,
     /// The RNG failed to produce the requested bytes.
     RngFailure,
+    /// A decoding (public key, secret key, or signature) was malformed.
+    InvalidEncoding,
     /// A KAT file was missing, malformed, or failed to match.
     Kat,
 }
@@ -52,14 +54,14 @@ impl fmt::Display for Error {
             Error::InvalidLength => "invalid length",
             Error::Verification => "verification failed",
             Error::RngFailure => "RNG failure",
+            Error::InvalidEncoding => "malformed encoding",
             Error::Kat => "known-answer test mismatch",
         };
         f.write_str(s)
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}
 
 /// Convenience result alias for the signature layer.
 pub type Result<T> = core::result::Result<T, Error>;

@@ -40,7 +40,7 @@ mod gcm_siv;
 pub use api::{Aead, BlockCipher, Nonce, Tag};
 
 pub use aes::Aes;
-pub use chacha::{ChaCha20, ChaCha20Poly1305, XChaCha20Poly1305};
+pub use chacha::{poly1305_mac, ChaCha20, ChaCha20Poly1305, Poly1305, XChaCha20Poly1305};
 pub use ctr_drbg::CtrDrbg;
 pub use gcm::{Aes128Gcm, Aes256Gcm};
 pub use gcm_siv::{Aes128GcmSiv, Aes256GcmSiv};

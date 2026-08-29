@@ -86,7 +86,7 @@ fn gf8_inv(x: u8) -> u8 {
         base = gf8_mul(base, base);
     }
     let nz = (x != 0) as u8;
-    let mask = nz.wrapping_sub(1); // 0xff if x != 0, else 0
+    let mask = 0u8.wrapping_sub(nz); // 0xff if x != 0, else 0
     result & mask
 }
 
@@ -329,7 +329,9 @@ mod tests {
         let pt = hex::decode("00112233445566778899aabbccddeeff").unwrap();
         let ct = hex::decode("69c4e0d86a7b0430d8cdb78070b4c55a").unwrap();
         let core = Aes::new_128(&key);
-        assert_eq!(ecb(&core, &pt.try_into().unwrap()), ct.try_into().unwrap());
+        let pt: [u8; 16] = pt.try_into().unwrap();
+        let ct: [u8; 16] = ct.try_into().unwrap();
+        assert_eq!(ecb(&core, &pt), ct);
     }
 
     #[test]
@@ -338,7 +340,9 @@ mod tests {
         let pt = hex::decode("00112233445566778899aabbccddeeff").unwrap();
         let ct = hex::decode("dda97ca4864cdfe06eaf70a0ec0d7191").unwrap();
         let core = Aes::new_192(&key);
-        assert_eq!(ecb(&core, &pt.try_into().unwrap()), ct.try_into().unwrap());
+        let pt: [u8; 16] = pt.try_into().unwrap();
+        let ct: [u8; 16] = ct.try_into().unwrap();
+        assert_eq!(ecb(&core, &pt), ct);
     }
 
     #[test]
@@ -347,6 +351,8 @@ mod tests {
         let pt = hex::decode("00112233445566778899aabbccddeeff").unwrap();
         let ct = hex::decode("8ea2b7ca516745bfeafc49904b496089").unwrap();
         let core = Aes::new_256(&key);
-        assert_eq!(ecb(&core, &pt.try_into().unwrap()), ct.try_into().unwrap());
+        let pt: [u8; 16] = pt.try_into().unwrap();
+        let ct: [u8; 16] = ct.try_into().unwrap();
+        assert_eq!(ecb(&core, &pt), ct);
     }
 }

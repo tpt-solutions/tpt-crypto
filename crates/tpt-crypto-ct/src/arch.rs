@@ -388,4 +388,22 @@ mod tests {
         unsafe { cmov_u64(255, &mut a, &b) };
         assert_eq!(a, 99);
     }
+
+    #[test]
+    fn clmul128_raw_basic() {
+        // 0xb * 0xd over GF(2) = 0x7f (fits in 128 bits, hi half is zero).
+        let a = Block128::from_le_bytes(0xb_u128.to_le_bytes());
+        let b = Block128::from_le_bytes(0xd_u128.to_le_bytes());
+        let (lo, hi) = clmul128_raw(&a, &b);
+        let lo_v = lo.lo as u128 | ((lo.hi as u128) << 64);
+        let hi_v = hi.lo as u128 | ((hi.hi as u128) << 64);
+        assert_eq!((lo_v, hi_v), (0x7f, 0));
+
+        // x^64 * x^64 = x^128 (lands entirely in the high half).
+        let x64 = Block128::from_le_bytes((1u128 << 64).to_le_bytes());
+        let (lo, hi) = clmul128_raw(&x64, &x64);
+        let lo_v = lo.lo as u128 | ((lo.hi as u128) << 64);
+        let hi_v = hi.lo as u128 | ((hi.hi as u128) << 64);
+        assert_eq!((lo_v, hi_v), (0, 1));
+    }
 }

@@ -278,16 +278,16 @@ impl Poly1305 {
         // Carry propagation into 26-bit limbs.
         let mut c = d0 >> 26;
         h[0] = (d0 & 0x3ffffff) as u64;
-        let mut d1 = d1 + c;
+        let d1 = d1 + c;
         c = d1 >> 26;
         h[1] = (d1 & 0x3ffffff) as u64;
-        let mut d2 = d2 + c;
+        let d2 = d2 + c;
         c = d2 >> 26;
         h[2] = (d2 & 0x3ffffff) as u64;
-        let mut d3 = d3 + c;
+        let d3 = d3 + c;
         c = d3 >> 26;
         h[3] = (d3 & 0x3ffffff) as u64;
-        let mut d4 = d4 + c;
+        let d4 = d4 + c;
 
         // Fold the overflow of d4 back in (2^130 ≡ 5 mod p).
         h[4] = (d4 & 0x3ffffff) as u64;
@@ -340,7 +340,7 @@ impl Poly1305 {
 }
 
 /// Poly1305 one-shot MAC over `msg` with a 32-byte one-time key.
-fn poly1305_mac(msg: &[u8], key: &[u8; 32]) -> [u8; 16] {
+pub fn poly1305_mac(msg: &[u8], key: &[u8; 32]) -> [u8; 16] {
     let mut mac = Poly1305::new(key);
     mac.update(msg);
     let s: [u8; 16] = key[16..32].try_into().unwrap();
@@ -379,7 +379,7 @@ fn chacha_poly_setup(key: &[u8; 32], nonce: &[u8; 12]) -> ([u8; 32], [u8; 12]) {
     let ks = chacha20_block(key, 0, nonce);
     let mut poly_key = [0u8; 32];
     poly_key.copy_from_slice(&ks[..32]);
-    (*poly_key, *nonce)
+    (poly_key, *nonce)
 }
 
 fn chacha_poly_seal(
@@ -390,7 +390,7 @@ fn chacha_poly_seal(
 ) -> Tag<16> {
     let (poly_key, cipher_nonce) = chacha_poly_setup(key, nonce);
     // ciphertext = ChaCha20 with counter starting at 1
-    let mut ctr = ChaCha20::new(key, cipher_nonce);
+    let mut ctr = ChaCha20::new(key, &cipher_nonce);
     ctr.counter = 1;
     ctr.apply_keystream(buf);
 
@@ -410,7 +410,7 @@ fn chacha_poly_open(
     if !tag.ct_eq(&Tag::new(expected)) {
         return Err(Error::Verification);
     }
-    let mut ctr = ChaCha20::new(key, cipher_nonce);
+    let mut ctr = ChaCha20::new(key, &cipher_nonce);
     ctr.counter = 1;
     ctr.apply_keystream(buf);
     Ok(())
@@ -490,7 +490,7 @@ mod tests {
     fn chacha20_rfc8439_block() {
         let key = hex::decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
             .unwrap();
-        let nonce = hex::decode("000000090000004a0000000000000000").unwrap();
+        let nonce = hex::decode("000000090000004a00000000").unwrap();
         let key: [u8; 32] = key.try_into().unwrap();
         let nonce: [u8; 12] = nonce.try_into().unwrap();
         let block = chacha20_block(&key, 1, &nonce);
@@ -501,14 +501,14 @@ mod tests {
              b5129cd1de164eb9cbd083e8a2503c4e",
         )
         .unwrap();
-        assert_eq!(&block[..], &expected[..]);
+        assert_eq!(&block[..], &expected[..], "got: {:02x?}", &block[..]);
     }
 
     #[test]
     fn chacha20_rfc8439_stream() {
         let key = hex::decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
             .unwrap();
-        let nonce = hex::decode("000000000000004a0000000000000000").unwrap();
+        let nonce = hex::decode("000000000000004a00000000").unwrap();
         let key: [u8; 32] = key.try_into().unwrap();
         let nonce: [u8; 12] = nonce.try_into().unwrap();
         let pt = [0u8; 64];
