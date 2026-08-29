@@ -21,9 +21,6 @@ tpt-crypto-hash = { version = "0.1.0", path = "crates/tpt-crypto-hash", default-
 digest = { version = "0.10", default-features = false }
 proptest = "1"
 
-# NOTE: `unsafe_code = "forbid"` is the workspace default. `tpt-crypto-ct` is
-# the single documented exception (its `arch` module). See SECURITY.md and the
-# crate's own `Cargo.toml`, which opts out of `lints.workspace`.
 [workspace.lints.rust]
 unsafe_code = "forbid"
 unsafe_op_in_unsafe_fn = "deny"

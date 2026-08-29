@@ -71,21 +71,22 @@ impl<P: FieldParams> FieldElement<P> {
     fn mont_mul(a: &[u64; MAX_LIMBS], b: &[u64; MAX_LIMBS]) -> [u64; MAX_LIMBS] {
         let p = &P::MODULUS;
         let mu = Self::MU;
+        let n = P::LIMBS;
         let mut t = [0u64; MAX_LIMBS + 1];
         let mut i = 0;
-        while i < P::LIMBS {
+        while i < n {
             let ai = a[i];
             let mut c: u128 = 0;
             let mut j = 0;
-            while j < P::LIMBS {
+            while j < n {
                 let prod = (ai as u128) * (b[j] as u128);
                 let sum = (t[j] as u128) + prod + c;
                 t[j] = sum as u64;
                 c = sum >> 64;
                 j += 1;
             }
-            let sum = (t[MAX_LIMBS] as u128) + c;
-            t[MAX_LIMBS] = sum as u64;
+            let sum = (t[n] as u128) + c;
+            t[n] = sum as u64;
             c = sum >> 64;
             // m = (t[0] * mu) mod 2^64
             let m = (t[0].wrapping_mul(mu)) as u128;
@@ -93,25 +94,22 @@ impl<P: FieldParams> FieldElement<P> {
             let s0 = (t[0] as u128) + m * (p[0] as u128);
             c = c + (s0 >> 64);
             let mut j = 1;
-            while j < P::LIMBS {
+            while j < n {
                 let mp = m * (p[j] as u128);
                 let sum2 = (t[j] as u128) + mp + c;
                 t[j - 1] = sum2 as u64;
                 c = sum2 >> 64;
                 j += 1;
             }
-            let sum3 = (t[MAX_LIMBS] as u128) + c;
-            t[MAX_LIMBS - 1] = sum3 as u64;
-            t[MAX_LIMBS] = (sum3 >> 64) as u64;
+            let sum3 = (t[n] as u128) + c;
+            t[n - 1] = sum3 as u64;
+            t[n] = (sum3 >> 64) as u64;
             i += 1;
         }
         // Normalize t (MAX+1 limbs, in [0, 2p)) to [0, p) with a ct conditional subtract.
-        let mut r = [0u64; MAX_LIMBS + 1];
-        r[0..MAX_LIMBS].copy_from_slice(&t[0..MAX_LIMBS]);
-        r[MAX_LIMBS] = t[MAX_LIMBS];
-        let mut pp = [0u64; MAX_LIMBS + 1];
-        pp[0..MAX_LIMBS].copy_from_slice(p);
-        let (sub, borrow) = consts::sub_limbs(&r, &pp);
+        let mut r = [0u64; MAX_LIMBS];
+        r[0..n].copy_from_slice(&t[0..n]);
+        let (sub, borrow) = consts::sub_limbs(&r, p);
         let ge = borrow == 0;
         let mut out = [0u64; MAX_LIMBS];
         let mut k = 0;
@@ -197,6 +195,13 @@ impl<P: FieldParams> FieldElement<P> {
             i += 1;
         }
         Self::from_integer(&reduced)
+    }
+
+    /// Construct from integer limbs (little-endian), reducing modulo `p`.
+    #[inline]
+    #[must_use]
+    pub fn from_limbs(int: [u64; MAX_LIMBS]) -> Self {
+        Self::from_integer(&int)
     }
 
     /// Constant-time selection between two field elements.
