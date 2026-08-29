@@ -18,31 +18,6 @@ use tpt_crypto_hash::k12::kangaroo_twelve;
 use tpt_crypto_hash::mac::hmac_sha256;
 use tpt_crypto_hash::kdf::hkdf_sha256;
 
-const fn hex(hexstr: &str) -> [u8; 64] {
-    // Only used for fixed-size const contexts where applicable.
-    let bytes = hexstr.as_bytes();
-    let mut out = [0u8; 64];
-    let mut i = 0;
-    let mut o = 0;
-    while i < bytes.len() {
-        let hi = hexbyte(bytes[i]);
-        let lo = hexbyte(bytes[i + 1]);
-        out[o] = (hi << 4) | lo;
-        i += 2;
-        o += 1;
-    }
-    out
-}
-
-const fn hexbyte(b: u8) -> u8 {
-    match b {
-        b'0'..=b'9' => b - b'0',
-        b'a'..=b'f' => b - b'a' + 10,
-        b'A'..=b'F' => b - b'A' + 10,
-        _ => 0,
-    }
-}
-
 fn decode_hex(s: &str) -> Vec<u8> {
     (0..s.len())
         .step_by(2)

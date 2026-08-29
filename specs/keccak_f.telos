@@ -1,0 +1,42 @@
+spec keccak_f
+
+description:
+  The Keccak-f[1600] permutation (FIPS 202) and the sponge built on it:
+  SHA3-224/256/384/512, SHAKE128/256, cSHAKE, and KMAC. The permutation is the
+  fixed sequence of 24 rounds of theta, rho, pi, chi, iota over a 5x5 array of
+  64-bit lanes. It is a bijection on the 1600-bit state and contains no
+  data-dependent control flow.
+
+inputs:
+   state : [u64; 25]        // the sponge state
+   message : bytes          // absorbed input
+   chunking : list<bytes>   // any partition of `message`
+
+outputs:
+   permuted : [u64; 25]     // keccak_f(state)
+   digest   : bytes         // sponge output
+
+assumes:
+   concat(chunking) == message
+
+ensures:
+   // permutation correctness against the FIPS 202 reference
+   keccak_f(state) == FIPS_202_KECCAK_F_1600(state)
+   // sponge / streaming equivalence
+   fold(Sha3_256::new(), chunking, update).finalize() == sha3_256(message)
+   // XOF stream is split-invariant
+   squeeze(a) ++ squeeze(b) == squeeze(a + b)
+   // fixed trace: absorb / permute / squeeze never branch or index on
+   // absorbed content or on squeezed output
+   execution_trace ⟂ (state_values, message_values)
+
+non_leaks:
+   - no conditional branch whose target depends on lane values
+   - no memory access whose address depends on lane values
+   - round count and rate are compile-time constants
+
+verification:
+   // discharged by NIST CAVP SHA-3 / SHAKE known-answer vectors and the
+   // NIST SP 800-185 cSHAKE / KMAC vectors in `tests/kat.rs`, plus the
+   // `sha3_256_streaming` and `shake128_split` property tests in
+   // `tests/props.rs`.

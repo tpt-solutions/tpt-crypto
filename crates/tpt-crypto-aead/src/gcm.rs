@@ -224,10 +224,7 @@ fn ctr_xor(cipher: &Aes, counter0: &[u8; 16], data: &mut [u8]) {
     }
 }
 
-impl Aead for Aes128Gcm {
-    const NONCE_LEN: usize = 12;
-    const TAG_LEN: usize = 16;
-
+impl Aead<12, 16> for Aes128Gcm {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<12>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
         gcm_inner(&self.0, nonce, aad, buf, true, None).unwrap()
     }
@@ -243,10 +240,7 @@ impl Aead for Aes128Gcm {
     }
 }
 
-impl Aead for Aes256Gcm {
-    const NONCE_LEN: usize = 12;
-    const TAG_LEN: usize = 16;
-
+impl Aead<12, 16> for Aes256Gcm {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<12>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
         gcm_inner(&self.0, nonce, aad, buf, true, None).unwrap()
     }

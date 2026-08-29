@@ -1,4 +1,4 @@
-//! KangarooTwelve (K12) over Keccak-p[1600, 12] / TurboSHAKE128. `no_std`.
+//! KangarooTwelve (K12) over `Keccak-p[1600,12]` / TurboSHAKE128. `no_std`.
 //!
 //! `KangarooTwelve(M, C, L)` builds `S = M || C || right_encode(|C|)` and:
 //! - if `|S| <= 8192`: returns `TurboSHAKE128(S, 0x07, L)`;
@@ -68,7 +68,7 @@ fn keccak_p12(a: &mut [u64; 25]) {
     }
 }
 
-/// A TurboSHAKE128 sponge (Keccak-p[1600, 12], rate 168, capacity 32).
+/// A TurboSHAKE128 sponge (`Keccak-p[1600,12]`, rate 168, capacity 32).
 struct TurboShake {
     state: [u8; 200],
     buflen: usize,

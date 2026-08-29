@@ -248,31 +248,32 @@ impl Poly1305 {
         h[3] = h[3].wrapping_add(n[3]);
         h[4] = h[4].wrapping_add(n[4]);
 
-        let d0 = h[0] as u128 * self.r0
-            + h[1] as u128 * self.r4_5
-            + h[2] as u128 * self.r3_5
-            + h[3] as u128 * self.r2_5
-            + h[4] as u128 * self.r1_5;
-        let d1 = h[0] as u128 * self.r1
-            + h[1] as u128 * self.r0
-            + h[2] as u128 * self.r4_5
-            + h[3] as u128 * self.r3_5
-            + h[4] as u128 * self.r2_5;
-        let d2 = h[0] as u128 * self.r2
-            + h[1] as u128 * self.r1
-            + h[2] as u128 * self.r0
-            + h[3] as u128 * self.r4_5
-            + h[4] as u128 * self.r3_5;
-        let d3 = h[0] as u128 * self.r3
-            + h[1] as u128 * self.r2
-            + h[2] as u128 * self.r1
-            + h[3] as u128 * self.r0
-            + h[4] as u128 * self.r4_5;
-        let d4 = h[0] as u128 * self.r4
-            + h[1] as u128 * self.r3
-            + h[2] as u128 * self.r2
-            + h[3] as u128 * self.r1
-            + h[4] as u128 * self.r0;
+        let mul = |a: u64, b: u64| (a as u128) * (b as u128);
+        let d0 = mul(h[0], self.r0)
+            + mul(h[1], self.r4_5)
+            + mul(h[2], self.r3_5)
+            + mul(h[3], self.r2_5)
+            + mul(h[4], self.r1_5);
+        let d1 = mul(h[0], self.r1)
+            + mul(h[1], self.r0)
+            + mul(h[2], self.r4_5)
+            + mul(h[3], self.r3_5)
+            + mul(h[4], self.r2_5);
+        let d2 = mul(h[0], self.r2)
+            + mul(h[1], self.r1)
+            + mul(h[2], self.r0)
+            + mul(h[3], self.r4_5)
+            + mul(h[4], self.r3_5);
+        let d3 = mul(h[0], self.r3)
+            + mul(h[1], self.r2)
+            + mul(h[2], self.r1)
+            + mul(h[3], self.r0)
+            + mul(h[4], self.r4_5);
+        let d4 = mul(h[0], self.r4)
+            + mul(h[1], self.r3)
+            + mul(h[2], self.r2)
+            + mul(h[3], self.r1)
+            + mul(h[4], self.r0);
 
         // Carry propagation into 26-bit limbs.
         let mut c = d0 >> 26;
@@ -436,10 +437,7 @@ fn pad_len(len: usize) -> usize {
     (16 - (len % 16)) % 16
 }
 
-impl Aead for ChaCha20Poly1305 {
-    const NONCE_LEN: usize = 12;
-    const TAG_LEN: usize = 16;
-
+impl Aead<12, 16> for ChaCha20Poly1305 {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<12>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
         chacha_poly_seal(&self.key, &nonce.0, aad, buf)
     }
@@ -455,10 +453,7 @@ impl Aead for ChaCha20Poly1305 {
     }
 }
 
-impl Aead for XChaCha20Poly1305 {
-    const NONCE_LEN: usize = 24;
-    const TAG_LEN: usize = 16;
-
+impl Aead<24, 16> for XChaCha20Poly1305 {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<24>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
         // Derive subkey via HChaCha20 on the first 16 bytes of the 24-byte nonce.
         let mut subkey = [0u8; 32];

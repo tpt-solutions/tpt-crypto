@@ -93,21 +93,21 @@ pub trait BlockCipher {
 /// Nonce and tag lengths are part of the type-level contract
 /// (`NONCE_LEN` / `TAG_LEN`), so a mismatched nonce or truncated tag is a
 /// compile-time error where the newtypes are used directly.
-pub trait Aead {
-    /// Nonce length in bytes.
-    const NONCE_LEN: usize;
-    /// Authentication tag length in bytes.
-    const TAG_LEN: usize;
-
+///
+/// The nonce and tag lengths are trait type parameters (`NONCE_LEN` /
+/// `TAG_LEN`) rather than associated consts: stable Rust cannot use an
+/// associated const as a const-generic argument, so an implementer writes
+/// `impl Aead<12, 16> for Aes128Gcm`.
+pub trait Aead<const NONCE_LEN: usize, const TAG_LEN: usize> {
     /// Encrypt `buf` in place, returning the detached authentication tag.
     ///
     /// `buf` is overwritten with the ciphertext (same length as the plaintext).
     fn encrypt_in_place_detached(
         &self,
-        nonce: &Nonce<{ Self::NONCE_LEN }>,
+        nonce: &Nonce<NONCE_LEN>,
         aad: &[u8],
         buf: &mut [u8],
-    ) -> Tag<{ Self::TAG_LEN }>;
+    ) -> Tag<TAG_LEN>;
 
     /// Decrypt `buf` in place, verifying `tag` in constant time.
     ///
@@ -116,21 +116,21 @@ pub trait Aead {
     /// `buf` holds the plaintext.
     fn decrypt_in_place_detached(
         &self,
-        nonce: &Nonce<{ Self::NONCE_LEN }>,
+        nonce: &Nonce<NONCE_LEN>,
         aad: &[u8],
         buf: &mut [u8],
-        tag: &Tag<{ Self::TAG_LEN }>,
+        tag: &Tag<TAG_LEN>,
     ) -> Result<()>;
 
     /// Encrypt `plaintext`, returning `ciphertext || tag`.
     #[cfg(feature = "alloc")]
     fn encrypt(
         &self,
-        nonce: &Nonce<{ Self::NONCE_LEN }>,
+        nonce: &Nonce<NONCE_LEN>,
         aad: &[u8],
         plaintext: &[u8],
     ) -> alloc::vec::Vec<u8> {
-        let mut buf = alloc::vec::Vec::with_capacity(plaintext.len() + Self::TAG_LEN);
+        let mut buf = alloc::vec::Vec::with_capacity(plaintext.len() + TAG_LEN);
         buf.extend_from_slice(plaintext);
         let tag = self.encrypt_in_place_detached(nonce, aad, &mut buf);
         buf.extend_from_slice(&tag.0);
@@ -141,16 +141,16 @@ pub trait Aead {
     #[cfg(feature = "alloc")]
     fn decrypt(
         &self,
-        nonce: &Nonce<{ Self::NONCE_LEN }>,
+        nonce: &Nonce<NONCE_LEN>,
         aad: &[u8],
         ciphertext: &[u8],
     ) -> Result<alloc::vec::Vec<u8>> {
-        if ciphertext.len() < Self::TAG_LEN {
+        if ciphertext.len() < TAG_LEN {
             return Err(Error::InvalidLength);
         }
-        let (ct, tag_bytes) = ciphertext.split_at(ciphertext.len() - Self::TAG_LEN);
+        let (ct, tag_bytes) = ciphertext.split_at(ciphertext.len() - TAG_LEN);
         let mut buf = alloc::vec::Vec::from(ct);
-        let tag = Tag::<Self::TAG_LEN>::from_slice(tag_bytes)?;
+        let tag = Tag::<TAG_LEN>::from_slice(tag_bytes)?;
         self.decrypt_in_place_detached(nonce, aad, &mut buf, &tag)?;
         Ok(buf)
     }

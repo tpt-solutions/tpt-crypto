@@ -1,4 +1,4 @@
-//! Keccak-f[1600] sponge and its instantiations: SHA3-224/256/384/512,
+//! `Keccak-f[1600]` sponge and its instantiations: SHA3-224/256/384/512,
 //! SHAKE128/256, cSHAKE128/256, KMAC128/256. Branch-free, `no_std`.
 
 use crate::traits::{Hasher, Xof};
@@ -83,7 +83,7 @@ fn keccak_f(a: &mut [u64; 25]) {
     }
 }
 
-/// A Keccak-f[1600] sponge parameterized by rate and padding byte.
+/// A `Keccak-f[1600]` sponge parameterized by rate and padding byte.
 #[derive(Clone)]
 struct Keccak {
     state: [u64; 25],

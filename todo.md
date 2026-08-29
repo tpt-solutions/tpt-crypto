@@ -135,21 +135,41 @@ variant (feature-gated re-exports instead of steps 3–6).
       skipped under `miri` — same laws covered by `#[cfg(test)]` unit tests)
 
 ### crates/tpt-crypto-hash
-- [ ] Sponge/Keccak-f[1600] core (branch-free); SHA3-224/256/384/512,
+- [x] Sponge/Keccak-f[1600] core (branch-free); SHA3-224/256/384/512,
       SHAKE128/256, cSHAKE, KMAC
-- [ ] Merkle–Damgård SHA-2: SHA-224/256/384/512, SHA-512/256
-- [ ] BLAKE2b (RFC 7693) + keyed mode; BLAKE3 (chunked tree, XOF)
-- [ ] KangarooTwelve (K12) over Keccak-p[1600,12]
-- [ ] HMAC (generic over any `Digest`); HKDF (extract/expand)
-- [ ] `HmacDrbg` (NIST SP 800-90A) implementing `DrbgCore`
-- [ ] API: streaming `Hasher` trait (`update`/`finalize`/`finalize_xof`) +
+      — fixed the pi-step lane index, the SP 800-185 `left_encode`/`encode_string`
+      bit-length bug, and KMAC's `bytepad(encode_string(K))` key block +
+      `right_encode(L)` finalization.
+- [x] Merkle–Damgård SHA-2: SHA-224/256/384/512, SHA-512/256, SHA-512/224
+      — fixed corrupt `K64[29]` and wrong SHA-512/256 + SHA-512/224 IVs.
+- [x] BLAKE2b (RFC 7693) + keyed mode; BLAKE3 (chunked tree, XOF)
+      — BLAKE2b: t/f counter went into the wrong `v[]` lanes and was applied a
+      block late; keyed block is now buffered so an empty message finalizes it
+      as the last block. BLAKE3: fixed `MSG_SCHEDULE` rows 2-6, the `v[12..16]`
+      init (no IV xor), the 8-word chaining-value load, second-half output
+      feed-forward, and rebuilt finalization around an `Output` node so the XOF
+      re-runs the root compression per output block.
+- [x] KangarooTwelve (K12) over Keccak-p[1600,12]
+      — fixed `length_encode(0)`, the pi-step index, two `RC12` typos, and
+      XOR (not overwrite) absorption across permutations.
+- [x] HMAC (generic over any `Hasher`); HKDF (extract/expand)
+      — HKDF-Expand no longer feeds a zero `T(0)` block on the first iteration.
+- [x] `HmacDrbg` (NIST SP 800-90A) implementing `DrbgCore`
+      — Update now stops after the 0x00 pass for empty provided-data; Generate's
+      trailing Update passes the real additional-input.
+- [x] API: streaming `Hasher` trait (`update`/`finalize`/`finalize_xof`) +
       one-shot free fns; `reset`; const output sizes
-- [ ] Optional `digest` trait-compat impls behind `digest` feature
-- [ ] KATs: NIST CAVP (SHA-2, SHA-3, SHAKE), RFC 7693 (BLAKE2), official BLAKE3
-      test vectors, K12 draft vectors, RFC 4231 (HMAC), RFC 5869 (HKDF)
-- [ ] All fixed-time (no data-dependent branch/index); proptest: streaming ==
-      one-shot for random chunkings
-- [ ] `specs/sha256.telos`, `specs/keccak_f.telos`
+- [~] Optional `digest` trait-compat impls behind `digest` feature
+      — `src/digest_impls.rs`: SHA-2, SHA-3 (`Digest`) and SHAKE
+      (`ExtendableOutput`); BLAKE2b/BLAKE3/K12/HMAC/`Mac` still TODO.
+- [~] KATs: NIST CAVP (SHA-2, SHA-3, SHAKE), RFC 7693 (BLAKE2), official BLAKE3
+      test vectors, K12 (RFC 9861), RFC 4231 (HMAC), RFC 5869 (HKDF),
+      NIST SP 800-185 (cSHAKE/KMAC) — in `tests/kat.rs` +
+      `tests/kat/PROVENANCE.md`. NIST SP 800-90A DRBG KAT vectors pending
+      (`tests/drbg.rs` pins behavioural properties for now).
+- [x] All fixed-time (no data-dependent branch/index); proptest: streaming ==
+      one-shot for random chunkings (`tests/props.rs`) + XOF split-invariance.
+- [x] `specs/sha256.telos`, `specs/keccak_f.telos`
 
 - [ ] **Milestone**: `cargo xtask release-dry-run` clean for `-core`, `-ct`,
       `-hash`; tag `v0.1.0-slice` locally; CI green incl. `miri` + `leakage`

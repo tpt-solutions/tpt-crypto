@@ -17,15 +17,16 @@
 //!
 //! # One-shot API
 //!
-//! Each primitive also has a one-shot free function, e.g. [`sha256`],
-//! [`shake256`], [`hmac_sha256`], [`hkdf_sha256`].
+//! Each primitive also has a one-shot free function, e.g.
+//! [`sha2::sha256`], [`sha3::shake256`], [`mac::hmac_sha256`],
+//! [`kdf::hkdf_sha256`].
 //!
 //! # Features
 //!
 //! - `std` (default): enables `std`/`alloc` on the core crates.
 //! - `alloc`: heap support without `std`.
-//! - `digest`: implements the `digest` crate traits ([`digest::Digest`],
-//!   [`digest::ExtendableOutput`], [`digest::Mac`], …) for the relevant types.
+//! - `digest`: implements the `digest` crate traits (`digest::Digest`,
+//!   `digest::ExtendableOutput`, …) for the relevant types.
 
 #[cfg(feature = "alloc")]
 extern crate alloc;

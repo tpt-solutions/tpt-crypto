@@ -9,8 +9,7 @@
 //! constant-time and the secret key is zeroized on drop.
 
 use crate::aes::Aes;
-use tpt_crypto_core::{DrbgCore, Error, Result};
-use tpt_crypto_ct::Zeroizing;
+use tpt_crypto_core::{DrbgCore, Error, Result, Zeroizing};
 
 const SEED_LEN: usize = 48; // AES-256 key (32) + counter (16)
 

@@ -279,27 +279,29 @@ fn aesni_encrypt(core: &Aes, block: &[u8; 16]) -> [u8; 16] {
     r
 }
 
-#[cfg(target_arch = "x86_64")]
-#[inline(always)]
-fn dispatch_encrypt(&self, block: &[u8; 16]) -> [u8; 16] {
-    #[cfg(target_feature = "aes")]
-    {
-        aesni_encrypt(self, block)
-    }
-    #[cfg(not(target_feature = "aes"))]
-    {
-        if arch::has_aes_ni() {
+impl Aes {
+    #[cfg(target_arch = "x86_64")]
+    #[inline(always)]
+    fn dispatch_encrypt(&self, block: &[u8; 16]) -> [u8; 16] {
+        #[cfg(target_feature = "aes")]
+        {
             aesni_encrypt(self, block)
-        } else {
-            self.encrypt_core(block)
+        }
+        #[cfg(not(target_feature = "aes"))]
+        {
+            if arch::has_aes_ni() {
+                aesni_encrypt(self, block)
+            } else {
+                self.encrypt_core(block)
+            }
         }
     }
-}
 
-#[cfg(not(target_arch = "x86_64"))]
-#[inline(always)]
-fn dispatch_encrypt(&self, block: &[u8; 16]) -> [u8; 16] {
-    self.encrypt_core(block)
+    #[cfg(not(target_arch = "x86_64"))]
+    #[inline(always)]
+    fn dispatch_encrypt(&self, block: &[u8; 16]) -> [u8; 16] {
+        self.encrypt_core(block)
+    }
 }
 
 #[cfg(test)]
