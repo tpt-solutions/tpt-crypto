@@ -50,7 +50,8 @@
       `benches/BUDGET.md` stub
 - [x] `.github/workflows/ci.yml` (see **CI** section)
 - [x] `git init` (local only); initial commit
-- [ ] Sanity: `cargo build` succeeds on the empty workspace
+- [x] Sanity: `cargo build` succeeds on the workspace (6 crates: core, ct, hash,
+      field, aead, curve)
 - [x] Register the repo in `tpt-rust-map/registry.toml` (new `[[repo]]` entry,
       pillar prefix `tpt-crypto-`) and add `tpt-rust-map/repos/tpt-crypto/`
 
@@ -110,26 +111,28 @@ variant (feature-gated re-exports instead of steps 3–6).
 - [x] `specs/secret_no_branch.telos` (types encoding no secret-dependent branch)
 
 ### crates/tpt-crypto-ct
-- [ ] Local lint override: `#![deny(unsafe_op_in_unsafe_fn)]`,
+- [x] Local lint override: `#![deny(unsafe_op_in_unsafe_fn)]`,
       **remove** `forbid(unsafe_code)` for this crate only (documented in
       `lib.rs` header + `SECURITY.md`)
-- [ ] `Choice` (0/1 as `u8`), `Not`/`BitAnd`/`BitOr`/`BitXor`, `from_u8_lsb`
-- [ ] `ct_eq` / `ct_ne` for `u8,u16,u32,u64,u128,usize` and `&[u8]` / `&[Limb]`
-- [ ] `ct_select` / `cmov` / `cswap` for the same set; `ct_select_slice`
-- [ ] `arch` module (the **only** `unsafe`): x86_64 `cmov` via `core::arch` /
+- [x] `Choice` (0/1 as `u8`), `Not`/`BitAnd`/`BitOr`/`BitXor`, `from_u8_lsb`
+- [x] `ct_eq` / `ct_ne` for `u8,u16,u32,u64,u128,usize` and `&[u8]` / `&[Limb]`
+- [x] `ct_select` / `cmov` / `cswap` for the same set; `ct_select_slice`
+- [x] `arch` module (the **only** `unsafe`): x86_64 `cmov` via `core::arch` /
       inline `asm!`, aarch64 `csel`, portable branch-free bitmask fallback;
       every block a `// SAFETY:` comment; `#[cfg]`-gated
-- [ ] `Masked<T>` — additive `(x ^ r, r)` and multiplicative masking; `remask`,
+- [x] `Masked<T>` — additive `(x ^ r, r)` and multiplicative masking; `remask`,
       `unmask`; masked add/sub/mul over limbs
-- [ ] Blinding helpers: scalar blinding, base-point blinding scaffolds
-- [ ] `ct_lookup` — branch-free table lookup (linear scan + `cmov`) for
+- [x] Blinding helpers: scalar blinding, base-point blinding scaffolds
+- [x] `ct_lookup` — branch-free table lookup (linear scan + `cmov`) for
       window methods in `-curve`
-- [ ] Leakage harness: `dudect`-style two-class Welch t-test runner
+- [x] Leakage harness: `dudect`-style two-class Welch t-test runner
       (`tests/leakage.rs` + `cargo xtask leakage`); classes for `ct_select`,
       `ct_eq`, `ct_lookup`
-- [ ] KATs: n/a; proptest: `ct_select(c,a,b) == if c {a} else {b}` for all c,a,b
-- [ ] `specs/ct_select.telos`: `ensures: execution_trace ⟂ cond`
-- [ ] MIRI: `cargo +nightly miri test -p tpt-crypto-ct` clean
+- [x] KATs: n/a; proptest: `ct_select(c,a,b) == if c {a} else {b}` for all c,a,b
+- [x] `specs/ct_select.telos`: `ensures: execution_trace ⟂ cond`
+- [x] MIRI: `cargo +nightly miri test -p tpt-crypto-ct` clean
+      (portable bitmask backend `#[cfg]`-gated under `miri`; proptest harness
+      skipped under `miri` — same laws covered by `#[cfg(test)]` unit tests)
 
 ### crates/tpt-crypto-hash
 - [ ] Sponge/Keccak-f[1600] core (branch-free); SHA3-224/256/384/512,
@@ -181,9 +184,22 @@ variant (feature-gated re-exports instead of steps 3–6).
       `specs/field_reduce.telos`
 
 ### crates/tpt-crypto-curve
-- [ ] Ed25519 (RFC 8032): Edwards25519, ct scalar mul (fixed-window + `ct_lookup`),
+- [x] Scaffold `crates/tpt-crypto-curve/` — `Cargo.toml` (deps: `-field`, `-ct`,
+      `-hash`, `-core`), `lib.rs` (`#![no_std]`, `#![forbid(unsafe_code)]`),
+      modules `edwards25519`, `montgomery25519`; `tests/kat.rs` with RFC 8032 §7.1
+      test 1 and RFC 7748 X25519 vectors
+- [~] Ed25519 (RFC 8032): Edwards25519, ct scalar mul (fixed-window + `ct_lookup`),
       point compress/decompress, cofactored verify
-- [ ] X25519 (RFC 7748) Montgomery ladder
+      — WIP in `src/edwards25519.rs`: extended-coord add/double, w=4 fixed-window
+      scalar mul, compress/decompress, `CtEq`. KAT `ed25519_rfc8032_test1` currently
+      FAILS (`field.rs:418` subtract-with-overflow in `recover_x`/`sqrt` path);
+      scalar-mul window uses a secret-dependent `if n != 0` branch — not yet ct.
+      No cofactored verify yet.
+- [~] X25519 (RFC 7748) Montgomery ladder
+      — WIP in `src/montgomery25519.rs`: clamp + ladder + `cswap` + final invert.
+      KAT `x25519_rfc7748` currently FAILS (`ct.rs:177` `CtOption::unwrap` on
+      `None` — `pad32_reduce` / `from_bytes` non-canonical input). Ladder step
+      formula needs review (stray `C` term).
 - [ ] P-256 / P-384 (SEC1): short-Weierstrass complete addition formulas,
       ct scalar mul, point (de)compression, subgroup/on-curve checks
 - [ ] BLS12-381: G1/G2 (subgroup checks via endomorphism), Miller loop,

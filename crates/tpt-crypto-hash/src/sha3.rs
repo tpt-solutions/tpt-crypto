@@ -62,8 +62,10 @@ fn keccak_f(a: &mut [u64; 25]) {
         for x in 0..5 {
             for y in 0..5 {
                 let rot = ROTC[y][x];
-                let nx = (2 * x + 3 * y) % 5;
-                let ny = x;
+                // Pi: B[y, (2x+3y) mod 5] = rot(A[x, y], r[x][y]),
+                // with lanes stored at index (col + 5*row).
+                let nx = y;
+                let ny = (2 * x + 3 * y) % 5;
                 b[nx + 5 * ny] = a[x + 5 * y].rotate_left(rot);
             }
         }
@@ -91,7 +93,7 @@ struct Keccak {
     buflen: usize,
     squeeze_buf: [u8; 200],
     squeeze_pos: usize,
-    prefix: [u8; 512],
+    prefix: [u8; 1024],
     prefix_len: usize,
     /// Set once padding has been applied; the sponge is then in the squeezing
     /// phase and may only be squeezed (or reset).
@@ -108,7 +110,7 @@ impl Keccak {
             buflen: 0,
             squeeze_buf: [0; 200],
             squeeze_pos: rate,
-            prefix: [0; 512],
+            prefix: [0; 1024],
             prefix_len: 0,
             finalized: false,
         }
@@ -116,7 +118,7 @@ impl Keccak {
 
     /// Set the prefix (e.g. cSHAKE/KMAC pre-processing) and absorb it.
     fn set_prefix(&mut self, prefix: &[u8]) {
-        let mut p = [0u8; 512];
+        let mut p = [0u8; 1024];
         p[..prefix.len()].copy_from_slice(prefix);
         self.prefix = p;
         self.prefix_len = prefix.len();
@@ -252,8 +254,9 @@ impl Keccak {
 
 fn left_encode(mut x: u64, out: &mut [u8; 9]) -> usize {
     if x == 0 {
-        out[0] = 0;
-        return 1;
+        out[0] = 1;
+        out[1] = 0;
+        return 2;
     }
     let mut tmp = [0u8; 8];
     let mut n = 0;
@@ -294,16 +297,12 @@ fn right_encode(mut x: usize) -> (usize, [u8; 9]) {
 }
 
 fn encode_string(s: &[u8], out: &mut [u8; 256]) -> usize {
+    // NIST SP 800-185: encode_string(S) = left_encode(len(S) in bits) || S.
     let mut tmp = [0u8; 9];
-    if s.is_empty() {
-        out[0] = 0;
-        1
-    } else {
-        let l = left_encode(s.len() as u64, &mut tmp);
-        out[..l].copy_from_slice(&tmp[..l]);
-        out[l..l + s.len()].copy_from_slice(s);
-        l + s.len()
-    }
+    let l = left_encode((s.len() as u64) * 8, &mut tmp);
+    out[..l].copy_from_slice(&tmp[..l]);
+    out[l..l + s.len()].copy_from_slice(s);
+    l + s.len()
 }
 
 fn bytepad(z: &[u8], rate: usize, out: &mut [u8; 512]) -> usize {
@@ -503,7 +502,6 @@ impl Xof for Shake256 {
 
 /// One-shot SHAKE128 producing `out.len()` bytes.
 #[inline]
-#[must_use]
 pub fn shake128(data: &[u8], out: &mut [u8]) {
     let mut h = Shake128::new();
     h.update(data);
@@ -512,7 +510,6 @@ pub fn shake128(data: &[u8], out: &mut [u8]) {
 
 /// One-shot SHAKE256 producing `out.len()` bytes.
 #[inline]
-#[must_use]
 pub fn shake256(data: &[u8], out: &mut [u8]) {
     let mut h = Shake256::new();
     h.update(data);
@@ -625,7 +622,6 @@ impl Xof for CShake256 {
 
 /// One-shot cSHAKE128 producing `out.len()` bytes.
 #[inline]
-#[must_use]
 pub fn cshake128(data: &[u8], out: &mut [u8], n: &[u8], s: &[u8]) {
     let mut h = CShake128::new(n, s);
     h.update(data);
@@ -634,7 +630,6 @@ pub fn cshake128(data: &[u8], out: &mut [u8], n: &[u8], s: &[u8]) {
 
 /// One-shot cSHAKE256 producing `out.len()` bytes.
 #[inline]
-#[must_use]
 pub fn cshake256(data: &[u8], out: &mut [u8], n: &[u8], s: &[u8]) {
     let mut h = CShake256::new(n, s);
     h.update(data);
@@ -647,13 +642,11 @@ pub fn cshake256(data: &[u8], out: &mut [u8], n: &[u8], s: &[u8]) {
 #[derive(Clone)]
 pub struct Kmac128 {
     e: Keccak,
-    msg_len: u64,
 }
 /// KMAC256 (keyed MAC over cSHAKE256).
 #[derive(Clone)]
 pub struct Kmac256 {
     e: Keccak,
-    msg_len: u64,
 }
 
 impl Kmac128 {
@@ -670,12 +663,18 @@ impl Kmac128 {
         combined[zlen..zlen + z2len].copy_from_slice(&z2[..z2len]);
         let mut pad = [0u8; 512];
         let plen = bytepad(&combined[..zlen + z2len], 168, &mut pad);
-        // Prefix is Z || K.
-        let mut prefix = [0u8; 512];
+        // Prefix is `bytepad(encode_string(N)||encode_string(S), rate)`
+        // (the cSHAKE customization) followed by the first message block
+        // `bytepad(encode_string(K), rate)` (SP 800-185 §4.3).
+        let mut ek = [0u8; 256];
+        let eklen = encode_string(k, &mut ek);
+        let mut kpad = [0u8; 512];
+        let kplen = bytepad(&ek[..eklen], 168, &mut kpad);
+        let mut prefix = [0u8; 1024];
         prefix[..plen].copy_from_slice(&pad[..plen]);
-        prefix[plen..plen + k.len()].copy_from_slice(k);
-        e.set_prefix(&prefix[..plen + k.len()]);
-        Kmac128 { e, msg_len: 0 }
+        prefix[plen..plen + kplen].copy_from_slice(&kpad[..kplen]);
+        e.set_prefix(&prefix[..plen + kplen]);
+        Kmac128 { e }
     }
 }
 
@@ -693,66 +692,67 @@ impl Kmac256 {
         combined[zlen..zlen + z2len].copy_from_slice(&z2[..z2len]);
         let mut pad = [0u8; 512];
         let plen = bytepad(&combined[..zlen + z2len], 136, &mut pad);
-        let mut prefix = [0u8; 512];
+        let mut ek = [0u8; 256];
+        let eklen = encode_string(k, &mut ek);
+        let mut kpad = [0u8; 512];
+        let kplen = bytepad(&ek[..eklen], 136, &mut kpad);
+        let mut prefix = [0u8; 1024];
         prefix[..plen].copy_from_slice(&pad[..plen]);
-        prefix[plen..plen + k.len()].copy_from_slice(k);
-        e.set_prefix(&prefix[..plen + k.len()]);
-        Kmac256 { e, msg_len: 0 }
+        prefix[plen..plen + kplen].copy_from_slice(&kpad[..kplen]);
+        e.set_prefix(&prefix[..plen + kplen]);
+        Kmac256 { e }
     }
 }
 
 impl Xof for Kmac128 {
     #[inline]
     fn update(&mut self, data: &[u8]) {
-        self.msg_len = self.msg_len.wrapping_add(data.len() as u64);
         self.e.update(data);
     }
     fn finalize_xof_reset(&mut self, out: &mut [u8]) {
-        let bitlen = self.msg_len.wrapping_mul(8);
-        let (elen, extra) = right_encode(bitlen as usize);
+        // Standard KMAC: the requested output length (in bits) is encoded
+        // and absorbed just before padding (SP 800-185 §4.3).
+        let (elen, extra) = right_encode(out.len() * 8);
         self.e.digest_out(&extra[..elen], out);
-        self.msg_len = 0;
     }
     #[inline]
     fn finalize_xof(self, out: &mut [u8]) {
-        let bitlen = self.msg_len.wrapping_mul(8);
-        let (elen, extra) = right_encode(bitlen as usize);
+        // Standard KMAC: the requested output length (in bits) is encoded
+        // and absorbed just before padding (SP 800-185 §4.3).
+        let (elen, extra) = right_encode(out.len() * 8);
         let mut e = self.e.clone();
         e.digest_out(&extra[..elen], out);
     }
     fn reset(&mut self) {
         self.e.reset();
-        self.msg_len = 0;
     }
 }
 impl Xof for Kmac256 {
     #[inline]
     fn update(&mut self, data: &[u8]) {
-        self.msg_len = self.msg_len.wrapping_add(data.len() as u64);
         self.e.update(data);
     }
     fn finalize_xof_reset(&mut self, out: &mut [u8]) {
-        let bitlen = self.msg_len.wrapping_mul(8);
-        let (elen, extra) = right_encode(bitlen as usize);
+        // Standard KMAC: the requested output length (in bits) is encoded
+        // and absorbed just before padding (SP 800-185 §4.3).
+        let (elen, extra) = right_encode(out.len() * 8);
         self.e.digest_out(&extra[..elen], out);
-        self.msg_len = 0;
     }
     #[inline]
     fn finalize_xof(self, out: &mut [u8]) {
-        let bitlen = self.msg_len.wrapping_mul(8);
-        let (elen, extra) = right_encode(bitlen as usize);
+        // Standard KMAC: the requested output length (in bits) is encoded
+        // and absorbed just before padding (SP 800-185 §4.3).
+        let (elen, extra) = right_encode(out.len() * 8);
         let mut e = self.e.clone();
         e.digest_out(&extra[..elen], out);
     }
     fn reset(&mut self) {
         self.e.reset();
-        self.msg_len = 0;
     }
 }
 
 /// One-shot KMAC128 producing `out.len()` bytes.
 #[inline]
-#[must_use]
 pub fn kmac128(k: &[u8], data: &[u8], out: &mut [u8], s: &[u8]) {
     let mut h = Kmac128::new(k, s);
     h.update(data);
@@ -761,7 +761,6 @@ pub fn kmac128(k: &[u8], data: &[u8], out: &mut [u8], s: &[u8]) {
 
 /// One-shot KMAC256 producing `out.len()` bytes.
 #[inline]
-#[must_use]
 pub fn kmac256(k: &[u8], data: &[u8], out: &mut [u8], s: &[u8]) {
     let mut h = Kmac256::new(k, s);
     h.update(data);

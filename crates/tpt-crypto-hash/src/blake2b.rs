@@ -77,10 +77,11 @@ impl<const OUT: usize> Blake2b<OUT> {
             t: 0,
         };
         if !key.is_empty() {
-            let mut kb = [0u8; 128];
-            kb[..key.len()].copy_from_slice(key);
-            b.compress(&kb, false);
-            b.t = b.t.wrapping_add(128);
+            // The padded key block is the first data block. Buffer it rather
+            // than compressing now: if the message turns out to be empty, this
+            // block is also the *last* block and must carry the final flag.
+            b.buf[..key.len()].copy_from_slice(key);
+            b.buflen = 128;
         }
         b
     }
@@ -92,13 +93,13 @@ impl<const OUT: usize> Blake2b<OUT> {
         }
         let mut v = [0u64; 16];
         v[..8].copy_from_slice(&self.h);
-        v[8] = IV[0] ^ (self.t as u64);
-        v[9] = IV[1] ^ (self.t >> 64) as u64;
+        v[8] = IV[0];
+        v[9] = IV[1];
         v[10] = IV[2];
         v[11] = IV[3];
-        v[12] = IV[4] ^ if last { 0xffff_ffff_ffff_ffff } else { 0 };
-        v[13] = IV[5];
-        v[14] = IV[6];
+        v[12] = IV[4] ^ (self.t as u64);
+        v[13] = IV[5] ^ (self.t >> 64) as u64;
+        v[14] = IV[6] ^ if last { 0xffff_ffff_ffff_ffff } else { 0 };
         v[15] = IV[7];
         for r in 0..12 {
             let s = &SIGMA[r];
@@ -140,29 +141,28 @@ impl<const OUT: usize> Hasher<OUT> for Blake2b<OUT> {
     #[inline]
     fn update(&mut self, data: &[u8]) {
         let mut data = data;
-        if self.buflen > 0 {
+        // The final block must be compressed with `last = true` from
+        // `finalize`, so the buffer is only flushed once we know more input
+        // follows: never leave the buffer empty here.
+        if self.buflen > 0 && data.len() > 128 - self.buflen {
             let need = 128 - self.buflen;
-            let take = need.min(data.len());
-            self.buf[self.buflen..self.buflen + take].copy_from_slice(&data[..take]);
-            self.buflen += take;
-            data = &data[take..];
-            if self.buflen == 128 {
-                let b = self.buf;
-                self.compress(&b, false);
-                self.t = self.t.wrapping_add(128);
-                self.buflen = 0;
-            }
+            self.buf[self.buflen..].copy_from_slice(&data[..need]);
+            data = &data[need..];
+            let b = self.buf;
+            self.t = self.t.wrapping_add(128);
+            self.compress(&b, false);
+            self.buflen = 0;
         }
-        while data.len() >= 128 {
+        while data.len() > 128 {
             let mut b = [0u8; 128];
             b.copy_from_slice(&data[..128]);
-            self.compress(&b, false);
             self.t = self.t.wrapping_add(128);
+            self.compress(&b, false);
             data = &data[128..];
         }
         if !data.is_empty() {
-            self.buf[..data.len()].copy_from_slice(data);
-            self.buflen = data.len();
+            self.buf[self.buflen..self.buflen + data.len()].copy_from_slice(data);
+            self.buflen += data.len();
         }
     }
 

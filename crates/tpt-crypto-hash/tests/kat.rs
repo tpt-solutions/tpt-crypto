@@ -11,11 +11,11 @@
 
 use tpt_crypto_hash::sha2::{sha224, sha256, sha384, sha512, sha512_224, sha512_256};
 use tpt_crypto_hash::sha3::{sha3_224, sha3_256, sha3_384, sha3_512};
-use tpt_crypto_hash::sha3::{shake128, shake256, cshake128, cshake256, kmac128, kmac256};
+use tpt_crypto_hash::sha3::{cshake128, kmac128, shake128, shake256};
 use tpt_crypto_hash::blake2b::{blake2b, blake2b_keyed};
 use tpt_crypto_hash::blake3::{blake3, blake3_keyed};
 use tpt_crypto_hash::k12::kangaroo_twelve;
-use tpt_crypto_hash::mac::{hmac_sha256, hmac_sha512};
+use tpt_crypto_hash::mac::hmac_sha256;
 use tpt_crypto_hash::kdf::hkdf_sha256;
 
 const fn hex(hexstr: &str) -> [u8; 64] {
@@ -113,11 +113,28 @@ fn blake2b_kat() {
 
 #[test]
 fn blake3_kat() {
-    // Official BLAKE3 test vector: empty string, 32-byte output.
+    // Official BLAKE3 test vectors (test_vectors.json), 32-byte output.
     assert_eq_hex("blake3(empty)", &blake3(b""), "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262");
+    // Input = repeating 0,1,..,250 pattern, length 3.
+    let d3 = [0u8, 1, 2];
+    assert_eq_hex(
+        "blake3(len3)",
+        &blake3(&d3),
+        "e1be4d7a8ab5560aa4199eea339849ba8e293d55ca0a81006726d184519e647f",
+    );
     // Keyed BLAKE3: key = "whats the Elvish word for friend" (32 bytes), empty msg.
     let key = b"whats the Elvish word for friend";
-    assert_eq_hex("blake3_keyed(empty)", &blake3_keyed(b"", key), "92b2b75604ed3c761f9d6f62392c8a9227ad0ea3f09573e783f142fd43470000");
+    assert_eq_hex(
+        "blake3_keyed(empty)",
+        &blake3_keyed(b"", key),
+        "92b2b75604ed3c761f9d6f62392c8a9227ad0ea3f09573e783f1498a4ed60d26",
+    );
+    // Keyed BLAKE3, same key, 3-byte input.
+    assert_eq_hex(
+        "blake3_keyed(len3)",
+        &blake3_keyed(&d3, key),
+        "39e67b76b5a007d4921969779fe666da67b5213b096084ab674742f0d5ec62b9",
+    );
 }
 
 #[test]
@@ -141,21 +158,31 @@ fn hkdf_kat() {
 
 #[test]
 fn cshake_kat() {
-    // NIST SP 800-185 cSHAKE128 test: N="Test", S="X", M=0x00*2, L=32.
-    // Published vector (NIST): cSHAKE128(00 01, 2, "Test", "X")
-    let msg = [0x00u8, 0x01];
+    // NIST SP 800-185 cSHAKE128 Sample #1: N="", S="Email Signature",
+    // X = 00 01 02 03, L = 256 bits.
+    let msg = [0x00u8, 0x01, 0x02, 0x03];
     let mut out = [0u8; 32];
-    cshake128(&msg, &mut out, b"Test", b"X");
-    assert_eq_hex("cshake128", &out, "03a9f760856705a15bc0cc0d0e14ed316d8079a2e4a1c5a0a5a60e0e2e15e2a0");
+    cshake128(&msg, &mut out, b"", b"Email Signature");
+    assert_eq_hex(
+        "cshake128",
+        &out,
+        "c1c36925b6409a04f1b504fcbca9d82b4017277cb5ed2b2065fc1d3814d5aaf5",
+    );
 }
 
 #[test]
 fn kmac_kat() {
-    // NIST SP 800-185 KMAC128(K="", X=0x00*200, L=32, S="")
-    let msg = [0u8; 200];
+    // NIST SP 800-185 KMAC128 Sample #1: K = 0x40..0x5F (32 bytes),
+    // X = 00 01 02 03, L = 256 bits, S = "".
+    let key: Vec<u8> = (0x40u8..0x60).collect();
+    let msg = [0x00u8, 0x01, 0x02, 0x03];
     let mut out = [0u8; 32];
-    kmac128(b"", &msg, &mut out, b"");
-    assert_eq_hex("kmac128", &out, "e5780b0d3ea6f7d3a429c57066241a5b2a2a2e2e2e2e2e2e2e2e2e2e2e2e2e2e");
+    kmac128(&key, &msg, &mut out, b"");
+    assert_eq_hex(
+        "kmac128",
+        &out,
+        "e5780b0d3ea6f7d3a429c5706aa43a00fadbd7d49628839e3187243f456ee14e",
+    );
 }
 
 #[test]

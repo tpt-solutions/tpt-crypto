@@ -9,14 +9,14 @@
 use crate::traits::Xof;
 
 const RC12: [u64; 12] = [
-    0x0000_0000_8080_008b,
+    0x0000_0000_8000_808b,
     0x8000_0000_0000_008b,
     0x8000_0000_0000_8089,
     0x8000_0000_0000_8003,
     0x8000_0000_0000_8002,
     0x8000_0000_0000_0080,
     0x0000_0000_0000_800a,
-    0x8000_0000_0080_000a,
+    0x8000_0000_8000_000a,
     0x8000_0000_8000_8081,
     0x8000_0000_0000_8080,
     0x0000_0000_8000_0001,
@@ -51,8 +51,8 @@ fn keccak_p12(a: &mut [u64; 25]) {
         for x in 0..5 {
             for y in 0..5 {
                 let rot = ROTC[y][x];
-                let nx = (2 * x + 3 * y) % 5;
-                let ny = x;
+                let nx = y;
+                let ny = (2 * x + 3 * y) % 5;
                 b[nx + 5 * ny] = a[x + 5 * y].rotate_left(rot);
             }
         }
@@ -87,7 +87,9 @@ impl TurboShake {
         if self.buflen > 0 {
             let need = rate - self.buflen;
             let take = need.min(data.len());
-            self.state[self.buflen..self.buflen + take].copy_from_slice(&data[..take]);
+            for (i, &byte) in data[..take].iter().enumerate() {
+                self.state[self.buflen + i] ^= byte;
+            }
             self.buflen += take;
             data = &data[take..];
             if self.buflen == rate {
@@ -105,7 +107,9 @@ impl TurboShake {
             data = &data[rate..];
         }
         if !data.is_empty() {
-            self.state[..data.len()].copy_from_slice(data);
+            for (i, &byte) in data.iter().enumerate() {
+                self.state[i] ^= byte;
+            }
             self.buflen = data.len();
         }
     }
@@ -143,20 +147,21 @@ fn permute(state: &mut [u8; 200]) {
 }
 
 fn right_encode(mut value: usize) -> (usize, [u8; 9]) {
+    // NIST SP 800-185 `length_encode` / RFC 9861: big-endian bytes of `value`
+    // followed by a single byte giving their count. `length_encode(0)` is the
+    // single byte `0x00` (no value bytes).
     let mut dst = [0u8; 9];
-    let mut n = 0;
     if value == 0 {
-        dst[0] = 0;
-        n = 1;
-    } else {
-        while value != 0 {
-            dst[n] = (value & 0xff) as u8;
-            value >>= 8;
-            n += 1;
-        }
-        for i in 0..n / 2 {
-            dst.swap(i, n - 1 - i);
-        }
+        return (1, dst);
+    }
+    let mut n = 0;
+    while value != 0 {
+        dst[n] = (value & 0xff) as u8;
+        value >>= 8;
+        n += 1;
+    }
+    for i in 0..n / 2 {
+        dst.swap(i, n - 1 - i);
     }
     dst[n] = n as u8;
     n += 1;

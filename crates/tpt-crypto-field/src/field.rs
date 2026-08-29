@@ -106,15 +106,28 @@ impl<P: FieldParams> FieldElement<P> {
             t[n] = (sum3 >> 64) as u64;
             i += 1;
         }
-        // Normalize t (MAX+1 limbs, in [0, 2p)) to [0, p) with a ct conditional subtract.
-        let mut r = [0u64; MAX_LIMBS];
-        r[0..n].copy_from_slice(&t[0..n]);
-        let (sub, borrow) = consts::sub_limbs(&r, p);
-        let ge = borrow == 0;
+        // Normalize t (n+1 limbs, in [0, 2p)) to [0, p). The full value is the
+        // (n+1)-limb accumulator `t`; sub_limbs over `MAX_LIMBS` would drop the
+        // top limb `t[n]` (which can be non-zero for real products), so compare
+        // and subtract against `p` zero-extended across all n+1 limbs.
+        let mut r = t;
+        let mut borrow: u64 = 0;
+        let mut idx = 0usize;
+        while idx < MAX_LIMBS + 1 {
+            let pv = if idx < n { p[idx] } else { 0u64 };
+            let (d1, b1) = r[idx].overflowing_sub(pv);
+            let (d, b2) = d1.overflowing_sub(borrow);
+            r[idx] = d;
+            borrow = (b1 | b2) as u64;
+            idx += 1;
+        }
+        // `borrow == 0` iff the full `t >= p`; in that case the reduced value is
+        // `r` (now `t - p`), otherwise the canonical value is the original `t`.
+        let ge = Choice::from_bool(borrow == 0);
         let mut out = [0u64; MAX_LIMBS];
         let mut k = 0;
         while k < MAX_LIMBS {
-            out[k] = ct_select_u64(r[k], sub[k], Choice::from_bool(ge));
+            out[k] = ct_select_u64(t[k], r[k], ge);
             k += 1;
         }
         out
@@ -401,11 +414,14 @@ impl<P: FieldParams> FieldElement<P> {
         let mut step = 0u32;
         while step < s {
             let b_is_one = b.ct_eq(&Self::one());
-            // Smallest e in [1, i] with b^(2^e) == 1.
+            // Smallest e in [1, i) with b^(2^e) == 1. Per HAC §3.36 the search is
+            // `1 <= i < E` (strictly below the current exponent), which keeps
+            // `e2 = i - found - 1` non-negative and matches the invariant
+            // `b^(2^(i-1)) == 1`.
             let mut found = 0u32;
             let mut t = b;
             let mut k = 1u32;
-            while k <= i {
+            while k < i {
                 t = t.square();
                 let is_one = t.ct_eq(&Self::one());
                 if is_one.into_bool() && found == 0 {
@@ -413,10 +429,7 @@ impl<P: FieldParams> FieldElement<P> {
                 }
                 k += 1;
             }
-            let mut e2 = i;
-            if found != 0 {
-                e2 = i - found - 1;
-            }
+            let e2 = i.saturating_sub(found).saturating_sub(1);
             let mut d = c;
             let mut sq = 0u32;
             while sq < e2 {
@@ -426,7 +439,9 @@ impl<P: FieldParams> FieldElement<P> {
             let x_new = x.mul(&d);
             let c_new = d.square();
             let b_new = b.mul(&c_new);
-            let apply = done.not();
+            // Apply the update only while we have not yet reached 1; applying once
+            // `b == 1` would corrupt an already-correct `x`.
+            let apply = done.not().and(b_is_one.not());
             x = Self::ct_select_fe(&x, &x_new, apply);
             c = Self::ct_select_fe(&c, &c_new, apply);
             b = Self::ct_select_fe(&b, &b_new, apply);

@@ -22,7 +22,7 @@ const K64: [u64; 80] = [
     0xe49b69c19ef14ad2, 0xefbe4786384f25e3, 0x0fc19dc68b8cd5b5, 0x240ca1cc77ac9c65,
     0x2de92c6f592b0275, 0x4a7484aa6ea6e483, 0x5cb0a9dcbd41fbd4, 0x76f988da831153b5,
     0x983e5152ee66dfab, 0xa831c66d2db43210, 0xb00327c898fb213f, 0xbf597fc7beef0ee4,
-    0xc6e00bf33da88fc2, 0xd5a79147c28c9f3a, 0x06ca6351e003826f, 0x142929670a0e6e70,
+    0xc6e00bf33da88fc2, 0xd5a79147930aa725, 0x06ca6351e003826f, 0x142929670a0e6e70,
     0x27b70a8546d22ffc, 0x2e1b21385c26c926, 0x4d2c6dfc5ac42aed, 0x53380d139d95b3df,
     0x650a73548baf63de, 0x766a0abb3c77b2a8, 0x81c2c92e47edaee6, 0x92722c851482353b,
     0xa2bfe8a14cf10364, 0xa81a664bbc423001, 0xc24b8b70d0f89791, 0xc76c51a30654be30,
@@ -55,8 +55,12 @@ const IV_SHA384: [u64; 8] = [
     0x67332667ffc00b31, 0x8eb44a8768581511, 0xdb0c2e0d64f98fa7, 0x47b5481dbefa4fa4,
 ];
 const IV_SHA512_256: [u64; 8] = [
-    0xcbbb9d5dc1059ed3, 0x1ec20b20216f029e, 0x99cb56d75b315d8e, 0x00ea509ffab89354,
-    0xf4abf75f7bcd8874, 0x3ea0cd298e9bc9ba, 0xba267c0e5ee418ce, 0xfe4568bcb6db84dc,
+    0x22312194fc2bf72c, 0x9f555fa3c84c64c2, 0x2393b86b6f53b151, 0x963877195940eabd,
+    0x96283ee2a88effe3, 0xbe5e1e2553863992, 0x2b0199fc2c85b8aa, 0x0eb72ddc81c52ca2,
+];
+const IV_SHA512_224: [u64; 8] = [
+    0x8c3d37c819544da2, 0x73e1996689dcd4d6, 0x1dfab7ae32ff9c82, 0x679dd514582f9fcf,
+    0x0f6d2b697bd44da8, 0x77e36f7304c48942, 0x3f9d85a86a1d36c8, 0x1112e6ad91d692a1,
 ];
 
 #[inline]
@@ -345,7 +349,8 @@ impl Engine64 {
         let out = self.finalize_blocks();
         self.state = match self.out_len {
             48 => IV_SHA384,
-            28 | 32 => IV_SHA512_256,
+            28 => IV_SHA512_224,
+            32 => IV_SHA512_256,
             _ => IV_SHA512,
         };
         self.buf = [0; 128];
@@ -415,7 +420,7 @@ sha2_type!(Sha256, Engine32, IV_SHA256, 32, "SHA-256 (Merkle–Damgård, 32-bit 
 sha2_type!(Sha384, Engine64, IV_SHA384, 48, "SHA-384 (Merkle–Damgård, 64-bit words).");
 sha2_type!(Sha512, Engine64, IV_SHA512, 64, "SHA-512 (Merkle–Damgård, 64-bit words).");
 sha2_type!(Sha512_256, Engine64, IV_SHA512_256, 32, "SHA-512/256 (truncated SHA-512, custom IV).");
-sha2_type!(Sha512_224, Engine64, IV_SHA512_256, 28, "SHA-512/224 (truncated SHA-512, custom IV).");
+sha2_type!(Sha512_224, Engine64, IV_SHA512_224, 28, "SHA-512/224 (truncated SHA-512, custom IV).");
 
 /// One-shot SHA-224.
 #[inline]

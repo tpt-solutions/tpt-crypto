@@ -1,0 +1,44 @@
+[package]
+name = "tpt-crypto-sig"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "ML-DSA (FIPS 204) and SLH-DSA (FIPS 205) signature schemes for the tpt-crypto substrate"
+repository.workspace = true
+
+[dependencies]
+tpt-crypto-core = { path = "../tpt-crypto-core", default-features = false }
+tpt-crypto-ct = { path = "../tpt-crypto-ct" }
+tpt-crypto-hash = { path = "../tpt-crypto-hash", default-features = false }
+
+[features]
+default = ["std"]
+std = ["tpt-crypto-core/std", "tpt-crypto-hash/std", "alloc"]
+alloc = ["tpt-crypto-core/alloc", "tpt-crypto-hash/alloc"]
+signature = []
+slh-dsa = ["alloc"]
+rand_core = ["tpt-crypto-core/rand_core"]
+
+[dev-dependencies]
+tpt-crypto-core = { path = "../tpt-crypto-core", default-features = false, features = ["std"] }
+tpt-crypto-hash = { path = "../tpt-crypto-hash", default-features = false, features = ["std"] }
+
+[[test]]
+name = "ml_dsa_kat"
+required-features = []
+
+[[test]]
+name = "ml_dsa_props"
+required-features = []
+
+[[test]]
+name = "slh_dsa_kat"
+required-features = ["slh-dsa"]
+
+[[bench]]
+name = "sig_bench"
+harness = false
+required-features = ["std"]
+
+[lib]
+path = "src/lib.rs"

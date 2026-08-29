@@ -296,9 +296,11 @@ fn field_props<P: FieldParams>(a: [u64; N], b: [u64; N], c: [u64; N]) {
     } else {
         let inv = x.invert().unwrap();
         assert_eq!(inv.mul(&x).to_bytes(), to_canon(&one_int()));
+        // Cross-check the inverse with the *independent* reference multiplier:
+        // `inv * x` reduced by the reference must also be the identity.
         assert_eq!(
-            inv.to_bytes(),
-            to_canon(&ref_mul(&from_canon(&inv.to_bytes()), &xi, p))
+            to_canon(&ref_mul(&from_canon(&inv.to_bytes()), &xi, p)),
+            to_canon(&one_int())
         );
     }
 

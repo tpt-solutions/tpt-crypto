@@ -8,14 +8,16 @@ const IV: [u32; 8] = [
     0x5be0cd19,
 ];
 
+// Each round's schedule is the previous one under the BLAKE3 message
+// permutation [2,6,3,10,7,0,4,13,1,11,12,5,9,14,15,8].
 const MSG_SCHEDULE: [[usize; 16]; 7] = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8],
-    [3, 12, 5, 13, 14, 10, 15, 6, 11, 8, 2, 0, 1, 9, 4, 7],
-    [14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3],
-    [11, 8, 12, 0, 5, 2, 15, 13, 10, 14, 3, 6, 7, 1, 9, 4],
-    [7, 13, 14, 0, 11, 8, 10, 1, 9, 4, 5, 6, 2, 15, 3, 12],
-    [9, 11, 1, 3, 8, 13, 5, 6, 4, 2, 15, 12, 0, 14, 7, 10],
+    [3, 4, 10, 12, 13, 2, 7, 14, 6, 5, 9, 0, 11, 15, 8, 1],
+    [10, 7, 12, 9, 14, 3, 13, 15, 4, 0, 11, 2, 5, 8, 1, 6],
+    [12, 13, 9, 11, 15, 10, 14, 8, 7, 2, 5, 3, 0, 1, 6, 4],
+    [9, 14, 11, 5, 8, 12, 15, 1, 13, 3, 0, 10, 2, 6, 4, 7],
+    [11, 15, 5, 0, 1, 9, 8, 6, 14, 10, 2, 12, 3, 4, 7, 13],
 ];
 
 const CHUNK_START: u32 = 1;
@@ -42,11 +44,8 @@ fn g(v: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize, mx: u32, my: u32
 #[inline]
 fn compress(cv: &[u8; 32], block: &[u8; 64], counter: u64, block_len: u32, flags: u32) -> [u8; 64] {
     let mut h = [0u32; 8];
-    for i in 0..4 {
+    for i in 0..8 {
         h[i] = u32::from_le_bytes(cv[4 * i..4 * i + 4].try_into().unwrap());
-    }
-    for i in 4..8 {
-        h[i] = IV[i];
     }
     let mut m = [0u32; 16];
     for i in 0..16 {
@@ -58,10 +57,10 @@ fn compress(cv: &[u8; 32], block: &[u8; 64], counter: u64, block_len: u32, flags
     v[9] = IV[1];
     v[10] = IV[2];
     v[11] = IV[3];
-    v[12] = (counter as u32) ^ IV[4];
-    v[13] = ((counter >> 32) as u32) ^ IV[5];
-    v[14] = block_len ^ IV[6];
-    v[15] = flags ^ IV[7];
+    v[12] = counter as u32;
+    v[13] = (counter >> 32) as u32;
+    v[14] = block_len;
+    v[15] = flags;
     for r in 0..7 {
         let s = &MSG_SCHEDULE[r];
         g(&mut v, 0, 4, 8, 12, m[s[0]], m[s[1]]);
@@ -73,22 +72,19 @@ fn compress(cv: &[u8; 32], block: &[u8; 64], counter: u64, block_len: u32, flags
         g(&mut v, 2, 7, 8, 13, m[s[12]], m[s[13]]);
         g(&mut v, 3, 4, 9, 14, m[s[14]], m[s[15]]);
     }
-    for i in 0..8 {
-        h[i] ^= v[i] ^ v[i + 8];
-    }
     let mut out = [0u8; 64];
     for i in 0..8 {
-        out[4 * i..4 * i + 4].copy_from_slice(&h[i].to_le_bytes());
-    }
-    for i in 8..16 {
-        out[4 * i..4 * i + 4].copy_from_slice(&v[i].to_le_bytes());
+        let lo = v[i] ^ v[i + 8];
+        let hi = v[i + 8] ^ h[i];
+        out[4 * i..4 * i + 4].copy_from_slice(&lo.to_le_bytes());
+        out[32 + 4 * i..32 + 4 * i + 4].copy_from_slice(&hi.to_le_bytes());
     }
     out
 }
 
-fn iv_first_four() -> [u8; 32] {
+fn iv_bytes() -> [u8; 32] {
     let mut b = [0u8; 32];
-    for i in 0..4 {
+    for i in 0..8 {
         b[4 * i..4 * i + 4].copy_from_slice(&IV[i].to_le_bytes());
     }
     b
@@ -99,11 +95,10 @@ fn iv_first_four() -> [u8; 32] {
 pub struct Blake3 {
     key: [u8; 32],
     keyed: bool,
-    cv: [u8; 32],
     chunk_index: u64,
     buf: [u8; CHUNK_LEN],
     buflen: usize,
-    stack: [[u8; 32]; 32],
+    stack: [[u8; 32]; 54],
     stack_len: usize,
 }
 
@@ -122,103 +117,164 @@ impl Blake3 {
         if keyed {
             k.copy_from_slice(key);
         }
-        let start_cv = if keyed { k } else { iv_first_four() };
         Blake3 {
             key: k,
             keyed,
-            cv: start_cv,
             chunk_index: 0,
             buf: [0; CHUNK_LEN],
             buflen: 0,
-            stack: [[0u8; 32]; 32],
+            stack: [[0u8; 32]; 54],
             stack_len: 0,
         }
     }
 
     #[inline]
-    fn parent_cv(&self, left: &[u8; 32], right: &[u8; 32], counter: u64, flags: u32) -> [u8; 32] {
-        let mut block = [0u8; 64];
-        block[..32].copy_from_slice(left);
-        block[32..].copy_from_slice(right);
-        let out = compress(&iv_first_four(), &block, counter, 64, flags);
+    fn key_words(&self) -> [u8; 32] {
+        if self.keyed {
+            self.key
+        } else {
+            iv_bytes()
+        }
+    }
+
+    #[inline]
+    fn base_flags(&self) -> u32 {
+        if self.keyed {
+            KEYED_HASH
+        } else {
+            0
+        }
+    }
+
+    /// A deferred compression: the last block of a chunk, or a parent node.
+    /// `chaining_value` produces the CV fed up the tree; `root_bytes` produces
+    /// the extendable root output.
+    fn output_chaining_value(&self, o: &Output) -> [u8; 32] {
+        let out = compress(&o.input_cv, &o.block, o.counter, o.block_len, o.flags);
         let mut cv = [0u8; 32];
         cv.copy_from_slice(&out[..32]);
         cv
     }
 
-    fn push_chunk_cv(&mut self, cv: [u8; 32]) {
-        self.stack[self.stack_len] = cv;
-        self.stack_len += 1;
-        let mut idx = self.chunk_index;
-        while (idx & 1) == 1 {
-            let right = self.stack[self.stack_len - 1];
-            let left = self.stack[self.stack_len - 2];
-            let parent = self.parent_cv(&left, &right, idx >> 1, PARENT);
-            self.stack_len -= 2;
-            self.stack[self.stack_len] = parent;
-            self.stack_len += 1;
-            idx >>= 1;
-        }
-        self.chunk_index += 1;
-    }
-
-    fn compress_chunk(&mut self, chunk: &[u8; CHUNK_LEN]) {
-        for bi in 0..16 {
-            let blk = chunk[64 * bi..64 * bi + 64].try_into().unwrap();
-            let mut flags = 0u32;
-            if bi == 0 {
-                flags |= CHUNK_START;
-            }
-            if bi == 15 {
-                flags |= CHUNK_END;
-            }
-            if self.keyed && self.chunk_index == 0 {
-                flags |= KEYED_HASH;
-            }
-            let out = compress(&self.cv, &blk, self.chunk_index, 64, flags);
-            self.cv.copy_from_slice(&out[..32]);
-        }
-        let cv = self.cv;
-        self.push_chunk_cv(cv);
-        self.cv = if self.keyed { self.key } else { iv_first_four() };
-    }
-
-    fn root_cv(&self) -> [u8; 32] {
-        if self.stack_len == 0 {
-            // No chunks: the (empty) chunk is the root.
-            let block = [0u8; 64];
-            let mut flags = CHUNK_START | CHUNK_END | ROOT;
-            if self.keyed {
-                flags |= KEYED_HASH;
-            }
-            let out = compress(&self.cv, &block, 0, 0, flags);
-            let mut cv = [0u8; 32];
-            cv.copy_from_slice(&out[..32]);
-            return cv;
-        }
-        let mut cv = self.stack[0];
-        for i in 1..self.stack_len {
-            let is_root = i == self.stack_len - 1;
-            let mut flags = PARENT;
-            if is_root {
-                flags |= ROOT;
-            }
-            cv = self.parent_cv(&cv, &self.stack[i], i as u64, flags);
-        }
-        cv
-    }
-
-    fn squeeze(&mut self, root_cv: [u8; 32], out: &mut [u8]) {
+    fn output_root_bytes(&self, o: &Output, out: &mut [u8]) {
         let mut counter = 0u64;
         let mut written = 0;
         while written < out.len() {
-            let block = compress(&root_cv, &[0u8; 64], counter, 64, ROOT);
+            let block = compress(&o.input_cv, &o.block, counter, o.block_len, o.flags | ROOT);
             let take = (out.len() - written).min(64);
             out[written..written + take].copy_from_slice(&block[..take]);
             written += take;
             counter += 1;
         }
     }
+
+    fn parent_output(&self, left: &[u8; 32], right: &[u8; 32]) -> Output {
+        let mut block = [0u8; 64];
+        block[..32].copy_from_slice(left);
+        block[32..].copy_from_slice(right);
+        Output {
+            input_cv: self.key_words(),
+            block,
+            counter: 0,
+            block_len: 64,
+            flags: PARENT | self.base_flags(),
+        }
+    }
+
+    fn push_chunk_cv(&mut self, mut cv: [u8; 32], chunk_index: u64) {
+        // Merge as many completed subtrees as there are trailing zero bits in
+        // the post-increment chunk count.
+        let mut total = chunk_index + 1;
+        while total & 1 == 0 {
+            let left = self.stack[self.stack_len - 1];
+            let po = self.parent_output(&left, &cv);
+            cv = self.output_chaining_value(&po);
+            self.stack_len -= 1;
+            total >>= 1;
+        }
+        self.stack[self.stack_len] = cv;
+        self.stack_len += 1;
+    }
+
+    /// Compress a full 1024-byte chunk into a chaining value and add it to the
+    /// tree. Never used for the final chunk (which becomes an [`Output`]).
+    fn compress_chunk(&mut self, chunk: &[u8; CHUNK_LEN]) {
+        let mut cv = self.key_words();
+        for bi in 0..16 {
+            let blk = chunk[64 * bi..64 * bi + 64].try_into().unwrap();
+            let mut flags = self.base_flags();
+            if bi == 0 {
+                flags |= CHUNK_START;
+            }
+            if bi == 15 {
+                flags |= CHUNK_END;
+            }
+            let out = compress(&cv, &blk, self.chunk_index, 64, flags);
+            cv.copy_from_slice(&out[..32]);
+        }
+        let idx = self.chunk_index;
+        self.push_chunk_cv(cv, idx);
+        self.chunk_index += 1;
+    }
+
+    /// Build the [`Output`] for the final (buffered) chunk.
+    fn final_chunk_output(&self) -> Output {
+        let len = self.buflen;
+        let nblocks = if len <= 64 { 1 } else { (len + 63) / 64 };
+        let mut cv = self.key_words();
+        for bi in 0..nblocks - 1 {
+            let blk: &[u8; 64] = self.buf[64 * bi..64 * bi + 64].try_into().unwrap();
+            let mut flags = self.base_flags();
+            if bi == 0 {
+                flags |= CHUNK_START;
+            }
+            let out = compress(&cv, blk, self.chunk_index, 64, flags);
+            cv.copy_from_slice(&out[..32]);
+        }
+        let bi = nblocks - 1;
+        let start = 64 * bi;
+        let end = len.max(start); // 0-length chunk => start == end == 0
+        let mut block = [0u8; 64];
+        block[..end - start].copy_from_slice(&self.buf[start..end]);
+        let mut flags = self.base_flags() | CHUNK_END;
+        if bi == 0 {
+            flags |= CHUNK_START;
+        }
+        Output {
+            input_cv: cv,
+            block,
+            counter: self.chunk_index,
+            block_len: (end - start) as u32,
+            flags,
+        }
+    }
+
+    fn root_output(&self) -> Output {
+        let mut output = self.final_chunk_output();
+        if self.stack_len == 0 {
+            return output;
+        }
+        let mut cv = self.output_chaining_value(&output);
+        let mut i = self.stack_len;
+        while i > 0 {
+            i -= 1;
+            output = self.parent_output(&self.stack[i], &cv);
+            if i > 0 {
+                cv = self.output_chaining_value(&output);
+            }
+        }
+        output
+    }
+}
+
+/// A deferred BLAKE3 compression (final chunk block or parent node).
+#[derive(Clone)]
+struct Output {
+    input_cv: [u8; 32],
+    block: [u8; 64],
+    counter: u64,
+    block_len: u32,
+    flags: u32,
 }
 
 impl Default for Blake3 {
@@ -232,64 +288,30 @@ impl Xof for Blake3 {
     #[inline]
     fn update(&mut self, data: &[u8]) {
         let mut data = data;
-        if self.buflen > 0 {
+        // The final chunk must be turned into an `Output` at finalization, so
+        // the buffer is only flushed once we know more input follows.
+        if self.buflen > 0 && data.len() > CHUNK_LEN - self.buflen {
             let need = CHUNK_LEN - self.buflen;
-            let take = need.min(data.len());
-            self.buf[self.buflen..self.buflen + take].copy_from_slice(&data[..take]);
-            self.buflen += take;
-            data = &data[take..];
-            if self.buflen == CHUNK_LEN {
-                let c = self.buf;
-                self.compress_chunk(&c);
-                self.buflen = 0;
-            }
+            self.buf[self.buflen..].copy_from_slice(&data[..need]);
+            data = &data[need..];
+            let c = self.buf;
+            self.compress_chunk(&c);
+            self.buflen = 0;
         }
-        while data.len() >= CHUNK_LEN {
+        while data.len() > CHUNK_LEN {
             let c: &[u8; CHUNK_LEN] = data[..CHUNK_LEN].try_into().unwrap();
             self.compress_chunk(c);
             data = &data[CHUNK_LEN..];
         }
         if !data.is_empty() {
-            self.buf[..data.len()].copy_from_slice(data);
-            self.buflen = data.len();
+            self.buf[self.buflen..self.buflen + data.len()].copy_from_slice(data);
+            self.buflen += data.len();
         }
     }
 
     fn finalize_xof_reset(&mut self, out: &mut [u8]) {
-        let mut chunk = [0u8; CHUNK_LEN];
-        chunk[..self.buflen].copy_from_slice(&self.buf[..self.buflen]);
-        let nblocks = if self.buflen == 0 { 1 } else { (self.buflen + 63) / 64 };
-        let is_root = self.stack_len == 0 && self.chunk_index == 0;
-        for bi in 0..nblocks {
-            let start = 64 * bi;
-            let end = (start + 64).min(self.buflen);
-            let mut blk = [0u8; 64];
-            blk[..end - start].copy_from_slice(&chunk[start..end]);
-            let block_len = (end - start) as u32;
-            let mut flags = 0u32;
-            if bi == 0 {
-                flags |= CHUNK_START;
-            }
-            if bi == nblocks - 1 {
-                flags |= CHUNK_END;
-            }
-            if is_root {
-                flags |= ROOT;
-            }
-            if self.keyed && self.chunk_index == 0 {
-                flags |= KEYED_HASH;
-            }
-            let c = self.cv;
-            let out_c = compress(&c, &blk, self.chunk_index, block_len, flags);
-            self.cv.copy_from_slice(&out_c[..32]);
-        }
-        if self.buflen > 0 || is_root {
-            let cv = self.cv;
-            self.push_chunk_cv(cv);
-        }
-        let root = self.root_cv();
-        self.squeeze(root, out);
-        // reset
+        let root = self.root_output();
+        self.output_root_bytes(&root, out);
         *self = Self::with_key(if self.keyed { &self.key } else { &[] });
     }
 

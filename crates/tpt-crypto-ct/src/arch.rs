@@ -24,7 +24,7 @@ extern crate std;
 /// `cond` may be any `u8`; only its zero/non-zero value is significant. No
 /// memory other than the two referenced words is touched, and no flags are
 /// relied upon by surrounding code after the call.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(miri)))]
 #[inline]
 pub(crate) unsafe fn cmov_u64(cond: u8, a: &mut u64, b: &u64) {
     // SAFETY: `a` and `b` are valid, aligned `u64` references passed by the
@@ -52,7 +52,7 @@ pub(crate) unsafe fn cmov_u64(cond: u8, a: &mut u64, b: &u64) {
 /// See [`cmov_u64`]. On AArch64 this uses the `csel` instruction, which
 /// selects a register based on the condition flags and therefore cannot
 /// introduce a data-dependent control-flow branch.
-#[cfg(target_arch = "aarch64")]
+#[cfg(all(target_arch = "aarch64", not(miri)))]
 #[inline]
 pub(crate) unsafe fn cmov_u64(cond: u8, a: &mut u64, b: &u64) {
     // SAFETY: `a` and `b` are valid, aligned `u64` references. The assembly
@@ -78,10 +78,16 @@ pub(crate) unsafe fn cmov_u64(cond: u8, a: &mut u64, b: &u64) {
 /// See [`cmov_u64`]. This fallback contains no actual `unsafe` operation but
 /// is declared `unsafe fn` so that call sites can uniformly invoke it inside
 /// an `unsafe` block regardless of target architecture.
-#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+// Under Miri (which cannot execute inline assembly) we fall back to the
+// portable bitmask implementation even on x86_64/aarch64, so the whole crate
+// stays `miri`-clean while the production backends keep using real `cmov`/`csel`.
+#[cfg(any(not(any(target_arch = "x86_64", target_arch = "aarch64")), miri))]
 #[inline]
 pub(crate) unsafe fn cmov_u64(cond: u8, a: &mut u64, b: &u64) {
-    let mask = u64::from(cond).wrapping_neg(); // 0 or 0xFFFF…FFFF
+    // Reduce `cond` to 0/1 first, then broadcast to a full-width mask. Using
+    // `cond` directly would only negate its low byte and corrupt the mask for
+    // any non-`0`/`1` value (e.g. `255`).
+    let mask = u64::from(cond != 0).wrapping_neg(); // 0 or 0xFFFF…FFFF
     let av = *a;
     let bv = *b;
     *a = av ^ (mask & (av ^ bv));
@@ -156,10 +162,10 @@ impl Block128 {
     }
 
     #[inline]
-    fn to_m128i(&self) -> core::arch::x86_64::__m128i {
+    fn to_m128i(self) -> core::arch::x86_64::__m128i {
         // SAFETY: `Block128` is a two-`u64` struct; the transmute copies only the
         // 16 bytes we own.
-        unsafe { core::mem::transmute_copy(self) }
+        unsafe { core::mem::transmute_copy(&self) }
     }
 }
 
@@ -182,13 +188,17 @@ pub(crate) unsafe fn aes_ni_encrypt_block(rk: &[Block128], block: Block128) -> B
     // SAFETY: all `__m128i` temporaries are private copies; `_mm_xor_si128` and
     // `_mm_aesenc_si128`/`_mm_aesenclast_si128` read only their input registers
     // and write the output, touching no memory. `rk.len()` is `rounds + 1`.
+    // The wrapping `unsafe` block is required by `unsafe_op_in_unsafe_fn`; the
+    // `unused_unsafe` allowance is a known false positive because the block is
+    // genuinely needed under that lint.
+    #[allow(unused_unsafe)]
     unsafe {
         let mut state = block.to_m128i();
         let k0 = rk[0].to_m128i();
         state = core::arch::x86_64::_mm_xor_si128(state, k0);
         let rounds = rk.len() - 1;
-        for r in 1..rounds {
-            let k = rk[r].to_m128i();
+        for k in rk.iter().take(rounds).skip(1) {
+            let k = k.to_m128i();
             state = core::arch::x86_64::_mm_aesenc_si128(state, k);
         }
         let k = rk[rounds].to_m128i();
@@ -224,11 +234,15 @@ pub fn aes_ni_encrypt_block_safe(rk: &[Block128], block: Block128) -> Option<Blo
 /// feature. No memory is accessed; operands are by value.
 #[cfg(all(target_arch = "x86_64", feature = "std"))]
 #[inline]
+#[allow(dead_code)]
 #[target_feature(enable = "pclmulqdq")]
 pub(crate) unsafe fn pclmulqdq(a: Block128, b: Block128) -> (Block128, Block128) {
     // SAFETY: `vpclmulqdq` reads two registers and writes one; no memory is
     // touched. We perform two clmul halves (low·low, high·high) and combine
-    // them in registers. The `__m128i` temporaries are private copies.
+    // them in registers. The `__m128i` temporaries are private copies. The
+    // wrapping `unsafe` block is required by `unsafe_op_in_unsafe_fn`
+    // (`unused_unsafe` is a known false positive here).
+    #[allow(unused_unsafe)]
     unsafe {
         let a_v = a.to_m128i();
         let b_v = b.to_m128i();
@@ -286,6 +300,67 @@ pub fn has_aes_ni() -> bool {
 #[must_use]
 pub fn has_pclmulqdq() -> bool {
     false
+}
+
+// ---------------------------------------------------------------------------
+// Carry-less multiplication (`pclmulqdq`) for GHASH / POLYVAL (x86_64 only).
+//
+// These wrap the Intel carry-less-multiply instructions. All `unsafe` stays in
+// this single module; callers in `tpt-crypto-aead` never write `unsafe`. The
+// 128×128 carry-less product is assembled from four 64×64 clmuls and returned
+// as two 128-bit halves (low, high) in `Block128` form.
+// ---------------------------------------------------------------------------
+
+/// Single 64×64 carry-less multiply producing a 128-bit `Block128` result.
+#[cfg(all(target_arch = "x86_64", feature = "std"))]
+#[inline]
+#[target_feature(enable = "pclmulqdq")]
+pub(crate) unsafe fn clmul(a: Block128, b: Block128, ctrl: u8) -> Block128 {
+    // SAFETY: `_mm_clmulepi64_si128` reads two registers and writes one; no
+    // memory is touched. `has_pclmulqdq` has already been checked by the
+    // caller of `clmul128_raw`.
+    #[allow(unused_unsafe)]
+    unsafe {
+        let av = a.to_m128i();
+        let bv = b.to_m128i();
+        let v = match ctrl {
+            0x00 => core::arch::x86_64::_mm_clmulepi64_si128(av, bv, 0x00),
+            0x01 => core::arch::x86_64::_mm_clmulepi64_si128(av, bv, 0x01),
+            0x10 => core::arch::x86_64::_mm_clmulepi64_si128(av, bv, 0x10),
+            _ => core::arch::x86_64::_mm_clmulepi64_si128(av, bv, 0x11),
+        };
+        Block128::from_m128i(v)
+    }
+}
+
+/// Full 128×128 carry-less product, returned as `(low, high)` 128-bit halves.
+#[cfg(all(target_arch = "x86_64", feature = "std"))]
+#[inline]
+#[must_use]
+pub fn clmul128_raw(a: &Block128, b: &Block128) -> (Block128, Block128) {
+    if !has_pclmulqdq() {
+        return (Block128 { lo: 0, hi: 0 }, Block128 { lo: 0, hi: 0 });
+    }
+    // SAFETY: `has_pclmulqdq` confirmed; `clmul` only touches registers.
+    let c00 = unsafe { clmul(*a, *b, 0x00) };
+    let c01 = unsafe { clmul(*a, *b, 0x10) };
+    let c10 = unsafe { clmul(*a, *b, 0x01) };
+    let c11 = unsafe { clmul(*a, *b, 0x11) };
+    let mid = Block128 {
+        lo: c01.lo ^ c10.lo,
+        hi: c01.hi ^ c10.hi,
+    };
+    // low half (product bits 0..127): c00 plus mid's bits 64..127;
+    // high half (product bits 128..255): c11 plus mid's bits 128..191.
+    let lo = Block128 {
+        lo: c00.lo,
+        hi: c00.hi ^ mid.lo,
+    };
+    let hi = Block128 {
+        lo: c11.lo ^ mid.hi,
+        hi: c11.hi,
+    };
+    (lo, hi)
 }
 
 #[cfg(test)]

@@ -24,17 +24,19 @@ pub fn hkdf_expand<H: Hasher<OUT> + Default + Clone, const BLOCK: usize, const O
     okm: &mut [u8],
 ) {
     let mut prev = [0u8; OUT];
+    let mut prev_len = 0usize;
     let mut written = 0;
     let mut counter = 1u8;
     while written < okm.len() {
         let mut h = Hmac::<H, BLOCK, OUT>::new(prk);
-        h.update(&prev);
+        h.update(&prev[..prev_len]);
         h.update(info);
         h.update(&[counter]);
         let blk = h.finalize();
         let need = (okm.len() - written).min(OUT);
         okm[written..written + need].copy_from_slice(&blk[..need]);
         prev.copy_from_slice(&blk);
+        prev_len = OUT;
         written += need;
         counter += 1;
     }

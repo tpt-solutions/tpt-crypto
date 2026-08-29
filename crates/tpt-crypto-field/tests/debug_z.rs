@@ -26,8 +26,8 @@ fn ref_reduce(x: &[u64], m: &[u64; N]) -> [u64; N] {
     }
     while bit >= 0 {
         let shift = bit as u32;
-        let mut sm = vec![0u64; N];
         let ls = (shift / 64) as usize;
+        let mut sm = vec![0u64; N + ls + 1];
         let bs = (shift % 64) as u32;
         for i in 0..N {
             let v = m[i];

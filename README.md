@@ -6,6 +6,13 @@ compatible dependency chain. No OpenSSL, no `ring`, no `*-sys` C-FFI.
 > **Status (this pass):** local `git` only — no GitHub remote, no
 > `cargo publish`. Metadata is prepped so publishing is a later one-step.
 
+> **⚠️ Not audited — reference material only.** This project has **not** been
+> independently security-audited or formally verified end-to-end. It is offered
+> as a community reference and a starting point for others to learn from, fork,
+> and harden — **not** as a production-ready, drop-in cryptographic library. Do
+> not ship it in security-critical systems without your own review, testing, and
+> professional audit. Use at your own risk.
+
 ## Layering (strict — lower never depends on higher)
 
 ```

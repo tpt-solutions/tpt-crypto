@@ -45,6 +45,10 @@ impl<H: Hasher<OUT> + Default + Clone, const BLOCK: usize, const OUT: usize> Hma
         h.update(data2);
         self.k = h.finalize();
         self.v = self.hmac(&[]);
+        // SP 800-90A: when provided_data is empty, stop after the 0x00 pass.
+        if data1.is_empty() && data2.is_empty() {
+            return;
+        }
         let mut h2 = Hmac::<H, BLOCK, OUT>::new(&self.k);
         h2.update(&self.v);
         h2.update(&[0x01]);
@@ -73,7 +77,7 @@ impl<H: Hasher<OUT> + Default + Clone, const BLOCK: usize, const OUT: usize> Drb
             out[generated..generated + take].copy_from_slice(&self.v[..take]);
             generated += take;
         }
-        self.update(&[0x00], &[]);
+        self.update(additional_input, &[]);
         Ok(())
     }
 }

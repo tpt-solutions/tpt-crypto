@@ -1,3 +1,9 @@
+// Proptest relies on `std::env::current_dir` for file-based failure
+// persistence, which Miri refuses under isolation. The same properties are
+// covered by the `#[cfg(test)]` unit tests in the library, so we skip this
+// harness under Miri rather than weaken the crate's constant-time guarantees.
+#![cfg(not(miri))]
+
 //! Property tests for the constant-time selection / comparison primitives.
 //!
 //! The central law exercised here is
