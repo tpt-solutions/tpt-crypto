@@ -158,18 +158,27 @@ fn verify() -> i32 {
 }
 
 fn release_dry_run() -> i32 {
-    println!("xtask release-dry-run: run `cargo publish --dry-run -p tpt-crypto-core`.");
-    let status = Command::new("cargo")
-        .args(["publish", "--dry-run", "-p", "tpt-crypto-core"])
-        .status();
-    match status {
-        Ok(s) if s.success() => 0,
-        Ok(_) => 1,
-        Err(e) => {
-            eprintln!("release-dry-run: could not invoke cargo: {e}");
-            1
+    // Publishable Phase 1 slice, in dependency order.
+    let crates = ["tpt-crypto-core", "tpt-crypto-ct", "tpt-crypto-hash"];
+    let mut worst = 0;
+    for name in crates {
+        println!("xtask release-dry-run: cargo publish --dry-run -p {name}");
+        let status = Command::new("cargo")
+            .args(["publish", "--dry-run", "-p", name])
+            .status();
+        match status {
+            Ok(s) if s.success() => {}
+            Ok(_) => worst = 1,
+            Err(e) => {
+                eprintln!("release-dry-run: could not invoke cargo: {e}");
+                worst = 1;
+            }
         }
     }
+    if worst == 0 {
+        println!("release-dry-run: clean for the v0.1 publishable slice.");
+    }
+    worst
 }
 
 fn sbom() -> i32 {

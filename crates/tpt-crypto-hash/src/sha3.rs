@@ -42,7 +42,7 @@ const ROTC: [[u32; 5]; 5] = [
 
 #[inline]
 fn keccak_f(a: &mut [u64; 25]) {
-    for round in 0..24 {
+    for &rc in &RC {
         // Theta
         let mut c = [0u64; 5];
         for x in 0..5 {
@@ -79,7 +79,7 @@ fn keccak_f(a: &mut [u64; 25]) {
             }
         }
         // Iota
-        a[0] ^= RC[round];
+        a[0] ^= rc;
     }
 }
 
@@ -122,7 +122,7 @@ impl Keccak {
         p[..prefix.len()].copy_from_slice(prefix);
         self.prefix = p;
         self.prefix_len = prefix.len();
-        if prefix.len() > 0 {
+        if !prefix.is_empty() {
             self.absorb(prefix);
         }
     }
@@ -209,13 +209,15 @@ impl Keccak {
             if self.squeeze_pos == self.rate {
                 keccak_f(&mut self.state);
                 for k in 0..(self.rate / 8) {
-                    self.squeeze_buf[8 * k..8 * k + 8].copy_from_slice(&self.state[k].to_le_bytes());
+                    self.squeeze_buf[8 * k..8 * k + 8]
+                        .copy_from_slice(&self.state[k].to_le_bytes());
                 }
                 self.squeeze_pos = 0;
             }
             let avail = self.rate - self.squeeze_pos;
             let take = avail.min(out.len());
-            out[..take].copy_from_slice(&self.squeeze_buf[self.squeeze_pos..self.squeeze_pos + take]);
+            out[..take]
+                .copy_from_slice(&self.squeeze_buf[self.squeeze_pos..self.squeeze_pos + take]);
             self.squeeze_pos += take;
             out = &mut out[take..];
         }

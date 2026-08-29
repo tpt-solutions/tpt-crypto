@@ -33,7 +33,7 @@ const ROTC: [[u32; 5]; 5] = [
 
 #[inline]
 fn keccak_p12(a: &mut [u64; 25]) {
-    for round in 0..12 {
+    for &rc in &RC12 {
         let mut c = [0u64; 5];
         for x in 0..5 {
             c[x] = a[x] ^ a[x + 5] ^ a[x + 10] ^ a[x + 15] ^ a[x + 20];
@@ -64,7 +64,7 @@ fn keccak_p12(a: &mut [u64; 25]) {
                 a[idx] = b[idx] ^ ((!b1) & b2);
             }
         }
-        a[0] ^= RC12[round];
+        a[0] ^= rc;
     }
 }
 

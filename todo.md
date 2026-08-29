@@ -159,9 +159,14 @@ variant (feature-gated re-exports instead of steps 3–6).
       trailing Update passes the real additional-input.
 - [x] API: streaming `Hasher` trait (`update`/`finalize`/`finalize_xof`) +
       one-shot free fns; `reset`; const output sizes
-- [~] Optional `digest` trait-compat impls behind `digest` feature
-      — `src/digest_impls.rs`: SHA-2, SHA-3 (`Digest`) and SHAKE
-      (`ExtendableOutput`); BLAKE2b/BLAKE3/K12/HMAC/`Mac` still TODO.
+- [x] Optional `digest` trait-compat impls behind `digest` feature
+       — `src/digest_impls.rs`: SHA-2, SHA-3 (`Digest`) and SHAKE
+       (`ExtendableOutput`); BLAKE2b (`Digest`), BLAKE3 & K12
+       (`ExtendableOutput`) now implemented. HMAC intentionally does **not**
+       implement `digest::Mac` (that trait fixes key length to `KeySize`,
+       whereas HMAC accepts arbitrary-length keys) — it exposes its own
+       constant-time `Hmac::verify` instead. Covered by
+       `tests/digest_compat.rs` (gated on `digest`).
 - [~] KATs: NIST CAVP (SHA-2, SHA-3, SHAKE), RFC 7693 (BLAKE2), official BLAKE3
       test vectors, K12 (RFC 9861), RFC 4231 (HMAC), RFC 5869 (HKDF),
       NIST SP 800-185 (cSHAKE/KMAC) — in `tests/kat.rs` +
@@ -171,8 +176,16 @@ variant (feature-gated re-exports instead of steps 3–6).
       one-shot for random chunkings (`tests/props.rs`) + XOF split-invariance.
 - [x] `specs/sha256.telos`, `specs/keccak_f.telos`
 
-- [ ] **Milestone**: `cargo xtask release-dry-run` clean for `-core`, `-ct`,
-      `-hash`; tag `v0.1.0-slice` locally; CI green incl. `miri` + `leakage`
+- [~] **Milestone**: `cargo xtask release-dry-run` clean for `-core`, `-ct`,
+       `-hash`; tag `v0.1.0-slice` locally; CI green incl. `miri` + `leakage`
+       — `core` and `ct` `cargo publish --dry-run` PASS (packaged cleanly);
+       `hash` package is valid but its isolated `publish --dry-run` only fails
+       to resolve the not-yet-published `core`/`ct` path deps (publish in
+       dependency order: `core` → `ct` → `hash`). `leakage` harness PASS
+       (Welch t ≪ 10.0). `miri` not run in this environment. Recommend a
+       targeted per-phase commit of the slice before tagging `v0.1.0-slice`
+       (working tree also carries unrelated uncommitted work in `aead`/`sig`/
+       `kem`).
 
 ---
 
@@ -231,17 +244,47 @@ variant (feature-gated re-exports instead of steps 3–6).
 - [ ] `specs/scalarmul_ct.telos` (timing ⟂ scalar)
 
 ### crates/tpt-crypto-aead
-- [ ] AES-128/192/256: portable bitsliced (constant-time) + `aes` `target-feature`
+- [x] Scaffold `crates/tpt-crypto-aead/` — `Cargo.toml` (deps `-core`, `-ct`;
+      `alloc`/`std`/`aead-trait` features), `lib.rs` (`#![no_std]`,
+      `#![forbid(unsafe_code)]`), modules `aes`/`api`/`chacha`/`ctr_drbg`/
+      `gcm`/`gcm_siv`/`aead_compat`.
+- [~] AES-128/192/256: portable bitsliced (constant-time) + `aes` `target-feature`
       AES-NI path routed through `tpt-crypto-ct::arch`
-- [ ] GHASH (carryless mul: portable Shoup-table-free + `pclmulqdq` path); GCM
-- [ ] ChaCha20 + Poly1305 (RFC 8439); XChaCha20-Poly1305 (draft-irtf-cfrg)
-- [ ] AES-GCM-SIV (RFC 8452) — nonce-misuse resistant; POLYVAL
-- [ ] `CtrDrbg` (SP 800-90A) implementing `DrbgCore`
-- [ ] API: `Aead` trait (`encrypt`/`decrypt` in-place + detached tag), AAD,
+      — `src/aes.rs`: table-free ct S-box via algebraic GF(2⁸) inversion (not
+      bitsliced), key schedule, `encrypt_block`; `x86_64` dispatch to AES-NI
+      through `tpt-crypto-ct::arch`. Inline KATs (FIPS-197). Decrypt path / equiv
+      inverse not needed (CTR-only use). Perf: no bitsliced parallel path.
+- [~] GHASH (carryless mul: portable Shoup-table-free + `pclmulqdq` path); GCM
+      — `src/gcm.rs`: branch-free portable GF(2¹²⁸) multiply, GHASH, `Aes128Gcm`/
+      `Aes256Gcm`; CTR-then-GHASH ordering per SP 800-38D, ct tag verify before
+      plaintext release. `pclmulqdq` path routed via `tpt-crypto-ct`. Inline KAT.
+- [~] ChaCha20 + Poly1305 (RFC 8439); XChaCha20-Poly1305 (draft-irtf-cfrg)
+      — `src/chacha.rs`: ChaCha20 block/stream, Poly1305, `ChaCha20Poly1305`,
+      `XChaCha20Poly1305` (HChaCha20). RFC 8439 §2.3/§2.4/§2.5 inline KATs.
+      Dead `poly1305_mac` fn left over from refactor — remove or wire up.
+- [~] AES-GCM-SIV (RFC 8452) — nonce-misuse resistant; POLYVAL
+      — `src/gcm_siv.rs`: POLYVAL, key-derivation, `Aes128GcmSiv`/`Aes256GcmSiv`.
+      RFC 8452 KAT present but **lib tests currently fail to compile**
+      (`gcm_siv.rs` inline tests: `try_into`/`.unwrap()` type-annotation errors
+      at lines ~265/275/286).
+- [~] `CtrDrbg` (SP 800-90A) implementing `DrbgCore`
+      — `src/ctr_drbg.rs`: AES-256 CTR-DRBG, `update` (key rebuilt into fresh
+      `Zeroizing` buffer), instantiate/reseed/generate, inline tests. Not yet
+      confirmed wired to the `DrbgCore` trait / CAVP vectors.
+- [x] API: `Aead` trait (`encrypt`/`decrypt` in-place + detached tag), AAD,
       ct tag comparison (`ct_eq`), `Nonce`/`Tag` newtypes
-- [ ] Optional `aead` trait-compat impls behind `aead` feature
-- [ ] KATs: NIST GCM/CAVP, RFC 8439, RFC 8452, Wycheproof (AES-GCM, ChaCha20Poly1305)
+      — `src/api.rs`: const-generic `Aead<NONCE_LEN, TAG_LEN>`, detached +
+      alloc-gated combined ops, `Nonce`/`Tag` newtypes, `Tag::ct_eq` via
+      `tpt-crypto-ct::ct_eq_bytes`, no `PartialEq` on `Tag`.
+- [~] Optional `aead` trait-compat impls behind `aead` feature
+      — `src/aead_compat.rs` behind the `aead-trait` feature (`aead` 0.6); not
+      yet verified to build/test with `--features aead-trait`.
+- [~] KATs: NIST GCM/CAVP, RFC 8439, RFC 8452, Wycheproof (AES-GCM, ChaCha20Poly1305)
+      — only inline per-module vectors so far (FIPS-197 AES, RFC 8439 ChaCha/
+      Poly1305, RFC 8452 GCM-SIV, one GCM KAT). No `tests/` dir, no NIST CAVP /
+      Wycheproof JSON, no PROVENANCE.
 - [ ] proptest: `decrypt(encrypt(m)) == m`; any ciphertext/tag/AAD bitflip → error
+      — `proptest` is a dev-dep but no property tests written yet.
 - [ ] `specs/aead_tag_verify.telos` (accept iff tag valid; timing ⟂ tag)
 
 - [ ] **Milestone**: dry-run clean for `-field`,`-curve`,`-aead`;

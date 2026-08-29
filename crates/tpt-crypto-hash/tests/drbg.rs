@@ -5,8 +5,8 @@
 //! output continuity.
 
 use tpt_crypto_core::DrbgCore;
-use tpt_crypto_hash::HmacDrbg;
 use tpt_crypto_hash::sha2::Sha256;
+use tpt_crypto_hash::HmacDrbg;
 
 type Drbg = HmacDrbg<Sha256, 64, 32>;
 

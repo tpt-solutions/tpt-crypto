@@ -6,8 +6,8 @@ error[E0369]: binary operation `==` cannot be applied to type `SecretBox<[u8; 4]
   |             |
   |             SecretBox<[u8; 4]>
   |
-note: the foreign item type `SecretBox<[u8; 4]>` doesn't implement `PartialEq`
+note: `SecretBox<[u8; 4]>` does not implement `PartialEq`
  --> src/secret.rs
   |
   | pub struct SecretBox<T: Zeroize> {
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not implement `PartialEq`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `SecretBox<[u8; 4]>` is defined in another crate

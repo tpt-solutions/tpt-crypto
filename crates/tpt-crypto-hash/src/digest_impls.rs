@@ -104,3 +104,21 @@ macro_rules! impl_digest_xof {
 
 impl_digest_xof!(crate::sha3::Shake128);
 impl_digest_xof!(crate::sha3::Shake256);
+
+// --- BLAKE2b (fixed-output `digest::Digest`) ----------------------------
+
+impl_digest_fixed!(crate::blake2b::Blake2b<32>, U32, 32);
+impl_digest_fixed!(crate::blake2b::Blake2b<64>, U64, 64);
+
+// --- BLAKE3 / KangarooTwelve (XOF `digest::ExtendableOutput`) -----------
+
+impl_digest_xof!(crate::blake3::Blake3);
+impl_digest_xof!(crate::k12::KangarooTwelve);
+
+// --- HMAC -----------------------------------------------------------------
+//
+// `Hmac` intentionally does **not** implement `digest::Mac`: that trait's
+// `new(key: &Key<Self>)` fixes the key length to `Self::KeySize`, whereas
+// HMAC accepts arbitrary-length keys (longer keys are hashed internally).
+// HMAC instead exposes its own constant-time [`crate::mac::Hmac::verify`]
+// method, which is the security-relevant interface.

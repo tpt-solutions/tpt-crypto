@@ -14,7 +14,9 @@ pub struct HmacDrbg<H: Hasher<OUT> + Default + Clone, const BLOCK: usize, const 
     _h: PhantomData<H>,
 }
 
-impl<H: Hasher<OUT> + Default + Clone, const BLOCK: usize, const OUT: usize> HmacDrbg<H, BLOCK, OUT> {
+impl<H: Hasher<OUT> + Default + Clone, const BLOCK: usize, const OUT: usize>
+    HmacDrbg<H, BLOCK, OUT>
+{
     /// Instantiate the DRBG with optional personalization and entropy.
     #[must_use]
     pub fn new(personal: &[u8], entropy: &[u8]) -> Self {

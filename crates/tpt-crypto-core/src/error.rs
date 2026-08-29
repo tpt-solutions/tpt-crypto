@@ -35,6 +35,8 @@ pub enum Error {
     InvalidCiphertext,
     /// A key was syntactically invalid (wrong size, wrong domain).
     InvalidKey,
+    /// The requested operation is not implemented / not enabled by features.
+    Unsupported,
 }
 
 impl fmt::Display for Error {
@@ -49,6 +51,7 @@ impl fmt::Display for Error {
             Error::InvalidSignature => "invalid signature",
             Error::InvalidCiphertext => "invalid ciphertext",
             Error::InvalidKey => "invalid key",
+            Error::Unsupported => "unsupported operation",
         };
         f.write_str(s)
     }

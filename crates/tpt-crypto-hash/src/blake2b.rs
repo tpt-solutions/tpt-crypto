@@ -101,8 +101,7 @@ impl<const OUT: usize> Blake2b<OUT> {
         v[13] = IV[5] ^ (self.t >> 64) as u64;
         v[14] = IV[6] ^ if last { 0xffff_ffff_ffff_ffff } else { 0 };
         v[15] = IV[7];
-        for r in 0..12 {
-            let s = &SIGMA[r];
+        for s in &SIGMA {
             g(&mut v, 0, 4, 8, 12, m[s[0]], m[s[1]]);
             g(&mut v, 1, 5, 9, 13, m[s[2]], m[s[3]]);
             g(&mut v, 2, 6, 10, 14, m[s[4]], m[s[5]]);
@@ -122,8 +121,8 @@ impl<const OUT: usize> Blake2b<OUT> {
         block[..self.buflen].copy_from_slice(&self.buf[..self.buflen]);
         self.t = self.t.wrapping_add(self.buflen as u128);
         self.compress(&block, true);
-        for i in 0..OUT {
-            out[i] = (self.h[i / 8] >> (8 * (i % 8))) as u8;
+        for (i, slot) in out.iter_mut().enumerate() {
+            *slot = (self.h[i / 8] >> (8 * (i % 8))) as u8;
         }
     }
 }

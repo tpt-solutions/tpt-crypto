@@ -34,8 +34,8 @@ extern crate alloc;
 pub mod blake2b;
 pub mod blake3;
 pub mod k12;
-pub mod mac;
 pub mod kdf;
+pub mod mac;
 pub mod sha2;
 pub mod sha3;
 

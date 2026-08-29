@@ -4,8 +4,7 @@ use crate::traits::Xof;
 
 // BLAKE3 uses the SHA-256 IV constants.
 const IV: [u32; 8] = [
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-    0x5be0cd19,
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
 // Each round's schedule is the previous one under the BLAKE3 message
@@ -61,9 +60,8 @@ fn compress(cv: &[u8; 32], block: &[u8; 64], counter: u64, block_len: u32, flags
     v[13] = (counter >> 32) as u32;
     v[14] = block_len;
     v[15] = flags;
-    for r in 0..7 {
-        let s = &MSG_SCHEDULE[r];
-        g(&mut v, 0, 4, 8, 12, m[s[0]], m[s[1]]);
+        for s in &MSG_SCHEDULE {
+            g(&mut v, 0, 4, 8, 12, m[s[0]], m[s[1]]);
         g(&mut v, 1, 5, 9, 13, m[s[2]], m[s[3]]);
         g(&mut v, 2, 6, 10, 14, m[s[4]], m[s[5]]);
         g(&mut v, 3, 7, 11, 15, m[s[6]], m[s[7]]);
@@ -220,7 +218,7 @@ impl Blake3 {
     /// Build the [`Output`] for the final (buffered) chunk.
     fn final_chunk_output(&self) -> Output {
         let len = self.buflen;
-        let nblocks = if len <= 64 { 1 } else { (len + 63) / 64 };
+        let nblocks = if len <= 64 { 1 } else { len.div_ceil(64) };
         let mut cv = self.key_words();
         for bi in 0..nblocks - 1 {
             let blk: &[u8; 64] = self.buf[64 * bi..64 * bi + 64].try_into().unwrap();
