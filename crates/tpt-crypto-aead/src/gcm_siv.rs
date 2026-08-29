@@ -24,27 +24,28 @@ fn xor_block(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
     out
 }
 
+/// POLYVAL defining polynomial `x¹²⁸ + x¹²⁷ + x¹²⁶ + x¹²¹ + 1` as the low-128-bit
+/// reduction constant in the little-endian representation (RFC 8452 §3):
+/// `0xc2` in the top byte (bits 121, 126, 127) plus bit 0.
+const POLYVAL_R: u128 = (0xc2u128 << 120) | 1;
+
 /// POLYVAL field multiplication `a · b` (little-endian POLYVAL convention).
 ///
-/// `a`, `b` are 16-byte blocks interpreted as `Σ b[i]·xⁱ` (byte 0 bit 0 = `x⁰`).
-/// The reduction polynomial is `x¹²⁸ + x⁷ + x² + x + 1` in this representation
-/// (the bit-reversal of the POLYVAL defining polynomial).
+/// `a`, `b` are 16-byte blocks interpreted as `Σ bit[i]·xⁱ` (byte 0 bit 0 = `x⁰`).
+/// Multiplication by `x` is a left shift; when it overflows `x¹²⁸` the result is
+/// reduced by [`POLYVAL_R`]. Branch-free (no secret-dependent control flow).
 #[inline]
 fn polyval_mul(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
-    let mut a = u128::from_le_bytes(*a);
-    let mut b = u128::from_le_bytes(*b);
+    let mut acc = u128::from_le_bytes(*a);
+    let b = u128::from_le_bytes(*b);
     let mut z = 0u128;
     let mut i = 0;
     while i < 128 {
-        if b & 1 != 0 {
-            z ^= a;
-        }
-        let reduce = a & 1;
-        a >>= 1;
-        if reduce != 0 {
-            a ^= 0x87;
-        }
-        b >>= 1;
+        let bi = ((b >> i) & 1).wrapping_neg();
+        z ^= acc & bi;
+        let carry = ((acc >> 127) & 1).wrapping_neg();
+        acc <<= 1;
+        acc ^= POLYVAL_R & carry;
         i += 1;
     }
     z.to_le_bytes()

@@ -253,18 +253,20 @@ variant (feature-gated re-exports instead of steps 3–6).
       through `tpt-crypto-ct::arch`. Inline KATs (FIPS-197). Decrypt path / equiv
       inverse not needed (CTR-only use). Perf: no bitsliced parallel path.
 - [~] GHASH (carryless mul: portable Shoup-table-free + `pclmulqdq` path); GCM
-      — `src/gcm.rs`: branch-free portable GF(2¹²⁸) multiply, GHASH, `Aes128Gcm`/
-      `Aes256Gcm`; CTR-then-GHASH ordering per SP 800-38D, ct tag verify before
-      plaintext release. `pclmulqdq` path routed via `tpt-crypto-ct`. Inline KAT.
+      — `src/gcm.rs`: branch-free portable GF(2¹²⁸) multiply (GHASH bit order
+      fixed — multiplier consumed MSB-first), GHASH, `Aes128Gcm`/`Aes256Gcm`;
+      CTR-then-GHASH ordering per SP 800-38D, ct tag verify before plaintext
+      release. `pclmulqdq` path routed via `tpt-crypto-ct`. NIST GCM Appendix B
+      TC1/TC2 inline KATs pass (verified against OpenSSL).
 - [~] ChaCha20 + Poly1305 (RFC 8439); XChaCha20-Poly1305 (draft-irtf-cfrg)
       — `src/chacha.rs`: ChaCha20 block/stream, Poly1305, `ChaCha20Poly1305`,
-      `XChaCha20Poly1305` (HChaCha20). RFC 8439 §2.3/§2.4/§2.5 inline KATs.
-      Dead `poly1305_mac` fn left over from refactor — remove or wire up.
+      `XChaCha20Poly1305` (HChaCha20). RFC 8439 §2.3.2 block + §2.4.2 encrypt +
+      §2.5.2 Poly1305 inline KATs pass.
 - [~] AES-GCM-SIV (RFC 8452) — nonce-misuse resistant; POLYVAL
-      — `src/gcm_siv.rs`: POLYVAL, key-derivation, `Aes128GcmSiv`/`Aes256GcmSiv`.
-      RFC 8452 KAT present but **lib tests currently fail to compile**
-      (`gcm_siv.rs` inline tests: `try_into`/`.unwrap()` type-annotation errors
-      at lines ~265/275/286).
+      — `src/gcm_siv.rs`: POLYVAL (rewritten — left-shift multiply, correct
+      `x¹²⁸+x¹²⁷+x¹²⁶+x¹²¹+1` reduction constant, branch-free), key-derivation,
+      `Aes128GcmSiv`/`Aes256GcmSiv`. RFC 8452 Appendix C.1 KAT + POLYVAL identity
+      test pass. Needs the full C.1–C.6 vector set.
 - [~] `CtrDrbg` (SP 800-90A) implementing `DrbgCore`
       — `src/ctr_drbg.rs`: AES-256 CTR-DRBG, `update` (key rebuilt into fresh
       `Zeroizing` buffer), instantiate/reseed/generate, inline tests. Not yet
@@ -275,12 +277,12 @@ variant (feature-gated re-exports instead of steps 3–6).
       alloc-gated combined ops, `Nonce`/`Tag` newtypes, `Tag::ct_eq` via
       `tpt-crypto-ct::ct_eq_bytes`, no `PartialEq` on `Tag`.
 - [~] Optional `aead` trait-compat impls behind `aead` feature
-      — `src/aead_compat.rs` behind the `aead-trait` feature (`aead` 0.6); not
-      yet verified to build/test with `--features aead-trait`.
+      — `src/aead_compat.rs` behind the `aead-trait` feature (`aead` 0.6);
+      `cargo test -p tpt-crypto-aead --all-features` builds and passes.
 - [~] KATs: NIST GCM/CAVP, RFC 8439, RFC 8452, Wycheproof (AES-GCM, ChaCha20Poly1305)
-      — only inline per-module vectors so far (FIPS-197 AES, RFC 8439 ChaCha/
-      Poly1305, RFC 8452 GCM-SIV, one GCM KAT). No `tests/` dir, no NIST CAVP /
-      Wycheproof JSON, no PROVENANCE.
+      — inline per-module vectors only (FIPS-197 AES, RFC 8439 ChaCha/Poly1305,
+      RFC 8452 GCM-SIV C.1, NIST GCM Appendix B TC1/TC2); all 15 lib tests green.
+      No `tests/` dir, no NIST CAVP / Wycheproof JSON, no PROVENANCE.
 - [ ] proptest: `decrypt(encrypt(m)) == m`; any ciphertext/tag/AAD bitflip → error
       — `proptest` is a dev-dep but no property tests written yet.
 - [ ] `specs/aead_tag_verify.telos` (accept iff tag valid; timing ⟂ tag)

@@ -11,7 +11,10 @@ pub const N: usize = 256;
 pub const Q: i32 = 3329;
 const QINV: i32 = 62209;
 const MONT: i32 = 2285;
+/// Final inverse-NTT scaling `f = 1441` (`mont^2 / 128` in the reference).
 const F: i32 = 1441;
+/// `R^2 mod q` used by [`poly_tomont`] to lift a canonical value into Montgomery form.
+const R2: i32 = 1353;
 
 /// A polynomial: 256 coefficients. Canonical values lie in `[0, q)`; during the
 /// NTT they are held in Montgomery form. Stored as `i32` so that the butterfly
@@ -34,9 +37,9 @@ pub type Poly = [i32; N];
 /// branch or index.
 #[inline]
 pub fn montgomery_reduce(a: i32) -> i32 {
-    let t0 = (a as i32).wrapping_mul(QINV as i32);
-    let t = ((t0 as i32).wrapping_mul(Q as i32)) >> 16;
-    freeze(a - t)
+    let t = (a as i16).wrapping_mul(QINV as i16) as i32;
+    let r = (a - t.wrapping_mul(Q)) >> 16;
+    freeze(r)
 }
 
 /// Montgomery multiplication of two Montgomery-encoded coefficients.
@@ -60,51 +63,24 @@ pub fn freeze(x: i32) -> i32 {
 // NTT twiddle factors
 // ---------------------------------------------------------------------------
 //
-// The NTT uses the primitive 256-th root of unity `ζ = 17` with `ζ^128 = -1`.
-// We generate the twiddle table at compile time from `ζ^{2·bitrev(i) + 1}`,
-// stored in Montgomery form, exactly as the reference Kyber/ML-KEM layout. The
-// forward transform walks `ZETAS[1..127]`; the inverse walks `ZETAS[127..1]`;
-// base multiplication uses `ZETAS[64..192]`.
+// Canonical `zetas` table from the FIPS 203 / Kyber reference `ntt.c`, used
+// verbatim. The NTT uses the primitive 256-th root of unity `ζ = 17` with
+// `ζ^128 = -1`. The forward transform walks `zetas[1..127]`; the inverse walks
+// `zetas[127..1]`; base multiplication uses `zetas[64..128]` (with a sign flip
+// on the second pair of each group, see [`poly_basemul`]).
 
-const fn pow_mod(mut base: i64, mut e: i64, m: i64) -> i64 {
-    let mut r = 1i64;
-    base %= m;
-    while e > 0 {
-        if e & 1 == 1 {
-            r = (r * base) % m;
-        }
-        base = (base * base) % m;
-        e >>= 1;
-    }
-    r
-}
-
-const fn bitrev7(mut x: usize) -> usize {
-    let mut r = 0usize;
-    let mut i = 0;
-    while i < 7 {
-        r = (r << 1) | (x & 1);
-        x >>= 1;
-        i += 1;
-    }
-    r
-}
-
-const fn to_mont(x: i64) -> i32 {
-    ((x * 65536) % Q as i64) as i32
-}
-
-const ZETAS: [i32; 256] = {
-    let mut arr = [0i32; 256];
-    let mut i = 0usize;
-    while i < 256 {
-        let exp = (2 * bitrev7(i) + 1) as i64;
-        let val = pow_mod(17, exp, Q as i64);
-        arr[i] = to_mont(val);
-        i += 1;
-    }
-    arr
-};
+const ZETAS: [i32; 128] = [
+    -1044, -758, -359, -1517, 1493, 1422, 287, 202, -171, 622, 1577, 182, 962, -1202,
+    -1474, 1468, 573, -1325, 264, 383, -829, 1458, -1602, -130, -681, 1017, 732, 608,
+    -1542, 411, -205, -1571, 1223, 652, -552, 1015, -1293, 1491, -282, -1544, 516, -8,
+    -320, -666, -1618, -1162, 126, 1469, -853, -90, -271, 830, 107, -1421, -247, -951,
+    -398, 961, -1508, -725, 448, -1065, 677, -1275, -1103, 430, 555, 843, -1251, 871,
+    1550, 105, 422, 587, 177, -235, -291, -460, 1574, 1653, -246, 778, 1159, -147, -777,
+    1483, -602, 1119, -1590, 644, -872, 349, 418, 329, -156, -75, 817, 1097, 603, 610,
+    1322, -1285, -1465, 384, -1215, -136, 1218, -1335, -874, 220, -1187, -1659, -1185,
+    -1530, -1278, 794, -1510, -854, -870, 478, -108, -308, 996, 991, 958, -1460, 1522,
+    1628,
+];
 
 // ---------------------------------------------------------------------------
 // NTT / inverse NTT / base multiplication
@@ -130,11 +106,18 @@ pub fn ntt(r: &mut Poly) {
         }
         len >>= 1;
     }
+    // Keep every coefficient inside `[-q, q]` so later `fqmul` inputs stay
+    // within the `±q·2^15` bound assumed by `montgomery_reduce` (the reference
+    // `poly_ntt` does the same via `poly_reduce` after `ntt`).
+    for c in r.iter_mut() {
+        *c = freeze(*c);
+    }
 }
 
 /// In-place inverse NTT, leaving coefficients in Montgomery form (the `tomont`
 /// suffix). Follow with [`poly_frommont`] to obtain canonical coefficients.
 pub fn invntt_tomont(r: &mut Poly) {
+    let f = F;
     let mut k = 127usize;
     let mut len = 2usize;
     while len <= 128 {
@@ -145,7 +128,7 @@ pub fn invntt_tomont(r: &mut Poly) {
             let mut j = start;
             while j < start + len {
                 let t = r[j];
-                r[j] = t + r[j + len];
+                r[j] = freeze(t + r[j + len]);
                 r[j + len] = fqmul(zeta, r[j + len] - t);
                 j += 1;
             }
@@ -154,29 +137,42 @@ pub fn invntt_tomont(r: &mut Poly) {
         len <<= 1;
     }
     for j in 0..N {
-        r[j] = montgomery_reduce((F as i32) * (r[j] as i32));
+        r[j] = fqmul(r[j], f);
     }
 }
 
 /// Negacyclic base multiplication of two NTT-domain polynomials (both in
 /// Montgomery form); result is in Montgomery form.
+///
+/// Mirrors the reference `poly_basemul_montgomery`: for each group of four
+/// coefficients the first pair uses `zetas[64+i]`, the second uses its negation.
 pub fn poly_basemul(r: &mut Poly, a: &Poly, b: &Poly) {
-    for i in 0..N / 2 {
-        let (ra, aa, ab) = (
-            &mut r[2 * i..2 * i + 2],
-            &a[2 * i..2 * i + 2],
-            &b[2 * i..2 * i + 2],
-        );
-        let t = fqmul(ZETAS[64 + i], ab[1]);
-        ra[0] = fqmul(aa[0], ab[0]) - fqmul(aa[1], t);
-        ra[1] = fqmul(aa[0], ab[1]) + fqmul(aa[1], ab[0]);
+    for i in 0..N / 4 {
+        let zeta = ZETAS[64 + i];
+        // First pair: coefficients [4i, 4i+1].
+        let t = fqmul(fqmul(a[4 * i + 1], b[4 * i + 1]), zeta);
+        r[4 * i] = t + fqmul(a[4 * i], b[4 * i]);
+        r[4 * i + 1] = fqmul(a[4 * i], b[4 * i + 1]) + fqmul(a[4 * i + 1], b[4 * i]);
+        // Second pair: coefficients [4i+2, 4i+3] with `-zeta`.
+        let z2 = -zeta;
+        let t = fqmul(fqmul(a[4 * i + 3], b[4 * i + 3]), z2);
+        r[4 * i + 2] = t + fqmul(a[4 * i + 2], b[4 * i + 2]);
+        r[4 * i + 3] = fqmul(a[4 * i + 2], b[4 * i + 3]) + fqmul(a[4 * i + 3], b[4 * i + 2]);
+    }
+}
+
+/// Convert a canonical polynomial into Montgomery form (`x ↦ x·R mod q`),
+/// matching the reference `poly_tomont`.
+pub fn poly_tomont(r: &mut Poly) {
+    for i in 0..N {
+        r[i] = montgomery_reduce(r[i].wrapping_mul(R2));
     }
 }
 
 /// Convert an NTT-domain polynomial from Montgomery form to canonical form.
 pub fn poly_frommont(r: &mut Poly) {
     for i in 0..N {
-        r[i] = montgomery_reduce((r[i] as i32) * MONT);
+        r[i] = montgomery_reduce(r[i].wrapping_mul(MONT));
     }
 }
 

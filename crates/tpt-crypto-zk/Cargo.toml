@@ -1,0 +1,35 @@
+[package]
+name = "tpt-crypto-zk"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Zero-knowledge proofs over Ed25519: Pedersen commitments, inner-product arguments, Bulletproofs range proofs, and a PLONK verifier (no_std + alloc)."
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/tpt-crypto-zk"
+readme = "README.md"
+keywords = ["cryptography", "zero-knowledge", "bulletproofs", "plonk", "no-std", "ristretto"]
+categories = ["cryptography", "no-std"]
+
+[dependencies]
+tpt-crypto-core = { workspace = true, default-features = false, features = ["alloc"] }
+tpt-crypto-ct = { workspace = true, default-features = false }
+tpt-crypto-field = { workspace = true, default-features = false, features = ["alloc"] }
+tpt-crypto-curve = { workspace = true, default-features = false }
+tpt-crypto-hash = { workspace = true, default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[features]
+default = ["alloc"]
+alloc = ["tpt-crypto-core/alloc", "tpt-crypto-field/alloc", "tpt-crypto-hash/alloc"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

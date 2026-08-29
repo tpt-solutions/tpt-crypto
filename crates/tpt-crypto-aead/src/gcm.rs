@@ -29,18 +29,19 @@ const R_GHASH: u128 = 0xe1u128 << 120;
 
 #[inline]
 fn gf_mult_portable(x: &[u8; 16], y: &[u8; 16]) -> [u8; 16] {
-    let mut a = u128::from_be_bytes(*x);
-    let mut b = u128::from_be_bytes(*y);
+    let mut v = u128::from_be_bytes(*x);
+    let y = u128::from_be_bytes(*y);
     let mut z = 0u128;
     let mut i = 0;
     while i < 128 {
-        if b & 1 != 0 {
-            z ^= a;
-        }
-        let t = a & 1;
-        a >>= 1;
-        a ^= R_GHASH.wrapping_mul(t);
-        b >>= 1;
+        // GHASH bit order: bit 0 (the MSB of the block) is the coefficient of
+        // x⁰, so the multiplier `y` is consumed from its most-significant bit.
+        // Branch-free: fold `v` in iff that bit is set.
+        let yi = ((y >> (127 - i)) & 1).wrapping_neg();
+        z ^= v & yi;
+        let carry = (v & 1).wrapping_neg();
+        v >>= 1;
+        v ^= R_GHASH & carry;
         i += 1;
     }
     z.to_be_bytes()
@@ -248,7 +249,7 @@ mod tests {
         );
         assert_eq!(
             &ct[16..],
-            hex::decode("58e2fccefa7e3061367f1d57a4e7455a").unwrap().as_slice()
+            hex::decode("ab6e47d42cec13bdf53a67b21257bddf").unwrap().as_slice()
         );
         // Round-trip decrypt recovers the plaintext.
         let pt2 = cipher.decrypt(&Nonce::new(nonce), &[], &ct).unwrap();

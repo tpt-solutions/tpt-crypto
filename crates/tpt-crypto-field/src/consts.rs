@@ -12,6 +12,8 @@
 //! buffers (`2 * MAX_LIMBS`, `MAX_LIMBS + 1`) are concrete literals and the crate
 //! builds on stable Rust (no `generic_const_exprs` needed).
 
+#![allow(long_running_const_eval)]
+
 #![allow(dead_code)]
 
 /// Maximum limb count supported by this crate (384 bits), covering every field
@@ -73,6 +75,67 @@ pub(crate) const fn limbs_ge<const N: usize>(a: &[u64; N], b: &[u64; N]) -> bool
     true
 }
 
+/// Lexicographic `a >= b` over `N`-limb arrays (most-significant limb first).
+#[inline]
+pub(crate) const fn ge_n<const N: usize>(a: &[u64; N], b: &[u64; N]) -> bool {
+    let mut i = N;
+    while i > 0 {
+        i -= 1;
+        if a[i] > b[i] {
+            return true;
+        }
+        if a[i] < b[i] {
+            return false;
+        }
+    }
+    true
+}
+
+/// `a - b` over `N` limbs, assuming `a >= b` (no borrow handling needed).
+#[inline]
+pub(crate) const fn sub_n<const N: usize>(a: &[u64; N], b: &[u64; N]) -> [u64; N] {
+    let mut out = [0u64; N];
+    let mut borrow = 0u64;
+    let mut i = 0;
+    while i < N {
+        let (d1, b1) = a[i].overflowing_sub(b[i]);
+        let (d, b2) = d1.overflowing_sub(borrow);
+        out[i] = d;
+        borrow = (b1 | b2) as u64;
+        i += 1;
+    }
+    out
+}
+
+/// Reduce a `(MAX_LIMBS + 1)`-limb value modulo an `MAX_LIMBS`-limb modulus.
+///
+/// The input is at most `2 * 2^384` (since it arises from a doubling/sum of two
+/// values `< m < 2^384`), so at most a few subtractions of `m` are required. This
+/// is a constant-time, compile-friendly alternative to the full long-division
+/// [`mod_reduce`] used by `mul_mod`.
+#[inline]
+pub(crate) const fn reduce_wide(t_in: [u64; MAX_LIMBS + 1], m: &[u64; MAX_LIMBS]) -> [u64; MAX_LIMBS] {
+    let mut t = t_in;
+    let mut mpad = [0u64; MAX_LIMBS + 1];
+    let mut j = 0;
+    while j < MAX_LIMBS {
+        mpad[j] = m[j];
+        j += 1;
+    }
+    let mut cnt = 0;
+    while ge_n(&t, &mpad) && cnt < 4 {
+        t = sub_n(&t, &mpad);
+        cnt += 1;
+    }
+    let mut out = [0u64; MAX_LIMBS];
+    let mut k = 0;
+    while k < MAX_LIMBS {
+        out[k] = t[k];
+        k += 1;
+    }
+    out
+}
+
 /// Lexicographic `a == b` over limb arrays.
 #[inline]
 pub(crate) const fn limbs_eq<const N: usize>(a: &[u64; N], b: &[u64; N]) -> bool {
@@ -102,29 +165,49 @@ pub(crate) const fn sub_mod(
 }
 
 /// `a + b mod m`, assuming `a < m` and `b < m`.
+///
+/// The sum is accumulated into a `(MAX_LIMBS + 1)`-limb buffer so the carry past
+/// the field width is never lost, then reduced by at most a few subtractions of
+/// `m`. This is essential for moduli near a power of two (e.g. P-384, Ed25519)
+/// where `a + b` would otherwise overflow the `MAX_LIMBS` representation and the
+/// carry would be silently discarded, collapsing the Montgomery constants to zero.
 #[inline]
 pub(crate) const fn add_mod(
     a: &[u64; MAX_LIMBS],
     b: &[u64; MAX_LIMBS],
     m: &[u64; MAX_LIMBS],
 ) -> [u64; MAX_LIMBS] {
-    let (r, _) = add_limbs(a, b);
-    if limbs_ge(&r, m) {
-        sub_mod(&r, m, m)
-    } else {
-        r
+    let mut t = [0u64; MAX_LIMBS + 1];
+    let mut carry: u128 = 0;
+    let mut i = 0;
+    while i < MAX_LIMBS {
+        let s = (a[i] as u128) + (b[i] as u128) + carry;
+        t[i] = s as u64;
+        carry = s >> 64;
+        i += 1;
     }
+    t[MAX_LIMBS] = carry as u64;
+    reduce_wide(t, m)
 }
 
 /// `2 * a mod m`, assuming `a < m`.
+///
+/// Implemented as a wide doubling into a `(MAX_LIMBS + 1)`-limb buffer (never
+/// dropping the carry past the field width) followed by [`reduce_wide`]. See
+/// [`add_mod`] for why the carry matters.
 #[inline]
 pub(crate) const fn double_mod(a: &[u64; MAX_LIMBS], m: &[u64; MAX_LIMBS]) -> [u64; MAX_LIMBS] {
-    let (r, _) = add_limbs(a, a);
-    if limbs_ge(&r, m) {
-        sub_mod(&r, m, m)
-    } else {
-        r
+    let mut t = [0u64; MAX_LIMBS + 1];
+    let mut carry: u128 = 0;
+    let mut i = 0;
+    while i < MAX_LIMBS {
+        let s = (a[i] as u128) + (a[i] as u128) + carry;
+        t[i] = s as u64;
+        carry = s >> 64;
+        i += 1;
     }
+    t[MAX_LIMBS] = carry as u64;
+    reduce_wide(t, m)
 }
 
 /// Shift a `MAX_LIMBS`-limb value left by `bits`, producing `2 * MAX_LIMBS` limbs.

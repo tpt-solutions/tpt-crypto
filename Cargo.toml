@@ -17,7 +17,11 @@ tpt-crypto-core = { version = "0.1.0", path = "crates/tpt-crypto-core", default-
 tpt-crypto-ct = { version = "0.1.0", path = "crates/tpt-crypto-ct", default-features = false }
 tpt-crypto-kem = { version = "0.1.0", path = "crates/tpt-crypto-kem", default-features = false }
 tpt-crypto-field = { version = "0.1.0", path = "crates/tpt-crypto-field", default-features = false }
+tpt-crypto-curve = { version = "0.1.0", path = "crates/tpt-crypto-curve", default-features = false }
 tpt-crypto-hash = { version = "0.1.0", path = "crates/tpt-crypto-hash", default-features = false }
+tpt-crypto-aead = { version = "0.1.0", path = "crates/tpt-crypto-aead", default-features = false }
+tpt-crypto-sig = { version = "0.1.0", path = "crates/tpt-crypto-sig", default-features = false }
+tpt-crypto-mpc = { version = "0.1.0", path = "crates/tpt-crypto-mpc", default-features = false }
 digest = { version = "0.10", default-features = false }
 proptest = "1"
 

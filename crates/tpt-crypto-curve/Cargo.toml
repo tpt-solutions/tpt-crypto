@@ -14,5 +14,10 @@ tpt-crypto-ct = { workspace = true }
 tpt-crypto-hash = { workspace = true }
 tpt-crypto-core = { workspace = true }
 
+[features]
+default = ["std"]
+std = ["alloc"]
+alloc = []
+
 [lints]
 workspace = true

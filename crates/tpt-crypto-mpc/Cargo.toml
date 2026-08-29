@@ -1,0 +1,29 @@
+[package]
+name = "tpt-crypto-mpc"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Secure multi-party computation: additive secret sharing, Beaver triples, and oblivious transfer (Chou-Orlandi base OT, IKNP extension). Constant-time, no_std, pure Rust."
+
+[dependencies]
+tpt-crypto-core = { workspace = true }
+tpt-crypto-ct = { workspace = true }
+tpt-crypto-field = { workspace = true }
+tpt-crypto-curve = { workspace = true }
+tpt-crypto-hash = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+hex = "0.4"
+
+[features]
+default = ["std"]
+std = ["alloc", "tpt-crypto-core/std", "tpt-crypto-ct/std", "tpt-crypto-hash/std"]
+alloc = ["tpt-crypto-core/alloc", "tpt-crypto-field/alloc", "tpt-crypto-hash/alloc"]
+
+[lints]
+workspace = true

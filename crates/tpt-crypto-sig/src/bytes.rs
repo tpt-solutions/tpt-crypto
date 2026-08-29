@@ -12,7 +12,7 @@
 /// Implemented for `[u8; N]`; this lets parameter sets name their key/signature
 /// buffers as associated `type PublicKeyBytes = [u8; 1312]` and still offer a
 /// uniform `from_slice` / `as_ref` API.
-pub trait ByteArray: Sized {
+pub trait ByteArray: Sized + AsRef<[u8]> {
     /// The length of the buffer in bytes.
     const LEN: usize;
 
@@ -22,9 +22,7 @@ pub trait ByteArray: Sized {
     /// Borrow the buffer as a byte slice.
     #[inline]
     fn as_byte_slice(&self) -> &[u8] {
-        // `[u8; N]` implements `AsRef<[u8]>`; re-use it so callers never depend
-        // on the concrete array type.
-        <Self as AsRef<[u8]>>::as_ref(self)
+        self.as_ref()
     }
 }
 
@@ -37,25 +35,25 @@ impl<const N: usize> ByteArray for [u8; N] {
     }
 }
 
-/// A fixed-size vector of [`Poly`] coefficients.
+/// A fixed-size vector of [`Poly`](crate::poly::Poly) coefficients.
 ///
 /// Implemented for `[Poly; N]`. The NTT matrix and the `s1` / `s2` / `t` vectors
 /// are all stored this way, so they can be allocated on the stack and iterated
 /// without `alloc`.
-pub trait PolyArray: Sized {
+pub trait PolyArray: Sized + Clone + AsRef<[crate::poly::Poly]> + AsMut<[crate::poly::Poly]> {
     /// A zero-filled vector of the right length.
     fn zeroed() -> Self;
 
     /// Borrow the vector as a polynomial slice.
     #[inline]
     fn as_poly_slice(&self) -> &[crate::poly::Poly] {
-        <Self as AsRef<[crate::poly::Poly]>>::as_ref(self)
+        self.as_ref()
     }
 
     /// Mutably borrow the vector as a polynomial slice.
     #[inline]
     fn as_poly_slice_mut(&mut self) -> &mut [crate::poly::Poly] {
-        <Self as AsRef<[crate::poly::Poly]>>::as_ref(self)
+        self.as_mut()
     }
 }
 

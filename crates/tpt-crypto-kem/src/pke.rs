@@ -15,8 +15,8 @@ use alloc::vec::Vec;
 use crate::encode::{pack_poly, unpack_poly};
 use crate::params::MlKemParams;
 use crate::poly::{
-    basemul_polys, freeze, invntt_p, ntt_p, poly_add, poly_frommsg, poly_tomsg, Poly,
-    N,
+    basemul_polys, freeze, invntt_p, ntt_p, poly_add, poly_frommsg, poly_tomsg, poly_tomont,
+    Poly, N,
 };
 use crate::sampler::{cbd, sample_ntt};
 use tpt_crypto_core::Error;
@@ -67,6 +67,8 @@ pub fn kpke_keygen<P: MlKemParams>(d: &[u8; 32]) -> Vec<u8> {
             let prod = basemul_polys(&a_hat, &s_hat_j);
             t_hat.vec[i] = poly_add(&t_hat.vec[i], &prod);
         }
+        // Lift the accumulated row into Montgomery form (reference `poly_tomont`).
+        poly_tomont(&mut t_hat.vec[j]);
     }
     for i in 0..P::K {
         let e_hat = ntt_p(&e.vec[i]);

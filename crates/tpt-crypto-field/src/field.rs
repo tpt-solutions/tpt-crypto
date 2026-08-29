@@ -35,6 +35,13 @@ pub trait FieldParams: Copy + Clone + Default + Eq + fmt::Debug + Send + Sync + 
     const MODULUS: [u64; MAX_LIMBS];
     /// The exponent `S` in `p - 1 = 2^S * T` (number of factors of two in `p-1`).
     const S: u32;
+    /// The Montgomery constant `R mod p` (the Montgomery encoding of `1`),
+    /// precomputed at build time: `2^(64 * LIMBS) mod p`, little-endian limbs.
+    const ONE_MONT: [u64; MAX_LIMBS];
+    /// The Montgomery constant `R^2 mod p`, precomputed at build time.
+    const R2: [u64; MAX_LIMBS];
+    /// The Montgomery constant `MU = -p^{-1} mod 2^64`, precomputed at build time.
+    const MU: u64;
 }
 
 /// A constant-time, stack-only element of `GF(p)`.
@@ -50,12 +57,12 @@ pub struct FieldElement<P: FieldParams> {
 }
 
 impl<P: FieldParams> FieldElement<P> {
-    /// The Montgomery constant `R^2 mod p` (compile-time derived).
-    const R2: [u64; MAX_LIMBS] = consts::r2_of(&P::MODULUS, P::LIMBS);
-    /// The Montgomery constant `-p^{-1} mod 2^64` (compile-time derived).
-    const MU: u64 = consts::mu_of(&P::MODULUS);
+    /// The Montgomery constant `R^2 mod p` (precomputed per field).
+    const R2: [u64; MAX_LIMBS] = P::R2;
+    /// The Montgomery constant `-p^{-1} mod 2^64` (precomputed per field).
+    const MU: u64 = P::MU;
     /// The Montgomery constant `R mod p` = the Montgomery encoding of `1`.
-    const ONE_MONT: [u64; MAX_LIMBS] = consts::one_mont_of(&P::MODULUS, P::LIMBS);
+    const ONE_MONT: [u64; MAX_LIMBS] = P::ONE_MONT;
     /// The Fermat inversion exponent `p - 2`.
     const MOD_MINUS_2: [u64; MAX_LIMBS] = consts::mod_minus_2(&P::MODULUS);
     /// `T = (p - 1) >> S`.

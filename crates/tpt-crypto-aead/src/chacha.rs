@@ -506,23 +506,28 @@ mod tests {
 
     #[test]
     fn chacha20_rfc8439_stream() {
+        // RFC 8439 §2.4.2: encrypt the sunscreen plaintext with initial counter 1.
         let key = hex::decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
             .unwrap();
         let nonce = hex::decode("000000000000004a00000000").unwrap();
         let key: [u8; 32] = key.try_into().unwrap();
         let nonce: [u8; 12] = nonce.try_into().unwrap();
-        let pt = [0u8; 64];
-        let mut ct = pt;
+        let mut buf = *b"Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.";
         let mut c = ChaCha20::new(&key, &nonce);
-        c.apply_keystream(&mut ct);
+        c.counter = 1;
+        c.apply_keystream(&mut buf);
         let expected = hex::decode(
-            "224f51f3401bd9e12fde276fb8631ded8\
-             5c68a49722793738b47e0e7eaf2e8249\
-             a554c7df511a8b3d4cbaeb2a7b5e9c8e\
-             be871f191017b461b7e4ceb17ca80eb0",
+            "6e2e359a2568f98041ba0728dd0d6981\
+             e97e7aec1d4360c20a27afccfd9fae0b\
+             f91b65c5524733ab8f593dabcd62b357\
+             1639d624e65152ab8f530c359f0861d8\
+             07ca0dbf500d6a6156a38e088a22b65e\
+             52bc514d16ccf806818ce91ab7793736\
+             5af90bbf74a35be6b40b8eedf2785e42\
+             874d",
         )
         .unwrap();
-        assert_eq!(&ct[..], &expected[..]);
+        assert_eq!(&buf[..], &expected[..]);
     }
 
     #[test]

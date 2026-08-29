@@ -87,7 +87,7 @@ pub fn cbd(out: &mut Poly, seed: &[u8; 32], counter: u8, eta: usize) {
             };
             let a = (nib & 1) + ((nib >> 1) & 1);
             let b = ((nib >> 2) & 1) + ((nib >> 3) & 1);
-            out[i] = (a - b) as i32;
+            out[i] = (a as i32) - (b as i32);
         }
     } else {
         // 6 bits/coefficient: three coin bits for `+`, three for `-` (result in [-3, 3]).
@@ -99,7 +99,7 @@ pub fn cbd(out: &mut Poly, seed: &[u8; 32], counter: u8, eta: usize) {
                 let d = (t >> (6 * j)) & 0x3F;
                 let a = (d & 1) + ((d >> 1) & 1) + ((d >> 2) & 1);
                 let b = ((d >> 3) & 1) + ((d >> 4) & 1) + ((d >> 5) & 1);
-                out[4 * g + j] = (a - b) as i32;
+                out[4 * g + j] = (a as i32) - (b as i32);
             }
         }
     }

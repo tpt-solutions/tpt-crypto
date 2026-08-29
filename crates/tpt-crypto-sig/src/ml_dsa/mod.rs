@@ -34,7 +34,7 @@ use tpt_crypto_ct::Choice;
 use tpt_crypto_hash::sha3::shake256;
 
 use crate::poly::{
-    decompose_impl, make_hint, polyt0_pack, polyt0_unpack, polyt1_pack, polyt1_unpack,
+    decompose_impl, make_hint, polyt0_pack, polyt1_pack, polyt1_unpack,
     polyeta_pack, polyeta_unpack, polyw1_pack, use_hint, Poly, Q,
 };
 use crate::Error;
@@ -242,19 +242,10 @@ fn shake256_concat(parts: &[&[u8]], out: &mut [u8]) {
     shake256(&buf, out);
 }
 
-/// Convert a slice of canonical polynomials into NTT/montgomery form in place.
-fn to_ntt_mont(v: &mut [Poly]) {
+/// Convert a slice of canonical polynomials into NTT (NTT-domain) form in place.
+fn to_ntt(v: &mut [Poly]) {
     for p in v.iter_mut() {
-        p.to_mont_ntt();
-    }
-}
-
-/// Bring a slice of NTT/montgomery polynomials back to canonical coefficients.
-fn to_coeff(v: &mut [Poly]) {
-    for p in v.iter_mut() {
-        p.inv_ntt_to_mont();
-        p.reduce();
-        p.canonicalize();
+        p.ntt();
     }
 }
 
@@ -265,10 +256,9 @@ fn mat_vec_mul(a: &[Poly], v: &[Poly], out: &mut [Poly]) {
     for i in 0..out.len() {
         let mut acc = Poly::ZERO;
         for j in 0..l {
-            acc.pointwise_acc_montgomery(&a[i * l + j], &v[j]);
+            acc.pointwise_acc(&a[i * l + j], &v[j]);
         }
-        acc.inv_ntt_to_mont();
-        acc.reduce();
+        acc.inv_ntt();
         acc.canonicalize();
         out[i] = acc;
     }
@@ -408,7 +398,7 @@ where
 
     // t = Â · ŝ₁ + s₂ (ŝ₁ in NTT domain; s₂ left in canonical coefficients).
     let mut s1hat = s1;
-    to_ntt_mont(s1hat.as_poly_slice_mut());
+    to_ntt(s1hat.as_poly_slice_mut());
     let mut t = <P::VecK as PolyArray>::zeroed();
     {
         let a_slice = a.as_poly_slice();
@@ -566,18 +556,18 @@ where
     let a = crate::ml_dsa::sample::expand_a::<P>(&rho);
 
     let mut s1hat = s1;
-    to_ntt_mont(s1hat.as_poly_slice_mut());
+    to_ntt(s1hat.as_poly_slice_mut());
     let mut s2hat = s2;
-    to_ntt_mont(s2hat.as_poly_slice_mut());
+    to_ntt(s2hat.as_poly_slice_mut());
 
     let mut kappa: u16 = 0;
 
     // Fixed iteration cap; rejection probability per loop is tiny.
     for _ in 0..256 {
         // y = ExpandMask(ρ′, κ)
-        let mut y = crate::ml_dsa::sample::expand_mask::<P>(&rhoprime, kappa);
-        let mut yhat = y;
-        to_ntt_mont(yhat.as_poly_slice_mut());
+        let y = crate::ml_dsa::sample::expand_mask::<P>(&rhoprime, kappa);
+        let mut yhat = y.clone();
+        to_ntt(yhat.as_poly_slice_mut());
 
         // w = Â · y
         let mut w = <P::VecK as PolyArray>::zeroed();
@@ -614,7 +604,7 @@ where
         // c = SampleInBall(c̃)
         let c = crate::ml_dsa::sample::poly_challenge(&c_tilde, P::TAU);
         let mut chat = c;
-        chat.to_mont_ntt();
+        chat.ntt();
 
         // z = y + c ∘ s₁
         let mut z = y;
@@ -623,8 +613,8 @@ where
             let s1_slice = s1hat.as_poly_slice();
             for i in 0..P::L {
                 let mut t = Poly::ZERO;
-                t.pointwise_montgomery(&chat, &s1_slice[i]);
-                t.inv_ntt_to_mont();
+                t.pointwise(&chat, &s1_slice[i]);
+                t.inv_ntt();
                 t.reduce();
                 t.canonicalize();
                 z_slice[i].add_assign(&t);
@@ -644,8 +634,8 @@ where
             let s2_slice = s2hat.as_poly_slice();
             for i in 0..P::K {
                 let mut t = Poly::ZERO;
-                t.pointwise_montgomery(&chat, &s2_slice[i]);
-                t.inv_ntt_to_mont();
+                t.pointwise(&chat, &s2_slice[i]);
+                t.inv_ntt();
                 t.reduce();
                 t.canonicalize();
                 r0_slice[i] = w0_slice[i];
@@ -788,7 +778,7 @@ where
 
     let c = crate::ml_dsa::sample::poly_challenge(&c_tilde, P::TAU);
     let mut chat = c;
-    chat.to_mont_ntt();
+    chat.ntt();
 
     let a = crate::ml_dsa::sample::expand_a::<P>(&rho);
 
@@ -796,7 +786,7 @@ where
     let mut w = <P::VecK as PolyArray>::zeroed();
     {
         let mut zhat = z;
-        to_ntt_mont(zhat.as_poly_slice_mut());
+        to_ntt(zhat.as_poly_slice_mut());
         mat_vec_mul(a.as_poly_slice(), zhat.as_poly_slice(), w.as_poly_slice_mut());
     }
 
@@ -804,12 +794,12 @@ where
     {
         let w_slice = w.as_poly_slice_mut();
         let mut t1d_ntt = t1d;
-        to_ntt_mont(t1d_ntt.as_poly_slice_mut());
+        to_ntt(t1d_ntt.as_poly_slice_mut());
         let t1d_slice = t1d_ntt.as_poly_slice();
         for i in 0..P::K {
             let mut t = Poly::ZERO;
-            t.pointwise_montgomery(&chat, &t1d_slice[i]);
-            t.inv_ntt_to_mont();
+            t.pointwise(&chat, &t1d_slice[i]);
+            t.inv_ntt();
             t.reduce();
             t.canonicalize();
             w_slice[i].sub_assign(&t);
@@ -848,7 +838,7 @@ where
     shake256_concat(&[&mu, &w1_packed], &mut c_rec);
 
     // Constant-time comparison of c̃.
-    if tpt_crypto_ct::ct_eq_bytes(&c_rec, &c_tilde) {
+    if bool::from(tpt_crypto_ct::ct_eq_bytes(&c_rec, &c_tilde)) {
         Ok(())
     } else {
         Err(Error::Verification)

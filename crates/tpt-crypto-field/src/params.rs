@@ -18,6 +18,12 @@ macro_rules! declare_params {
             const LIMBS: usize = $limbs;
             const MODULUS: [u64; MAX_LIMBS] = $modulus;
             const S: u32 = crate::consts::s_of(&Self::MODULUS);
+            // Montgomery constants are derived at compile time from the modulus so
+            // there is a single source of truth (no hand-computed literals that can
+            // disagree between `ONE_MONT`, `R2`, and `MU`).
+            const ONE_MONT: [u64; MAX_LIMBS] = crate::consts::one_mont_of(&Self::MODULUS, $limbs);
+            const R2: [u64; MAX_LIMBS] = crate::consts::r2_of(&Self::MODULUS, $limbs);
+            const MU: u64 = crate::consts::mu_of(&Self::MODULUS);
         }
     };
 }
@@ -32,8 +38,7 @@ declare_params!(
         0xFFFF_FFFF_0000_0001,
         0,
         0,
-    ]
-);
+    ]\n);
 
 declare_params!(
     P256ScalarParams,
@@ -45,8 +50,7 @@ declare_params!(
         0xFFFF_FFFF_0000_0000,
         0,
         0,
-    ]
-);
+    ]\n);
 
 declare_params!(
     P384BaseParams,
@@ -58,8 +62,7 @@ declare_params!(
         0xFFFF_FFFF_FFFF_FFFF,
         0xFFFF_FFFF_FFFF_FFFF,
         0xFFFF_FFFF_FFFF_FFFF,
-    ]
-);
+    ]\n);
 
 declare_params!(
     P384ScalarParams,
@@ -71,8 +74,7 @@ declare_params!(
         0xFFFF_FFFF_FFFF_FFFF,
         0xFFFF_FFFF_FFFF_FFFF,
         0xFFFF_FFFF_FFFF_FFFF,
-    ]
-);
+    ]\n);
 
 declare_params!(
     Bls12381FpParams,
@@ -84,8 +86,7 @@ declare_params!(
         0x6477_4b84_f385_12bf,
         0x4b1b_a7b6_434b_acd7,
         0x1a01_11ea_397f_e69a,
-    ]
-);
+    ]\n);
 
 declare_params!(
     Bls12381FrParams,
@@ -97,8 +98,7 @@ declare_params!(
         0x73ed_a753_299d_7d48,
         0,
         0,
-    ]
-);
+    ]\n);
 
 // Ed25519 base field: p = 2^255 - 19 (little-endian limbs).
 declare_params!(
@@ -111,8 +111,7 @@ declare_params!(
         0x7FFF_FFFF_FFFF_FFFF,
         0,
         0,
-    ]
-);
+    ]\n);
 
 // Ed25519 scalar field: L = 2^252 + 27742317777372353535851937790883648493.
 declare_params!(
@@ -125,8 +124,7 @@ declare_params!(
         0x0000_0000_0000_0010,
         0,
         0,
-    ]
-);
+    ]\n);
 
 /// NIST P-256 base field `GF(p)`.
 pub type P256Base = FieldElement<P256BaseParams>;
@@ -168,3 +166,4 @@ mod tests {
         assert_eq!(Bls12381FrParams::S, 32);
     }
 }
+

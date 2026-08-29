@@ -21,6 +21,7 @@
 #![no_std]
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
+#![allow(long_running_const_eval)]
 
 extern crate alloc;
 

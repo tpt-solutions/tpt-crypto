@@ -93,6 +93,24 @@ impl EdwardsPoint {
         }
     }
 
+    /// Negate this point (`-P`), constant-time. In extended coordinates this
+    /// flips the sign of `x` and `t` while leaving `y` and `z` unchanged.
+    #[must_use]
+    pub fn neg(&self) -> Self {
+        EdwardsPoint {
+            x: self.x.neg(),
+            y: self.y,
+            z: self.z,
+            t: self.t.neg(),
+        }
+    }
+
+    /// Constant-time point subtraction (`self - other`).
+    #[must_use]
+    pub fn sub(&self, other: &Self) -> Self {
+        self.add(&other.neg())
+    }
+
     /// Constant-time point doubling.
     pub fn double(&self) -> Self {
         let a = self.x.square();

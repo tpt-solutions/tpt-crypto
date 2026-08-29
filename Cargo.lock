@@ -921,11 +921,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "tpt-crypto-mpc"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "proptest",
+ "tpt-crypto-core",
+ "tpt-crypto-ct",
+ "tpt-crypto-curve",
+ "tpt-crypto-field",
+ "tpt-crypto-hash",
+]
+
+[[package]]
 name = "tpt-crypto-sig"
 version = "0.1.0"
 dependencies = [
  "tpt-crypto-core",
  "tpt-crypto-ct",
+ "tpt-crypto-hash",
+]
+
+[[package]]
+name = "tpt-crypto-zk"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "tpt-crypto-core",
+ "tpt-crypto-ct",
+ "tpt-crypto-curve",
+ "tpt-crypto-field",
  "tpt-crypto-hash",
 ]
 

@@ -8,6 +8,7 @@
 use tpt_crypto_hash::sha3::{Shake128, Shake256};
 use tpt_crypto_hash::Xof;
 
+use crate::bytes::PolyArray;
 use crate::ml_dsa::MlDsaParams;
 use crate::poly::Poly;
 
@@ -167,7 +168,7 @@ pub fn expand_a<P: MlDsaParams>(rho: &[u8; 32]) -> P::Mat {
     for i in 0..P::K {
         for j in 0..P::L {
             let mut p = poly_uniform(rho, ((i << 8) + j) as u16);
-            p.to_mont_ntt();
+            p.ntt();
             m[i * P::L + j] = p;
         }
     }

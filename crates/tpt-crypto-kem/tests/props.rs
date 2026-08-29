@@ -2,6 +2,7 @@
 //! malformed ciphertexts. All checks are constant-time by construction.
 
 use proptest::prelude::*;
+use proptest::test_runner::TestCaseError;
 use tpt_crypto_core::CryptoRng;
 use tpt_crypto_kem::ml_kem::{decapsulate, encapsulate, keygen, MlKem512, MlKem768, MlKem1024};
 use tpt_crypto_kem::params::MlKemParams;
@@ -20,11 +21,12 @@ impl CryptoRng for TestRng {
 }
 
 /// For every parameter set: `decapsulate(sk, encapsulate(pk).1) == encapsulate(pk).0`.
-fn round_trip<P: MlKemParams>(rng: &mut TestRng) {
+fn round_trip<P: MlKemParams>(rng: &mut TestRng) -> Result<(), TestCaseError> {
     let (pk, sk) = keygen::<P>(rng);
     let (ss1, ct) = encapsulate::<P>(&pk, rng);
     let ss2 = decapsulate::<P>(&sk, &ct.bytes).expect("decapsulation must succeed on a valid ciphertext");
     prop_assert_eq!(ss1, ss2);
+    Ok(())
 }
 
 proptest! {
