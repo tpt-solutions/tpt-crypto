@@ -46,6 +46,8 @@ pub enum Error {
     InvalidEncoding,
     /// A KAT file was missing, malformed, or failed to match.
     Kat,
+    /// The requested operation or parameter set is not yet implemented.
+    Unsupported,
 }
 
 impl fmt::Display for Error {
@@ -56,6 +58,7 @@ impl fmt::Display for Error {
             Error::RngFailure => "RNG failure",
             Error::InvalidEncoding => "malformed encoding",
             Error::Kat => "known-answer test mismatch",
+            Error::Unsupported => "operation not implemented",
         };
         f.write_str(s)
     }

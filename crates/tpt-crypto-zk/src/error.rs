@@ -17,4 +17,6 @@ pub enum ZkError {
     InvalidAggregation,
     /// An input had an invalid length.
     InvalidLength,
+    /// The requested primitive is not yet implemented in this build.
+    Unsupported,
 }

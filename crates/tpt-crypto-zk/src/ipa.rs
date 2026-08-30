@@ -372,15 +372,18 @@ impl InnerProductProof {
         let mut lb = [0u8; 32];
         la.copy_from_slice(&slice[pos..pos + 32]);
         lb.copy_from_slice(&slice[pos + 32..pos + 64]);
-        let a = bytes_to_scalar(&la).ok_or(ZkError::Malformed)?;
-        let b = bytes_to_scalar(&lb).ok_or(ZkError::Malformed)?;
+        let a = bytes_to_scalar_checked(&la).ok_or(ZkError::Malformed)?;
+        let b = bytes_to_scalar_checked(&lb).ok_or(ZkError::Malformed)?;
         Ok(InnerProductProof { l_vec, r_vec, a, b })
     }
 }
 
 /// Reconstruct a scalar from its 32-byte little-endian encoding, rejecting
-/// non-canonical values.
-fn bytes_to_scalar(bytes: &[u8; 32]) -> Option<Ed25519Scalar> {
+/// non-canonical values. Exposed for proof deserialization.
+pub(crate) fn bytes_to_scalar_checked(bytes: &[u8]) -> Option<Ed25519Scalar> {
+    if bytes.len() < 32 {
+        return None;
+    }
     // Re-encode as the 48-byte big-endian form the field crate expects.
     let mut be = [0u8; 48];
     for i in 0..32 {

@@ -7,7 +7,7 @@
 //! for the protocols in this crate.
 
 use tpt_crypto_field::Ed25519Scalar;
-use tpt_crypto_hash::sha3::{Shake256, Xof};
+use tpt_crypto_hash::{sha3::Shake256, Xof};
 
 use crate::group::{scalar_from_wide, scalar_le_bytes, Ristretto};
 
@@ -54,10 +54,10 @@ impl Transcript {
     /// back into the running state so subsequent messages bind to it.
     pub fn challenge_scalar(&mut self, label: &[u8]) -> Ed25519Scalar {
         let mut t = self.state.clone();
-        t.state.update(b"\x01");
-        t.state.update(label);
+        t.update(b"\x01");
+        t.update(label);
         let mut buf = [0u8; 64];
-        t.state.squeeze(&mut buf);
+        t.squeeze(&mut buf);
         self.state.update(&buf);
         scalar_from_wide(&buf)
     }

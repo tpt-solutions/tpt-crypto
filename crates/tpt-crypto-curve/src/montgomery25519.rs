@@ -49,7 +49,7 @@ impl X25519 {
             let b0 = x3.add(&z3);
             let b1 = x3.sub(&z3);
             let aa = a0.square();
-            let bb = b0.square();
+            let bb = a1.square();
             let e = aa.sub(&bb);
             let da = a1.mul(&b0);
             let cb = a0.mul(&b1);
@@ -68,6 +68,148 @@ impl X25519 {
         let z2_inv = z2.invert().unwrap_or(Ed25519Field::zero());
         let r = x2.mul(&z2_inv);
         Self::to_le32(&r)
+    }
+
+    /// DEBUG ONLY: returns the (x2,z2,x3,z3) state after the first ladder
+    /// iteration (t = 254) for the given scalar/public-u, as little-endian bytes.
+    #[doc(hidden)]
+    pub fn dbg_first_step(scalar: &[u8; 32], public_u: &[u8; 32]) -> ([u8; 32], [u8; 32], [u8; 32], [u8; 32]) {
+        let mut k = *scalar;
+        k[0] &= 248;
+        k[31] &= 127;
+        k[31] |= 64;
+        let x1 = Self::from_le32(public_u);
+        let (mut x2, mut z2, mut x3, mut z3) = (
+            Ed25519Field::one(),
+            Ed25519Field::zero(),
+            x1,
+            Ed25519Field::one(),
+        );
+        let mut swap = false;
+        let t = 254;
+        let bit = ((k[t / 8] >> (t % 8)) & 1) != 0;
+        swap ^= bit;
+        let sc = Choice::from(swap);
+        cswap(sc, &mut x2, &mut x3);
+        cswap(sc, &mut z2, &mut z3);
+        swap = bit;
+        let a0 = x2.add(&z2);
+        let a1 = x2.sub(&z2);
+        let b0 = x3.add(&z3);
+        let b1 = x3.sub(&z3);
+        let aa = a0.square();
+        let bb = a1.square();
+        let e = aa.sub(&bb);
+        let da = a1.mul(&b0);
+        let cb = a0.mul(&b1);
+        x3 = da.add(&cb).square();
+        z3 = x1.mul(&da.sub(&cb).square());
+        x2 = aa.mul(&bb);
+        z2 = e.mul(&aa.add(&e.mul(&Self::a24())));
+        (Self::to_le32(&x2), Self::to_le32(&z2), Self::to_le32(&x3), Self::to_le32(&z3))
+    }
+
+    /// DEBUG ONLY: full ladder trace (x2,z2,x3,z3 as le bytes) per iteration,
+    /// delivered to a caller-supplied closure (no allocation).
+    #[doc(hidden)]
+    pub fn dbg_trace<F: FnMut([u8; 32], [u8; 32], [u8; 32], [u8; 32])>(
+        scalar: &[u8; 32],
+        public_u: &[u8; 32],
+        mut emit: F,
+    ) {
+        let mut k = *scalar;
+        k[0] &= 248;
+        k[31] &= 127;
+        k[31] |= 64;
+        let x1 = Self::from_le32(public_u);
+        let (mut x2, mut z2, mut x3, mut z3) = (
+            Ed25519Field::one(),
+            Ed25519Field::zero(),
+            x1,
+            Ed25519Field::one(),
+        );
+        let mut swap = false;
+        for t in (0..255).rev() {
+            let bit = ((k[t / 8] >> (t % 8)) & 1) != 0;
+            swap ^= bit;
+            let sc = Choice::from(swap);
+            cswap(sc, &mut x2, &mut x3);
+            cswap(sc, &mut z2, &mut z3);
+            swap = bit;
+            let a0 = x2.add(&z2);
+            let a1 = x2.sub(&z2);
+            let b0 = x3.add(&z3);
+            let b1 = x3.sub(&z3);
+            let aa = a0.square();
+            let bb = a1.square();
+            let e = aa.sub(&bb);
+            let da = a1.mul(&b0);
+            let cb = a0.mul(&b1);
+            x3 = da.add(&cb).square();
+            z3 = x1.mul(&da.sub(&cb).square());
+            x2 = aa.mul(&bb);
+            z2 = e.mul(&aa.add(&e.mul(&Self::a24())));
+            emit(
+                Self::to_le32(&x2),
+                Self::to_le32(&z2),
+                Self::to_le32(&x3),
+                Self::to_le32(&z3),
+            );
+        }
+    }
+
+    /// DEBUG ONLY: dump post-loop (pre/final-cswap) values and the final result components.
+    #[doc(hidden)]
+    pub fn dbg_final(
+        scalar: &[u8; 32],
+        public_u: &[u8; 32],
+    ) -> (bool, [u8; 32], [u8; 32], [u8; 32], [u8; 32], [u8; 32], [u8; 32], [u8; 32]) {
+        let mut k = *scalar;
+        k[0] &= 248;
+        k[31] &= 127;
+        k[31] |= 64;
+        let x1 = Self::from_le32(public_u);
+        let (mut x2, mut z2, mut x3, mut z3) = (
+            Ed25519Field::one(),
+            Ed25519Field::zero(),
+            x1,
+            Ed25519Field::one(),
+        );
+        let mut swap = false;
+        for t in (0..255).rev() {
+            let bit = ((k[t / 8] >> (t % 8)) & 1) != 0;
+            swap ^= bit;
+            let sc = Choice::from(swap);
+            cswap(sc, &mut x2, &mut x3);
+            cswap(sc, &mut z2, &mut z3);
+            swap = bit;
+            let a0 = x2.add(&z2);
+            let a1 = x2.sub(&z2);
+            let b0 = x3.add(&z3);
+            let b1 = x3.sub(&z3);
+            let aa = a0.square();
+            let bb = a1.square();
+            let e = aa.sub(&bb);
+            let da = a1.mul(&b0);
+            let cb = a0.mul(&b1);
+            x3 = da.add(&cb).square();
+            z3 = x1.mul(&da.sub(&cb).square());
+            x2 = aa.mul(&bb);
+            z2 = e.mul(&aa.add(&e.mul(&Self::a24())));
+        }
+        let pre_x2 = Self::to_le32(&x2);
+        let pre_z2 = Self::to_le32(&z2);
+        let pre_x3 = Self::to_le32(&x3);
+        let pre_z3 = Self::to_le32(&z3);
+        let sc = Choice::from(swap);
+        cswap(sc, &mut x2, &mut x3);
+        cswap(sc, &mut z2, &mut z3);
+        let post_x2 = Self::to_le32(&x2);
+        let post_z2 = Self::to_le32(&z2);
+        let z2_inv = z2.invert().unwrap_or(Ed25519Field::zero());
+        let r = x2.mul(&z2_inv);
+        let res = Self::to_le32(&r);
+        (swap, pre_x2, pre_z2, pre_x3, pre_z3, post_x2, post_z2, res)
     }
 
     /// Curve25519 constant `(A - 2) / 4 = (486662 - 2) / 4 = 121665`.

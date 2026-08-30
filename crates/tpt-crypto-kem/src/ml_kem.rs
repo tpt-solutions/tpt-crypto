@@ -141,6 +141,47 @@ pub fn keygen<P: MlKemParams>(rng: &mut impl CryptoRng) -> (EncapsKey, DecapsKey
     (EncapsKey { bytes: pk }, DecapsKey { bytes: sk })
 }
 
+/// Deterministic key generation from explicit seeds.
+///
+/// `d` seeds the matrix (via `H(d)`), and `z` is the implicit-rejection nonce.
+/// Provided for reproducible tests and KAT validation; equivalent to
+/// [`keygen`] when `(d, z)` is drawn from an RNG.
+pub fn keygen_seed<P: MlKemParams>(d: &[u8; 32], z: &[u8; 32]) -> (EncapsKey, DecapsKey) {
+    let pk = pke::kpke_keygen::<P>(d);
+    let h = h_parts(&pk, &[]);
+
+    let mut sk = vec![0u8; P::SK_LEN];
+    let mut off = 0usize;
+    sk[off..off + P::PK_LEN].copy_from_slice(&pk);
+    off += P::PK_LEN;
+    sk[off..off + 32].copy_from_slice(d);
+    off += 32;
+    sk[off..off + 32].copy_from_slice(&h);
+    off += 32;
+    sk[off..off + 32].copy_from_slice(z);
+
+    (EncapsKey { bytes: pk }, DecapsKey { bytes: sk })
+}
+
+/// Encapsulate to `pk` with an explicit 32-byte message `m`, returning the shared
+/// secret and ciphertext. Equivalent to [`encapsulate`] when `m` is chosen at
+/// random; provided for reproducible tests and KAT validation.
+pub fn encapsulate_msg<P: MlKemParams>(
+    pk: &EncapsKey,
+    m: &[u8; 32],
+) -> (SharedSecret, Ciphertext) {
+    let h_pk = h_parts(&pk.bytes, &[]);
+    let g = g_parts(m, &h_pk);
+    let mut k = [0u8; 32];
+    k.copy_from_slice(&g[..32]);
+    let mut r_seed = [0u8; 32];
+    r_seed.copy_from_slice(&g[32..]);
+
+    let (rho, t_hat) = pke::decode_pk::<P>(&pk.bytes).expect("own public key is well-formed");
+    let ct = pke::kpke_encrypt::<P>(&rho, &t_hat, m, &r_seed);
+    (k, Ciphertext { bytes: ct })
+}
+
 /// Encapsulate to `pk`, returning the shared secret and ciphertext. `rng`
 /// supplies the random message `m`.
 pub fn encapsulate<P: MlKemParams>(pk: &EncapsKey, rng: &mut impl CryptoRng) -> (SharedSecret, Ciphertext) {

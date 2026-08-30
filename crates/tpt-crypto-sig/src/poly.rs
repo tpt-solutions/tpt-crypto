@@ -18,11 +18,8 @@ pub const Q: i32 = 8_380_417;
 pub const N: usize = 256;
 /// Number of dropped bits in `Power2Round`: `d = 13`.
 const D: i32 = 13;
-/// `q⁻¹ mod 2³²` (reference `QINV`), used to convert the Montgomery-form
-/// [`ZETAS`] twiddles into their canonical representatives.
+/// `q⁻¹ mod 2³²` (reference `QINV`), used by the Montgomery reduction.
 const QINV: i32 = 58_728_449;
-/// `256⁻¹ mod q`, the normalization factor applied by the inverse NTT.
-const NINV: i32 = 8_347_681;
 
 /// NTT twiddle factors `ζ^{brv(i)}` in Montgomery form (reference `ZETAS`).
 pub const ZETAS: [i32; N] = [
@@ -101,10 +98,6 @@ impl Poly {
         coeffs: [0i32; N],
     };
 
-    /// Primitive `2n`-th root of unity for the negacyclic NTT: `ζ^{256} ≡ 1 (mod q)`
-    /// and `ζ^{128} ≡ −1 (mod q)`. `1753` is the FIPS 204 / Dilithium constant.
-    const ZETA: i32 = 1753;
-
     /// `x^e mod q` (q prime), used to build the NTT twiddle table.
     #[inline]
     fn pow_mod(mut base: i64, mut exp: i64) -> i32 {
@@ -124,63 +117,25 @@ impl Poly {
         r as i32
     }
 
-    /// Reverse the low 7 bits of `x` (used for NTT twiddle ordering).
-    const fn bitrev7(mut x: usize) -> usize {
-        let mut r = 0usize;
-        let mut b = 0;
-        while b < 7 {
-            r = (r << 1) | (x & 1);
-            x >>= 1;
-            b += 1;
-        }
-        r
+    /// Montgomery radix `R = 2³²`.
+    const R: i64 = 1i64 << 32;
+
+    /// Convert a canonical coefficient into Montgomery form: `mont(c) = c·R mod q`.
+    #[inline]
+    fn to_mont(c: i32) -> i32 {
+        Self::reduce_mod((c as i64) * Self::R)
     }
 
-    /// `x^e mod q` as a `const fn` for the twiddle-table builder.
-    const fn pow_mod_const(mut base: i64, mut exp: i64) -> i32 {
-        let mut r = 1i64;
-        let q = Q as i64;
-        base %= q;
-        if base < 0 {
-            base += q;
-        }
-        while exp > 0 {
-            if exp & 1 == 1 {
-                r = (r * base) % q;
-            }
-            base = (base * base) % q;
-            exp >>= 1;
-        }
-        r as i32
+    /// Convert a Montgomery-form coefficient back to canonical: `c·R⁻¹ mod q`.
+    #[inline]
+    const fn from_mont(c: i32) -> i32 {
+        Self::montgomery_reduce(c as i64)
     }
-
-    /// Build the negacyclic NTT twiddle table (canonical form, no Montgomery).
-    ///
-    /// Forward twiddles occupy `table[1..128]` as `ζ^{bitrev7(k)}`; the inverse
-    /// twiddles (used by [`Poly::inv_ntt`]) occupy `table[128..256]` as
-    /// `−ζ^{bitrev7(256 − k)}`, mirroring the FIPS 204 reference ordering.
-    const fn build_zetas() -> [i32; N] {
-        let mut z = [0i32; N];
-        let mut k = 1usize;
-        while k < 128 {
-            z[k] = Self::pow_mod_const(Self::ZETA as i64, Self::bitrev7(k) as i64);
-            k += 1;
-        }
-        k = 1;
-        while k < 128 {
-            z[N - k] = -z[k];
-            k += 1;
-        }
-        z
-    }
-
-    /// Negacyclic NTT twiddle table (canonical form).
-    const ZETAS_NEGA: [i32; N] = Self::build_zetas();
 
     /// Montgomery reduction used only to convert the Montgomery-form [`ZETAS`]
     /// twiddles into canonical coefficients: `montgomery_reduce(m) = m·2⁻³² mod q`.
     #[inline]
-    fn montgomery_reduce(a: i64) -> i32 {
+    const fn montgomery_reduce(a: i64) -> i32 {
         let t = ((a as i32 as i64) * (QINV as i64)) as i32;
         ((a - (t as i64) * (Q as i64)) >> 32) as i32
     }
@@ -208,22 +163,29 @@ impl Poly {
         a + ((a >> 31) & Q)
     }
 
-    /// Forward negacyclic NTT, in place (ring `Z_q[X]/(X^n + 1)`, canonical form).
+    /// Forward negacyclic NTT, in place (ring `Z_q[X]/(X^n + 1)`, canonical input).
     ///
-    /// Operates on canonical coefficients and produces the canonical NTT-domain
-    /// representation, so sampled (canonical) polynomials may be transformed
-    /// directly.
+    /// The transform is evaluated in Montgomery form (the reference `ZETAS`
+    /// twiddles are already Montgomery-encoded), so the canonical input is
+    /// first lifted to Montgomery form; the output therefore lives in the
+    /// NTT/NTT-domain (Montgomery) representation consumed by [`Poly::pointwise`]
+    /// and [`Poly::pointwise_acc`].
     pub fn ntt(&mut self) {
+        for c in self.coeffs.iter_mut() {
+            *c = Self::to_mont(*c);
+        }
         let a = &mut self.coeffs;
+        let mut k = 0usize;
         let mut len = 128usize;
         while len > 0 {
-            let zeta = Self::layer_zeta(len);
             let mut start = 0usize;
             while start < N {
+                k += 1;
+                let zeta = ZETAS[k];
                 for j in start..(start + len) {
-                    let t = Self::reduce_mod((zeta as i64) * (a[j + len] as i64));
-                    a[j + len] = Self::reduce_mod((a[j] as i64) - (t as i64));
-                    a[j] = Self::reduce_mod((a[j] as i64) + (t as i64));
+                    let t = Self::montgomery_reduce((zeta as i64) * (a[j + len] as i64));
+                    a[j + len] = a[j] - t;
+                    a[j] = a[j] + t;
                 }
                 start += 2 * len;
             }
@@ -231,41 +193,50 @@ impl Poly {
         }
     }
 
-    /// Inverse negacyclic NTT, in place (ring `Z_q[X]/(X^n + 1)`, canonical form).
-    /// Applies the `256⁻¹ mod q` normalization.
+    /// Inverse negacyclic NTT, in place (ring `Z_q[X]/(X^n + 1)`).
+    ///
+    /// Runs the reference `invntt_tomont` (Montgomery domain) on the NTT-domain
+    /// (Montgomery) input and converts the result back to canonical form, so the
+    /// caller receives coefficient-form `R_q` values.
     pub fn inv_ntt(&mut self) {
         let a = &mut self.coeffs;
+        let mut k = N;
         let mut len = 1usize;
         while len < N {
-            let zeta = Self::layer_zeta_inv(len);
             let mut start = 0usize;
             while start < N {
+                k -= 1;
+                let zeta = -ZETAS[k];
                 for j in start..(start + len) {
                     let t = a[j];
-                    a[j] = Self::reduce_mod((t as i64) + (a[j + len] as i64));
-                    a[j + len] = Self::reduce_mod((t as i64) - (a[j + len] as i64));
-                    a[j + len] = Self::reduce_mod((zeta as i64) * (a[j + len] as i64));
+                    a[j] = t + a[j + len];
+                    a[j + len] = t - a[j + len];
+                    a[j + len] = Self::montgomery_reduce((zeta as i64) * (a[j + len] as i64));
                 }
                 start += 2 * len;
             }
             len <<= 1;
         }
         for c in a.iter_mut() {
-            *c = Self::reduce_mod((*c as i64) * (NINV as i64));
+            *c = Self::montgomery_reduce(41978i64 * (*c as i64));
+            *c = Self::from_mont(*c);
         }
     }
 
     /// Pointwise multiplication in the NTT domain: `self = a ∘ b`.
+    ///
+    /// Both `a` and `b` must be in NTT-domain (Montgomery) form; the result is a
+    /// Montgomery-domain polynomial.
     pub fn pointwise(&mut self, a: &Poly, b: &Poly) {
         for i in 0..N {
-            self.coeffs[i] = Self::reduce_mod((a.coeffs[i] as i64) * (b.coeffs[i] as i64));
+            self.coeffs[i] = Self::montgomery_reduce((a.coeffs[i] as i64) * (b.coeffs[i] as i64));
         }
     }
 
-    /// Accumulating pointwise multiplication: `self += a ∘ b`.
+    /// Accumulating pointwise multiplication: `self += a ∘ b` (NTT domain).
     pub fn pointwise_acc(&mut self, a: &Poly, b: &Poly) {
         for i in 0..N {
-            let t = Self::reduce_mod((a.coeffs[i] as i64) * (b.coeffs[i] as i64));
+            let t = Self::montgomery_reduce((a.coeffs[i] as i64) * (b.coeffs[i] as i64));
             self.coeffs[i] = Self::reduce_mod((self.coeffs[i] as i64) + (t as i64));
         }
     }
@@ -777,8 +748,8 @@ mod tests {
     }
 
     fn zeta_is_primitive_root() {
-        assert_eq!(Poly::pow_mod(1753, 256), 1, "1753^256 != 1");
-        assert_eq!(Poly::pow_mod(1753, 128), Q - 1, "1753^128 != -1");
+        assert_eq!(Poly::pow_mod(1753, 256), Q - 1, "1753^256 != -1");
+        assert_eq!(Poly::pow_mod(1753, 512), 1, "1753^512 != 1");
     }
 
     fn ntt_conv_kind() {

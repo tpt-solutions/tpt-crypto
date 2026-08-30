@@ -15,6 +15,7 @@
 
 use core::fmt;
 use core::marker::PhantomData;
+use core::ops::Neg;
 
 use crate::consts::{self, MAX_LIMBS};
 use crate::ct::{Choice, CtEq, CtOption};
@@ -73,71 +74,93 @@ impl<P: FieldParams> FieldElement<P> {
     /// `(p + 1) >> 2`, the square-root exponent for `p ≡ 3 (mod 4)`.
     const SQRT_EXP: [u64; MAX_LIMBS] = consts::sqrt_exp(&P::MODULUS);
 
-    /// Constant-time Montgomery multiplication (CIOS).
+    /// Constant-time Montgomery multiplication.
+    ///
+    /// Computes `a * b * R^{-1} mod p` (the Montgomery product) using the
+    /// standard operand-scanning Montgomery reduction (HAC §14.32). `a` and `b`
+    /// are assumed to already be in Montgomery form (`*R mod p`). The integer
+    /// product `a*b` is accumulated into a `2n`-limb buffer (note `a*b < p^2 <
+    /// R*p`, so the reduction precondition is satisfied), reduced, and the result
+    /// shifted right by `n` limbs and conditionally subtracted by `p`.
     #[inline]
     fn mont_mul(a: &[u64; MAX_LIMBS], b: &[u64; MAX_LIMBS]) -> [u64; MAX_LIMBS] {
         let p = &P::MODULUS;
         let mu = Self::MU;
         let n = P::LIMBS;
-        let mut t = [0u64; MAX_LIMBS + 1];
+        // t = a * b as a (up to) 2n-limb integer.
+        let mut t = [0u64; 2 * MAX_LIMBS + 2];
         let mut i = 0;
         while i < n {
             let ai = a[i];
-            let mut c: u128 = 0;
+            let mut carry: u128 = 0;
             let mut j = 0;
             while j < n {
-                let prod = (ai as u128) * (b[j] as u128);
-                let sum = (t[j] as u128) + prod + c;
-                t[j] = sum as u64;
+                let sum = (t[i + j] as u128) + (ai as u128) * (b[j] as u128) + carry;
+                t[i + j] = sum as u64;
+                carry = sum >> 64;
+                j += 1;
+            }
+            let mut k = i + n;
+            let mut c = carry;
+            while c != 0 {
+                let sum = (t[k] as u128) + c;
+                t[k] = sum as u64;
                 c = sum >> 64;
-                j += 1;
+                k += 1;
             }
-            let sum = (t[n] as u128) + c;
-            t[n] = sum as u64;
-            c = sum >> 64;
-            // m = (t[0] * mu) mod 2^64
-            let m = (t[0].wrapping_mul(mu)) as u128;
-            // (t[0] + m*p[0]) is a multiple of 2^64; discard its low word, keep carry.
-            let s0 = (t[0] as u128) + m * (p[0] as u128);
-            c = c + (s0 >> 64);
-            let mut j = 1;
-            while j < n {
-                let mp = m * (p[j] as u128);
-                let sum2 = (t[j] as u128) + mp + c;
-                t[j - 1] = sum2 as u64;
-                c = sum2 >> 64;
-                j += 1;
-            }
-            let sum3 = (t[n] as u128) + c;
-            t[n - 1] = sum3 as u64;
-            t[n] = (sum3 >> 64) as u64;
             i += 1;
         }
-        // Normalize t (n+1 limbs, in [0, 2p)) to [0, p). The full value is the
-        // (n+1)-limb accumulator `t`; sub_limbs over `MAX_LIMBS` would drop the
-        // top limb `t[n]` (which can be non-zero for real products), so compare
-        // and subtract against `p` zero-extended across all n+1 limbs.
-        let mut r = t;
-        let mut borrow: u64 = 0;
-        let mut idx = 0usize;
-        while idx < MAX_LIMBS + 1 {
-            let pv = if idx < n { p[idx] } else { 0u64 };
-            let (d1, b1) = r[idx].overflowing_sub(pv);
-            let (d, b2) = d1.overflowing_sub(borrow);
-            r[idx] = d;
-            borrow = (b1 | b2) as u64;
+        // Montgomery reduction: for i in 0..n, m = t[i]*mu mod 2^64, t += m*p (into
+        // the 2n-limb buffer), shifting the result one limb right each step.
+        i = 0;
+        while i < n {
+            let m = (t[i].wrapping_mul(mu)) as u128;
+            let mut carry: u128 = 0;
+            let mut j = 0;
+            while j < n {
+                let sum = (t[i + j] as u128) + m * (p[j] as u128) + carry;
+                t[i + j] = sum as u64;
+                carry = sum >> 64;
+                j += 1;
+            }
+            let mut k = i + n;
+            let mut c = carry;
+            while c != 0 {
+                let sum = (t[k] as u128) + c;
+                t[k] = sum as u64;
+                c = sum >> 64;
+                k += 1;
+            }
+            i += 1;
+        }
+        // The reduced value lives in t[n..2n]; copy it out.
+        let mut out = [0u64; MAX_LIMBS];
+        let mut idx = 0;
+        while idx < MAX_LIMBS {
+            out[idx] = t[n + idx];
             idx += 1;
         }
-        // `borrow == 0` iff the full `t >= p`; in that case the reduced value is
-        // `r` (now `t - p`), otherwise the canonical value is the original `t`.
-        let ge = Choice::from_bool(borrow == 0);
-        let mut out = [0u64; MAX_LIMBS];
-        let mut k = 0;
-        while k < MAX_LIMBS {
-            out[k] = ct_select_u64(t[k], r[k], ge);
-            k += 1;
+        // Final conditional subtraction of `p` (the reduction leaves a value in
+        // [0, 2p)). Compare `out` against `p` (zero-extended) and select.
+        let mut sub = [0u64; MAX_LIMBS];
+        let mut borrow: u64 = 0;
+        let mut idx2 = 0;
+        while idx2 < MAX_LIMBS {
+            let pv = if idx2 < n { p[idx2] } else { 0u64 };
+            let (d1, b1) = out[idx2].overflowing_sub(pv);
+            let (d, b2) = d1.overflowing_sub(borrow);
+            sub[idx2] = d;
+            borrow = (b1 | b2) as u64;
+            idx2 += 1;
         }
-        out
+        let ge = Choice::from_bool(borrow == 0);
+        let mut res = [0u64; MAX_LIMBS];
+        let mut idx3 = 0;
+        while idx3 < MAX_LIMBS {
+            res[idx3] = ct_select_u64(out[idx3], sub[idx3], ge);
+            idx3 += 1;
+        }
+        res
     }
 
     /// Encode an integer (`< p`) into Montgomery form.
@@ -537,6 +560,14 @@ impl<P: FieldParams> CtEq for FieldElement<P> {
     }
 }
 
+impl<P: FieldParams> Neg for FieldElement<P> {
+    type Output = Self;
+    #[inline]
+    fn neg(self) -> Self {
+        FieldElement::neg(&self)
+    }
+}
+
 impl<P: FieldParams> CtSelect for FieldElement<P> {
     #[inline]
     fn ct_select(cond: tpt_crypto_ct::Choice, a: Self, b: Self) -> Self {
@@ -674,5 +705,351 @@ impl<P: FieldParams> Field for FieldElement<P> {
     #[inline]
     fn sqrt(&self) -> CtOption<Self> {
         self.sqrt()
+    }
+}
+
+#[cfg(test)]
+mod const_audit {
+    extern crate std;
+    use super::*;
+    use crate::params::{Ed25519FieldParams, Ed25519ScalarParams};
+    use std::eprintln;
+
+    // Reference 320-bit little-endian arithmetic to cross-check the derived
+    // Montgomery constants for Ed25519Scalar (L).
+    const L: [u64; 5] = [
+        0xEDD3_F55C_1A63_1258,
+        0x14DE_F9DE_A2F7_9CD6,
+        0x0000_0000_0000_0000,
+        0x1000_0000_0000_0000,
+        0,
+    ];
+
+    fn limb_ge(a: &[u64; 5], b: &[u64; 5]) -> bool {
+        let mut i = 5;
+        while i > 0 {
+            i -= 1;
+            if a[i] > b[i] {
+                return true;
+            }
+            if a[i] < b[i] {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn limb_sub(a: &[u64; 5], b: &[u64; 5]) -> [u64; 5] {
+        let mut out = [0u64; 5];
+        let mut borrow = 0u64;
+        for i in 0..5 {
+            let (d1, b1) = a[i].overflowing_sub(b[i]);
+            let (d, b2) = d1.overflowing_sub(borrow);
+            out[i] = d;
+            borrow = (b1 | b2) as u64;
+        }
+        out
+    }
+
+    #[test]
+    fn audit_scalar_constants() {
+        // Proper 2^256 mod L via repeated doubling with a correct reduction.
+        assert_eq!(mul_mod_ref(&[1, 0, 0, 0, 0], &[1, 0, 0, 0, 0])[0], 1, "mul_mod_ref 1*1");
+        assert_eq!(mul_mod_ref(&[2, 0, 0, 0, 0], &[3, 0, 0, 0, 0])[0], 6, "mul_mod_ref 2*3");
+        assert_eq!(mul_mod_ref(&[7, 0, 0, 0, 0], &[6, 0, 0, 0, 0])[0], 42, "mul_mod_ref 7*6");
+
+        let mut acc = [0u64; 5];
+        acc[0] = 1;
+        let mut m6 = [0u64; 6];
+        m6[0] = L[0];
+        m6[1] = L[1];
+        m6[2] = L[2];
+        m6[3] = L[3];
+        m6[4] = L[4];
+        for _ in 0..256 {
+            let mut t = [0u64; 6];
+            let mut carry: u128 = 0;
+            for i in 0..5 {
+                let s = (acc[i] as u128) * 2 + carry;
+                t[i] = s as u64;
+                carry = s >> 64;
+            }
+            t[5] = carry as u64;
+            // compare t[0..6] with m6
+            let ge = {
+                let mut i = 6;
+                let mut r = true;
+                let mut lt = false;
+                while i > 0 {
+                    i -= 1;
+                    if t[i] > m6[i] {
+                        r = true;
+                        break;
+                    }
+                    if t[i] < m6[i] {
+                        lt = true;
+                        break;
+                    }
+                }
+                r && !lt
+            };
+            let red = if ge { limb_sub6(&t, &m6) } else { t };
+            acc[0] = red[0];
+            acc[1] = red[1];
+            acc[2] = red[2];
+            acc[3] = red[3];
+            acc[4] = red[4];
+        }
+
+        // --- Base field cross-check (is mont_mul globally broken or scalar-specific?) ---
+        {
+            let bf = FieldElement::<Ed25519FieldParams>::from_u64(0x1234_5678_9abc_def0);
+            let bf2 = bf.mul(&bf);
+            let bfb = bf2.to_bytes();
+            eprintln!(
+                "BASE x^2 plain tail = {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+                bfb[40], bfb[41], bfb[42], bfb[43], bfb[44], bfb[45], bfb[46], bfb[47]
+            );
+            let p255: [u64; 5] = [
+                0xFFFF_FFFF_FFFF_FFED,
+                0xFFFF_FFFF_FFFF_FFFF,
+                0xFFFF_FFFF_FFFF_FFFF,
+                0x7FFF_FFFF_FFFF_FFFF,
+                0,
+            ];
+            let xv = [0x9abc_def0u64, 0x1234_5678, 0, 0, 0];
+            let expected = mul_mod_ref(&xv, &xv);
+            eprintln!(
+                "BASE ref x^2 tail = {:016x}{:016x}{:016x}{:016x}",
+                expected[3], expected[2], expected[1], expected[0]
+            );
+        }
+
+        // Compare to the field-derived ONE_MONT.
+        let one_mont = Ed25519ScalarParams::ONE_MONT;
+        let matches = acc[0] == one_mont[0]
+            && acc[1] == one_mont[1]
+            && acc[2] == one_mont[2]
+            && acc[3] == one_mont[3]
+            && one_mont[4] == 0
+            && one_mont[5] == 0;
+        eprintln!("ref R=2^256 mod L = {:016x}{:016x}{:016x}{:016x}", acc[3], acc[2], acc[1], acc[0]);
+        eprintln!("ONE_MONT          = {:016x}{:016x}{:016x}{:016x}", one_mont[3], one_mont[2], one_mont[1], one_mont[0]);
+        assert!(matches, "ONE_MONT mismatch vs reference");
+
+        // Reference R^2 mod L.
+        let r = acc;
+        let r2 = mul_mod_ref(&r, &r);
+        let field_r2 = Ed25519ScalarParams::R2;
+        let r2ok = r2[0] == field_r2[0]
+            && r2[1] == field_r2[1]
+            && r2[2] == field_r2[2]
+            && r2[3] == field_r2[3]
+            && field_r2[4] == 0
+            && field_r2[5] == 0;
+        eprintln!("ref R2  = {:016x}{:016x}{:016x}{:016x}", r2[3], r2[2], r2[1], r2[0]);
+        eprintln!("field R2= {:016x}{:016x}{:016x}{:016x}", field_r2[3], field_r2[2], field_r2[1], field_r2[0]);
+        assert!(r2ok, "R2 mismatch vs reference");
+
+        // Reference CIOS Montgomery multiply to cross-check the field's `mont_mul`.
+        let p = Ed25519ScalarParams::MODULUS;
+        let mu = Ed25519ScalarParams::MU;
+        let a = Ed25519ScalarParams::ONE_MONT;
+        let r_ref = cios_ref(&a, &a, &p, mu, 4);
+        eprintln!("REF ONE_MONT^2 = {:016x}{:016x}{:016x}{:016x}", r_ref[3], r_ref[2], r_ref[1], r_ref[0]);
+        let mut y: u64 = L[0];
+        for _ in 0..5 {
+            y = y.wrapping_mul(2u64.wrapping_sub(L[0].wrapping_mul(y)));
+        }
+        let ref_mu = y.wrapping_neg();
+        eprintln!("ref mu = {:016x}, field mu = {:016x}", ref_mu, Ed25519ScalarParams::MU);
+        assert_eq!(ref_mu, Ed25519ScalarParams::MU);
+
+        // to_bytes(ONE_MONT) must equal the plain integer 1.
+        let r_elem = FieldElement::<Ed25519ScalarParams>::from_mont(Ed25519ScalarParams::ONE_MONT);
+        let rb = r_elem.to_bytes();
+        eprintln!("to_bytes(ONE_MONT) tail = {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            rb[40], rb[41], rb[42], rb[43], rb[44], rb[45], rb[46], rb[47]);
+
+        // ONE_MONT * ONE_MONT (Montgomery) must equal ONE_MONT, whose plain form is 1.
+        let a = FieldElement::<Ed25519ScalarParams>::from_mont(Ed25519ScalarParams::ONE_MONT);
+        let aa = a.mul(&a);
+        let aab = aa.to_bytes();
+        eprintln!("ONE_MONT^2 plain tail = {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            aab[40], aab[41], aab[42], aab[43], aab[44], aab[45], aab[46], aab[47]);
+
+        // Reference: (plain 1 * plain 1) mod L = 1.
+        // Build field element for plain value 0x1234... and multiply.
+        let x = FieldElement::<Ed25519ScalarParams>::from_u64(0x1234_5678_9abc_def0);
+        let xx = x.mul(&x);
+        let xxb = xx.to_bytes();
+        eprintln!("x^2 plain tail = {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            xxb[40], xxb[41], xxb[42], xxb[43], xxb[44], xxb[45], xxb[46], xxb[47]);
+        // Expected x^2 mod L via reference mul_mod.
+        let xv = [0x9abc_def0u64, 0x1234_5678, 0, 0, 0];
+        let expected = mul_mod_ref(&xv, &xv);
+        eprintln!("ref x^2 tail = {:016x}{:016x}{:016x}{:016x}",
+            expected[3], expected[2], expected[1], expected[0]);
+
+    }
+
+    fn limb_sub6(a: &[u64; 6], b: &[u64; 6]) -> [u64; 6] {
+        let mut out = [0u64; 6];
+        let mut borrow = 0u64;
+        for i in 0..6 {
+            let (d1, b1) = a[i].overflowing_sub(b[i]);
+            let (d, b2) = d1.overflowing_sub(borrow);
+            out[i] = d;
+            borrow = (b1 | b2) as u64;
+        }
+        out
+    }
+
+    // Mul two 5-limb values mod L using schoolbook + long division.
+    fn mul_mod_ref(a: &[u64; 5], b: &[u64; 5]) -> [u64; 5] {
+        let mut t = [0u64; 10];
+        for i in 0..5 {
+            let mut carry: u128 = 0;
+            for j in 0..5 {
+                let prod = (a[i] as u128) * (b[j] as u128) + (t[i + j] as u128) + carry;
+                t[i + j] = prod as u64;
+                carry = prod >> 64;
+            }
+            let mut k = i + 5;
+            let mut c = carry;
+            while c != 0 {
+                let s = (t[k] as u128) + c;
+                t[k] = s as u64;
+                c = s >> 64;
+                k += 1;
+            }
+        }
+        // long division by L (5 limbs).
+        let mut r = t;
+        let mut bit = (10u32 * 64) - 1;
+        while bit >= 252 {
+            // shift L left by (bit - 251)
+            let shift = bit - 251;
+            let mut sm = [0u64; 10];
+            let ls = (shift / 64) as usize;
+            let bs = shift % 64;
+            for i in 0..5 {
+                if ls + i < 10 {
+                    sm[ls + i] = sm[ls + i].wrapping_add(L[i] << bs);
+                }
+                if bs > 0 && ls + i + 1 < 10 {
+                    sm[ls + i + 1] = sm[ls + i + 1].wrapping_add(L[i] >> (64 - bs));
+                }
+            }
+            if big_ge(&r, &sm) {
+                r = big_sub(&r, &sm);
+            }
+            bit -= 1;
+        }
+        let mut out = [0u64; 5];
+        out.copy_from_slice(&r[0..5]);
+        if limb_ge(&out, &L) {
+            out = limb_sub(&out, &L);
+        }
+        out
+    }
+
+    fn big_ge(a: &[u64; 10], b: &[u64; 10]) -> bool {
+        let mut i = 10;
+        while i > 0 {
+            i -= 1;
+            if a[i] > b[i] {
+                return true;
+            }
+            if a[i] < b[i] {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn big_sub(a: &[u64; 10], b: &[u64; 10]) -> [u64; 10] {
+        let mut out = [0u64; 10];
+        let mut borrow = 0u64;
+        for i in 0..10 {
+            let (d1, b1) = a[i].overflowing_sub(b[i]);
+            let (d, b2) = d1.overflowing_sub(borrow);
+            out[i] = d;
+            borrow = (b1 | b2) as u64;
+        }
+        out
+    }
+
+    // Independent standard CIOS Montgomery multiplication (n limbs) used only to
+    // cross-check the field's `mont_mul`.
+    fn cios_ref(a: &[u64; 6], b: &[u64; 6], p: &[u64; 6], mu: u64, n: usize) -> [u64; 6] {
+        let mut t = [0u64; 7];
+        let mut i = 0;
+        while i < n {
+            let ai = a[i];
+            let mut c: u128 = 0;
+            let mut j = 0;
+            while j < n {
+                let prod = (ai as u128) * (b[j] as u128);
+                let sum = (t[j] as u128) + prod + c;
+                t[j] = sum as u64;
+                c = sum >> 64;
+                j += 1;
+            }
+            let sum = (t[n] as u128) + c;
+            t[n] = sum as u64;
+            c = sum >> 64;
+            let m = (t[0].wrapping_mul(mu)) as u128;
+            let s0 = (t[0] as u128) + m * (p[0] as u128);
+            c = c + (s0 >> 64);
+            let mut j = 1;
+            while j < n {
+                let mp = m * (p[j] as u128);
+                let sum2 = (t[j] as u128) + mp + c;
+                t[j - 1] = sum2 as u64;
+                c = sum2 >> 64;
+                j += 1;
+            }
+            let sum3 = (t[n] as u128) + c;
+            t[n - 1] = sum3 as u64;
+            t[n] = (sum3 >> 64) as u64;
+            i += 1;
+        }
+        // Normalize: t is in [0, 2p); subtract p once if t >= p.
+        // Compare t[0..n+1] with p[0..n] (p zero-extended).
+        let mut ge = true;
+        let mut lt = false;
+        let mut k = n + 1;
+        while k > 0 {
+            k -= 1;
+            let tv = if k <= n { t[k] } else { 0 };
+            let pv = if k < n { p[k] } else { 0 };
+            if tv > pv {
+                ge = true;
+                lt = false;
+                break;
+            }
+            if tv < pv {
+                ge = false;
+                lt = true;
+                break;
+            }
+        }
+        let mut out = [0u64; 6];
+        if ge && !lt {
+            let mut borrow = 0u64;
+            for idx in 0..=n {
+                let pv = if idx < n { p[idx] } else { 0 };
+                let (d1, b1) = t[idx].overflowing_sub(pv);
+                let (d, b2) = d1.overflowing_sub(borrow);
+                out[idx] = d;
+                borrow = (b1 | b2) as u64;
+            }
+            out
+        } else {
+            let mut o = [0u64; 6];
+            o[..=n].copy_from_slice(&t[..=n]);
+            o
+        }
     }
 }

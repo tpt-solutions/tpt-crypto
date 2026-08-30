@@ -56,10 +56,10 @@ fn ed25519_compress_roundtrip() {
     assert_eq!(dec.compress(), c);
 }
 
-/// RFC 7748 X25519 test vector.
+/// RFC 7748 §5.2 X25519 test vector 1.
 #[test]
 fn x25519_rfc7748() {
-    let scalar = hex::decode("a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5e1859cb6e918c0c5e1f")
+    let scalar = hex::decode("a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4")
         .unwrap();
     let u_coord = hex::decode("e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c")
         .unwrap();
@@ -74,21 +74,36 @@ fn x25519_rfc7748() {
     assert_eq!(result.to_vec(), expected, "X25519 RFC 7748 mismatch");
 }
 
-/// RFC 7748 §6.1 — Alice's scalar/base, shared secret.
+/// RFC 7748 §5.2 X25519 test vector 2.
 #[test]
-fn x25519_rfc7748_alice() {
-    let scalar = hex::decode("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+fn x25519_rfc7748_vec2() {
+    let scalar = hex::decode("4b66e9d4d1b4673c5ad22691957d6af5c11b6421e0ea01d42ca4169e7918ba0d")
         .unwrap();
-    let base = hex::decode("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a")
+    let u_coord = hex::decode("e5210f12786811d3f4b7959d0538ae2c31dbe7106fc03c3efc4cd549c715a493")
         .unwrap();
-    let expected = hex::decode("4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742")
+    let expected = hex::decode("95cbde9476e8907d7aade45cb4b873f88b595a68799fa152e6f8f7647aac7957")
         .unwrap();
 
     let mut k = [0u8; 32];
     k.copy_from_slice(&scalar);
     let mut u = [0u8; 32];
-    u.copy_from_slice(&base);
+    u.copy_from_slice(&u_coord);
     let result = X25519::diffie_hellman(&k, &u);
+    assert_eq!(result.to_vec(), expected, "X25519 RFC 7748 vec2 mismatch");
+}
+
+/// RFC 7748 §6.1 — Alice's scalar with the base point u=9 yields Alice's public key.
+#[test]
+fn x25519_rfc7748_alice() {
+    let scalar = hex::decode("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
+        .unwrap();
+    let base = [9u8; 32];
+    let expected = hex::decode("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a")
+        .unwrap();
+
+    let mut k = [0u8; 32];
+    k.copy_from_slice(&scalar);
+    let result = X25519::diffie_hellman(&k, &base);
     assert_eq!(result.to_vec(), expected, "X25519 RFC 7748 §6.1 mismatch");
 }
 

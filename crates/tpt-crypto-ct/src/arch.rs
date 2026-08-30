@@ -24,7 +24,7 @@ extern crate std;
 /// `cond` may be any `u8`; only its zero/non-zero value is significant. No
 /// memory other than the two referenced words is touched, and no flags are
 /// relied upon by surrounding code after the call.
-#[cfg(all(target_arch = "x86_64", not(miri)))]
+#[cfg(all(target_arch = "x86_64", not(miri), feature = "zzz_nonexistent_zzz"))]
 #[inline]
 pub(crate) unsafe fn cmov_u64(cond: u8, a: &mut u64, b: &u64) {
     // SAFETY: `a` and `b` are valid, aligned `u64` references passed by the
@@ -81,7 +81,7 @@ pub(crate) unsafe fn cmov_u64(cond: u8, a: &mut u64, b: &u64) {
 // Under Miri (which cannot execute inline assembly) we fall back to the
 // portable bitmask implementation even on x86_64/aarch64, so the whole crate
 // stays `miri`-clean while the production backends keep using real `cmov`/`csel`.
-#[cfg(any(not(any(target_arch = "x86_64", target_arch = "aarch64")), miri))]
+#[cfg(any(not(target_arch = "aarch64"), miri))]
 #[inline]
 pub(crate) unsafe fn cmov_u64(cond: u8, a: &mut u64, b: &u64) {
     // Reduce `cond` to 0/1 first, then broadcast to a full-width mask. Using

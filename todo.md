@@ -8,7 +8,8 @@
 >
 > Layering (strict — lower never depends on higher):
 > `core → ct → field → curve`, `hash` on `core+ct`, `aead` on `core+ct`,
-> `kem`/`sig` on `field+curve+hash`, `zk` on `curve+hash`, `mpc` on `field+hash`,
+> `kem`/`sig` on `field+curve+hash`, `zk` on `field+curve+hash`,
+> `mpc` on `field+curve+hash`,
 > `tpt-crypto` (facade) on everything.
 
 ---
@@ -208,9 +209,16 @@ variant (feature-gated re-exports instead of steps 3–6).
       — `tests/kat/field_mul.json` (24 vectors) + `tests/kat/field_reduce.json`
       (21 vectors), hand-computed from the prime definitions and verified against
       Python big-integer arithmetic; see `tests/kat/PROVENANCE.md`.
-- [ ] proptest: field axioms (assoc/dist/inverse), `from(to(x)) == x`,
+- [~] proptest: field axioms (assoc/dist/inverse), `from(to(x)) == x`,
       `mul` matches `tpt-math-exact` mod P
-      — requires the `proptest` crate (network); deferred.
+      — `tests/field_props.rs` now exists (`proptest` is a workspace dep).
+      P-256 (base+scalar), BLS12-381 (Fp+Fr) pass; `p384_base_props` and
+      `p384_scalar_props` currently **FAIL** (`field_props.proptest-regressions`).
+      Scratch `tests/dbg_check.rs` + `consts::dbg_consts` trace tests are
+      debugging aids, prune before publish.
+      NOTE: `src/params.rs` in `4e6c0d9` shipped with literal `]\n);` typos in
+      8 `declare_params!` calls (broke `--features alloc`); since fixed in the
+      working tree, along with corrected `Ed25519ScalarParams` limbs.
 - [x] `specs/field_mul.telos` (`result == a*b mod P ∀ a,b<P`),
       `specs/field_reduce.telos`
 
@@ -225,12 +233,25 @@ variant (feature-gated re-exports instead of steps 3–6).
       scalar mul, compress/decompress, `CtEq`. KAT `ed25519_rfc8032_test1` currently
       FAILS (`field.rs:418` subtract-with-overflow in `recover_x`/`sqrt` path);
       scalar-mul window uses a secret-dependent `if n != 0` branch — not yet ct.
-      No cofactored verify yet.
+      No cofactored verify yet. `edwards25519.rs` gained helper methods in
+      `4e6c0d9` (consumed by `-zk`); `tests/xref.rs` cross-reference suite added
+      — `ed25519_rfc8032_test1` + `..._signature` still FAIL.
 - [~] X25519 (RFC 7748) Montgomery ladder
-      — WIP in `src/montgomery25519.rs`: clamp + ladder + `cswap` + final invert.
-      KAT `x25519_rfc7748` currently FAILS (`ct.rs:177` `CtOption::unwrap` on
-      `None` — `pad32_reduce` / `from_bytes` non-canonical input). Ladder step
-      formula needs review (stray `C` term).
+       — WIP in `src/montgomery25519.rs`: clamp + ladder + `cswap` + final invert.
+       X25519 KATs still failing. **DIAGNOSED (2026-08-30):** the entire data
+       plane the ladder depends on was verified correct in isolation — field
+       `add`/`sub`/`mul`/`square`/`invert`/`from_bytes`/`to_bytes` (3·5=15),
+       `EdwardsPoint::add(x,x)==double(x)`, `EdwardsPoint::mul` (RFC 8032 pubkey
+       KAT passes; `mul([8,0,..])`==triple-double), `ct_lookup`, `ct_select`,
+       `cswap`, and `to_montgomery_u(basepoint)==9` all check out. The ladder
+       formula matches RFC 7748 §5 exactly (the `da`/`cb` swap is arithmetically
+       equivalent). So the defect is a subtle Montgomery-ladder bug that does NOT
+       surface in the isolated component tests — needs step-traced
+       intermediate values to pin down (likely a residual `mont_mul` overflow on
+       large ladder intermediates, or a `swap`/`cswap` timing subtlety). NOT yet
+       fixed. `tests/xref.rs` now compiles (str→bytes fix); scratch
+       `tests/dbg_r.rs` pruned. Curve25519 breakage remains the root cause of the
+       `-mpc` base-OT / IKNP / Beaver-from-OT test failures.
 - [ ] P-256 / P-384 (SEC1): short-Weierstrass complete addition formulas,
       ct scalar mul, point (de)compression, subgroup/on-curve checks
 - [ ] BLS12-381: G1/G2 (subgroup checks via endomorphism), Miller loop,
@@ -295,41 +316,67 @@ variant (feature-gated re-exports instead of steps 3–6).
 ## Phase 3 — Post-Quantum Core  (headline)
 
 ### crates/tpt-crypto-kem
-- [ ] `poly` module: `R_q = Z_q[X]/(X^n+1)` (Kyber q=3329, n=256), compile-time
+- [x] `poly` module: `R_q = Z_q[X]/(X^n+1)` (Kyber q=3329, n=256), compile-time
       unrolled NTT / inv-NTT / base-mul, Montgomery reduction, `add`/`sub`
-- [ ] Samplers: CBD (centered binomial), ct rejection sampling for uniform,
+      — `src/poly.rs`; lib unit tests + `tests/props.rs` NTT round-trip green.
+- [x] Samplers: CBD (centered binomial), ct rejection sampling for uniform,
       SHAKE-based XOF (`parse`), all timing ⟂ secret polynomial
-- [ ] `compress`/`decompress`, `encode`/`decode` (bit-packing), ct
-- [ ] K-PKE (IND-CPA) keygen/encrypt/decrypt; ML-KEM (FIPS 203) FO transform →
+      — `src/sampler.rs`.
+- [x] `compress`/`decompress`, `encode`/`decode` (bit-packing), ct
+      — `src/encode.rs`.
+- [~] K-PKE (IND-CPA) keygen/encrypt/decrypt; ML-KEM (FIPS 203) FO transform →
       ML-KEM-512 / 768 / 1024; implicit-rejection decapsulation (ct)
-- [ ] Spec API: `ml_kem::keygen::<MlKem768>(rng)`, `encapsulate`, `decapsulate`
-- [ ] FrodoKEM (feature `frodo`) and Classic McEliece (feature `mceliece`,
+      — `src/pke.rs` + `src/ml_kem.rs` (alloc-gated); `tests/props.rs`
+      encaps/decaps round-trip passes for all three parameter sets.
+      `ml_kem.rs` under active edit.
+- [x] Spec API: `ml_kem::keygen::<MlKem768>(rng)`, `encapsulate`, `decapsulate`
+- [~] FrodoKEM (feature `frodo`) and Classic McEliece (feature `mceliece`,
       long-term secrets) — gated, larger
+      — `src/frodo.rs` / `src/mceliece.rs` are feature-gated stubs returning
+      `Error::Unsupported`; API surface only.
 - [ ] KATs: FIPS 203 ACVP vectors + NIST `.rsp` KAT files (all param sets)
-- [ ] proptest: `decapsulate(sk, encapsulate(pk).0) == encapsulate(pk).1`;
+      — `tests/kat/` dir present; one KAT test currently `#[ignore]`, no ACVP
+      vectors wired.
+- [~] proptest: `decapsulate(sk, encapsulate(pk).0) == encapsulate(pk).1`;
       malformed ciphertext → implicit-reject (no panic, no distinguishable time)
+      — `tests/props.rs`: round-trip for 512/768/1024 + implicit-reject on
+      tampered ciphertext, all green (4 tests).
 - [ ] `specs/ml_kem_decapsulate.telos` (`ensures: timing ⟂ sk`),
       `specs/ntt_roundtrip.telos`
 
 ### crates/tpt-crypto-sig
-- [ ] Reuse `-kem::poly` for ML-DSA ring (q=8380417, n=256); power2round,
+- [~] Reuse `-kem::poly` for ML-DSA ring (q=8380417, n=256); power2round,
       decompose, `makeHint`/`useHint`, ct
-- [ ] ML-DSA (FIPS 204) keygen/sign/verify → ML-DSA-44 / 65 / 87; hedged +
+      — own `src/poly.rs` (does **not** reuse `-kem::poly`); power2round /
+      decompose / hint helpers present. `poly::tests::all_poly_tests` currently
+      **FAILS** ("ntt round trip failed"); `poly.rs` under active edit.
+- [~] ML-DSA (FIPS 204) keygen/sign/verify → ML-DSA-44 / 65 / 87; hedged +
       deterministic; rejection-sampling loop with ct primitives; `ctx` domain sep
-- [ ] SLH-DSA (FIPS 205): WOTS+, XMSS, FORS, hypertree; SHA2 + SHAKE param sets;
+      — `src/ml_dsa/mod.rs` + `src/ml_dsa/sample.rs`; keygen/sign/verify wired for
+      all three sets, deterministic + hedged, `Ctx` domain separation. All 6
+      `ml_dsa::tests` round-trips currently **FAIL** (blocked on the poly NTT bug).
+- [~] SLH-DSA (FIPS 205): WOTS+, XMSS, FORS, hypertree; SHA2 + SHAKE param sets;
       `slh-dsa` feature (large)
+      — `src/slh_dsa.rs` scaffolded (now an unconditional `pub mod`, no longer
+      feature-gated): `SlhDsaParam` enum + stub key/sig types, operations return
+      `Error::Unsupported`. No WOTS+/XMSS/FORS/hypertree yet.
+      `tests/slh_dsa_kat.rs` is a placeholder.
 - [ ] Ed25519 sign/verify (on `-curve`), batch verify
 - [ ] ECDSA P-256 / P-384: RFC 6979 deterministic nonce + ct scalar ops;
       low-s normalization; ASN.1 DER + fixed encodings
 - [ ] BLS12-381 (spec API): `sign`, `verify`, `aggregate`,
       `verify_aggregate` (same-message + distinct-message), proof-of-possession;
       ciphersuite `BLS_SIG_..._NUL_`
-- [ ] Spec API: `ml_dsa::keygen::<MlDsa65>`, `sign(sk, msg, ctx)`, `verify(...)`
-- [ ] Optional `signature` trait-compat impls behind `signature` feature
+- [~] Spec API: `ml_dsa::keygen::<MlDsa65>`, `sign(sk, msg, ctx)`, `verify(...)`
+      — surface exists; blocked on the failing round-trips above.
+- [~] Optional `signature` trait-compat impls behind `signature` feature
+      — `src/signature_impls.rs` is a stub.
 - [ ] KATs: FIPS 204 & 205 ACVP, RFC 8032 (Ed25519), RFC 6979 + NIST CAVP (ECDSA),
       Wycheproof (ECDSA/EdDSA), draft-irtf-cfrg-bls-signature vectors
-- [ ] proptest: `verify(pk, m, sign(sk, m))` ok; wrong key/msg/ctx → `Verification`;
+      — `tests/ml_dsa_kat.rs` present (placeholder), no ACVP vectors.
+- [~] proptest: `verify(pk, m, sign(sk, m))` ok; wrong key/msg/ctx → `Verification`;
       `verify_aggregate` iff all inputs valid
+      — `tests/ml_dsa_props.rs` present; blocked on the failing round-trips.
 - [ ] `specs/bls_aggregate.telos` (`valid iff all input sigs valid`),
       `specs/ecdsa_nonce_ct.telos`
 
@@ -341,29 +388,66 @@ variant (feature-gated re-exports instead of steps 3–6).
 ## Phase 4 — Advanced Primitives + Facade
 
 ### crates/tpt-crypto-zk  (`no_std` + `alloc`)
-- [ ] Fiat-Shamir `Transcript` (Merlin-style STROBE-lite on SHAKE256):
-      `append_message`, `challenge_scalar`
-- [ ] Pedersen commitments over BLS12-381 G1 / Ed25519 (`commit(value, blinding)`)
-- [ ] Inner-product argument; Bulletproofs range proofs — single + aggregated,
+> Crate scaffolded and committed (`4e6c0d9`) with the placeholder `lib.rs`; the
+> module set below is being wired up now. **RESOLVED (2026-08-30): the lib now
+> compiles** (was ~30 errors). Fixes: `-hash` `Xof` is re-exported at crate
+> root (import `tpt_crypto_hash::{sha3::Shake256, Xof}`); `-field` gained a
+> `Neg` impl for `FieldElement`; `-curve` `EdwardsPoint::ct_eq` already existed
+> (just needed the `CtEq` trait in scope in `-zk`); `-zk` `transcript.rs`/
+> `group.rs`/`bulletproofs.rs` updated to the new `Shake256`/`Xof` API
+> (`t.state` → `t`, `bytes_to_scalar` → `bytes_to_scalar_checked` taking
+> `&[u8]`); `bulletproofs::prove_range` return tuple order fixed; `plonk.rs`
+> added as a compiling placeholder module (verifier not yet implemented —
+> returns `ZkError::Unsupported`). `Pedersen`/`Transcript`/`IPA`/`Bulletproofs`
+> types compile but are **untested** (no wiring/tests run green yet).
+- [~] Fiat-Shamir `Transcript` (Merlin-style STROBE-lite on SHAKE256):
+      `append_message`, `challenge_scalar` — `src/transcript.rs`.
+- [~] Pedersen commitments over BLS12-381 G1 / Ed25519 (`commit(value, blinding)`)
+      — `src/pedersen.rs` + `src/generators.rs` + `src/group.rs` (Ed25519 only).
+- [~] Inner-product argument; Bulletproofs range proofs — single + aggregated,
       ranges up to `2^64` (`prove_range`, `verify_range` per spec API)
+      — `src/ipa.rs` + `src/bulletproofs.rs` (`prove_range`/`verify_range`,
+      `range_proof_{to,from}_bytes`); not yet building/tested.
 - [ ] Minimal PLONK verifier (~500 LoC): transcript, KZG **or** IPA commitment
       opening check, permutation + gate checks; accepts any compliant proof
       (no prover — that is `tpt-telos`'s job)
+      — `pub mod plonk;` declared but `src/plonk.rs` not created yet.
 - [ ] KATs: bulletproofs reference test vectors (dalek-compatible),
       PLONK proof fixtures from a reference prover
+      — `tests/kat/` dir present but empty.
 - [ ] proptest: honest `prove_range` always verifies; out-of-range value →
       prove fails; tampered proof → verify fails
 - [ ] `specs/bulletproofs_verify.telos` (`true iff proof valid for commitment`)
 
 ### crates/tpt-crypto-mpc  (`no_std` + `alloc`)
-- [ ] Additive secret sharing over `-field` (`share`, `reconstruct`,
+> Crate scaffolded and committed (`4e6c0d9`). Deps: `-core`, `-ct`, `-field`,
+> `-curve`, `-hash` (so this crate sits on `field+curve+hash`, not just
+> `field+hash`). Lib builds; the OT-backed paths fail at test time only because
+> Curve25519 in `-curve` is still failing its RFC 7748 / RFC 8032 KATs.
+- [x] Additive secret sharing over `-field` (`share`, `reconstruct`,
       `add`/`scalar_mul` on shares)
-- [ ] Beaver triple representation; offline gen (from OT) + online multiply
-- [ ] Base OT (Chou–Orlandi / simplest OT) on `-curve`; 1-of-2 and 1-of-N
-- [ ] IKNP OT extension
-- [ ] KATs: cross-impl vectors where available; otherwise documented reference runs
-- [ ] proptest: `reconstruct(share(x)) == x`; Beaver-multiplied shares
+      — `src/field_share.rs` (`share_secret`, `share_secret_2`, `reconstruct`,
+      `Share::add` / `Share::scale`); `share_reconstruct_kat` + `tests/props.rs`
+      `reconstruct(share(x)) == x` pass.
+- [~] Beaver triple representation; offline gen (from OT) + online multiply
+      — `src/beaver.rs` (`BeaverTriple::deal` / `deal_from_base_ot` /
+      `deal_many_from_iknp`, `multiply`). Dealer path OK; `beaver_from_base_ot_kat`
+      currently **FAILS** (downstream of the `-curve` OT failure).
+- [~] Base OT (Chou–Orlandi / simplest OT) on `-curve`; 1-of-2 and 1-of-N
+      — `src/ot.rs` (`transfer_base_ot_1of2`, `transfer_1ofn`); `oneofn_kat`
+      passes, `base_ot_kat` currently **FAILS** — root cause is broken
+      Curve25519 in `-curve`.
+- [~] IKNP OT extension
+      — `src/iknp.rs` (`extend_1of2`, κ=128); `iknp_kat` currently **FAILS**
+      (same `-curve` root cause).
+- [~] KATs: cross-impl vectors where available; otherwise documented reference runs
+      — `tests/kat.rs` + `tests/kat/PROVENANCE.md` (reference runs, not RFC
+      vectors — none exist for these primitives). `share_reconstruct_kat` +
+      `oneofn_kat` pass; `base_ot_kat` / `beaver_from_base_ot_kat` / `iknp_kat`
+      fail on the `-curve` Curve25519 issue.
+- [~] proptest: `reconstruct(share(x)) == x`; Beaver-multiplied shares
       reconstruct to `a*b`; OT receiver learns exactly one message
+      — `tests/props.rs` present (+ `props.proptest-regressions` committed).
 - [ ] `specs/secret_share_reconstruct.telos`
 
 ### crates/tpt-crypto  (facade — umbrella variant)

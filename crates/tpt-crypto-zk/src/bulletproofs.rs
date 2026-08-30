@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 
 use tpt_crypto_field::Ed25519Scalar;
-use tpt_crypto_hash::sha3::{Shake256, Xof};
+use tpt_crypto_hash::{sha3::Shake256, Xof};
 
 use crate::error::ZkError;
 use crate::generators::BulletproofGens;
@@ -307,7 +307,7 @@ pub fn prove_range(
         e_blinding,
         ipp,
     };
-    (vs, proof)
+    (proof, vs)
 }
 
 /// Verify a range proof for the given value commitments.

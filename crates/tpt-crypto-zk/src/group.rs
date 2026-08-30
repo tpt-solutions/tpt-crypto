@@ -7,8 +7,8 @@
 //! Edwards25519 formulas and fixed-window scalar multiplication).
 
 use tpt_crypto_curve::EdwardsPoint;
-use tpt_crypto_field::Ed25519Scalar;
-use tpt_crypto_hash::sha3::{Shake256, Xof};
+use tpt_crypto_field::{CtEq, Ed25519Scalar};
+use tpt_crypto_hash::{sha3::Shake256, Xof};
 
 /// A group element in the prime-order subgroup of Ed25519.
 #[derive(Clone, Copy, Debug)]
@@ -92,21 +92,21 @@ impl Ristretto {
 impl core::ops::Add for Ristretto {
     type Output = Self;
     fn add(self, rhs: Self) -> Self {
-        self.add(&rhs)
+        Ristretto(self.0.add(&rhs.0))
     }
 }
 
 impl core::ops::Sub for Ristretto {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self {
-        self.add(&rhs.neg())
+        Ristretto(self.0.add(&rhs.0.neg()))
     }
 }
 
 impl core::ops::Neg for Ristretto {
     type Output = Self;
     fn neg(self) -> Self {
-        self.neg()
+        Ristretto(self.0.neg())
     }
 }
 

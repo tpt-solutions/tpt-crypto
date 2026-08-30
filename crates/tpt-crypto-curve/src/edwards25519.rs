@@ -64,7 +64,7 @@ impl EdwardsPoint {
         let d = curve_d();
         let y2 = y.square();
         let u = y2.sub(&Ed25519Field::one());
-        let v = d.mul(&y2).sub(&Ed25519Field::one());
+        let v = d.mul(&y2).add(&Ed25519Field::one());
         let x2 = u.mul(&v.invert().unwrap());
         let x = x2
             .sqrt()
@@ -164,6 +164,22 @@ impl EdwardsPoint {
         self.double().double().double()
     }
 
+    /// Affine y-coordinate of this point (y / z).
+    pub fn affine_y(&self) -> Ed25519Field {
+        let zinv = self.z.invert().unwrap_or(Ed25519Field::zero());
+        self.y.mul(&zinv)
+    }
+
+    /// The Montgomery u-coordinate of this Edwards point via the birational map
+    /// `u = (1 + y) / (1 - y)` (RFC 7748 §4.1).
+    pub fn to_montgomery_u(&self) -> Ed25519Field {
+        let y = self.affine_y();
+        let one = Ed25519Field::one();
+        let num = one.add(&y);
+        let den = one.sub(&y);
+        num.mul(&den.invert().unwrap_or(Ed25519Field::zero()))
+    }
+
     /// Compress to the canonical 32-byte little-endian encoding (y with sign of x).
     pub fn compress(&self) -> [u8; 32] {
         let zinv = self.z.invert().unwrap_or(Ed25519Field::zero());
@@ -201,7 +217,7 @@ impl EdwardsPoint {
         let d = curve_d();
         let y2 = y.square();
         let u = y2.sub(&Ed25519Field::one());
-        let v = d.mul(&y2).sub(&Ed25519Field::one());
+        let v = d.mul(&y2).add(&Ed25519Field::one());
         let v_inv = v.invert();
         let x2 = u.mul(&v_inv.unwrap_or_else(Ed25519Field::zero));
         let x_opt = x2.sqrt();
@@ -255,14 +271,19 @@ impl CtSelect for EdwardsPoint {
 impl EdwardsPoint {
     /// Derive the Ed25519 public key (compressed) from a 32-byte seed.
     pub fn public_key(seed: &[u8; 32]) -> [u8; 32] {
-        let a = Self::clamp(seed);
+        let h = sha512_concat(&[seed]);
+        let mut a = [0u8; 32];
+        a.copy_from_slice(&h[..32]);
+        let a = Self::clamp(&a);
         Self::basepoint().mul(&a).compress()
     }
 
     /// Sign `msg` with the RFC 8032 Ed25519 algorithm, returning a 64-byte signature.
     pub fn sign(seed: &[u8; 32], msg: &[u8]) -> [u8; 64] {
         let h = sha512_concat(&[seed]);
-        let a = Self::clamp(seed);
+        let mut a = [0u8; 32];
+        a.copy_from_slice(&h[..32]);
+        let a = Self::clamp(&a);
         let mut prefix = [0u8; 32];
         prefix.copy_from_slice(&h[32..64]);
 
@@ -330,15 +351,42 @@ fn scalar_to_le32(s: Ed25519Scalar) -> [u8; 32] {
     out
 }
 
-/// Reduce a 64-byte (512-bit) little-endian digest modulo L using the identity
-/// `digest = lo + 2^256 * hi`, i.e. `digest mod L = (lo + (2^256 mod L) * hi) mod L`.
+/// Reduce a 64-byte (512-bit) little-endian digest modulo L.
+///
+/// The field's `from_limbs`/`mont_mul` only consider the low `P::LIMBS` limbs,
+/// so a naive `hi * 2^256 + lo` overflows and silently drops the high part.
+/// Instead we accumulate `sum_i limb_i * (2^64i mod L)` limb-by-limb, each
+/// product reduced modulo L by the field arithmetic.
 fn reduce_wide(d: &[u8; 64]) -> Ed25519Scalar {
-    let lo = le32_to_scalar(&d[..32].try_into().unwrap());
-    let hi = le32_to_scalar(&d[32..].try_into().unwrap());
-    let mut two256 = [0u64; MAX_LIMBS];
-    two256[4] = 1; // 2^256
-    let two256 = Ed25519Scalar::from_limbs(two256);
-    hi.mul(&two256).add(&lo)
+    let mut limbs = [0u64; 8];
+    for i in 0..8 {
+        let mut v = 0u64;
+        for j in 0..8 {
+            v |= (d[i * 8 + j] as u64) << (8 * j);
+        }
+        limbs[i] = v;
+    }
+    // base = 2^64 mod L.
+    let mut base = Ed25519Scalar::one();
+    let mut i = 0;
+    while i < 64 {
+        base = base.double();
+        i += 1;
+    }
+    let mut powers = [Ed25519Scalar::one(); 8];
+    let mut k = 1;
+    while k < 8 {
+        powers[k] = powers[k - 1].mul(&base);
+        k += 1;
+    }
+    let mut acc = Ed25519Scalar::zero();
+    let mut j = 0;
+    while j < 8 {
+        let term = Ed25519Scalar::from_u64(limbs[j]).mul(&powers[j]);
+        acc = acc.add(&term);
+        j += 1;
+    }
+    acc
 }
 
 /// Incremental SHA-512 over a list of byte slices (no allocation).

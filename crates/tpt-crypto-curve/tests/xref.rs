@@ -358,6 +358,62 @@ fn x25519_reference_matches_rfc() {
 }
 
 #[test]
+fn ladder_first_step_debug() {
+    use tpt_crypto_field::Ed25519Field;
+    let x1 = Ed25519Field::from_u64(9);
+    let mut x2 = Ed25519Field::one();
+    let mut z2 = Ed25519Field::zero();
+    let mut x3 = x1;
+    let mut z3 = Ed25519Field::one();
+    let mut swap = false;
+    let bit = true;
+    swap ^= bit;
+    core::mem::swap(&mut x2, &mut x3);
+    core::mem::swap(&mut z2, &mut z3);
+    swap = bit;
+    let a0 = x2.add(&z2);
+    let a1 = x2.sub(&z2);
+    let b0 = x3.add(&z3);
+    let b1 = x3.sub(&z3);
+    let aa = a0.square();
+    let bb = b0.square();
+    let e = aa.sub(&bb);
+    let da = a1.mul(&b0);
+    let cb = a0.mul(&b1);
+    let n_x2 = aa.mul(&bb);
+    let n_z2 = e.mul(&aa.add(&e.mul(&Ed25519Field::from_u64(121665))));
+    let n_x3 = da.add(&cb).square();
+    let n_z3 = x1.mul(&da.sub(&cb).square());
+    let bytes = n_x2.to_bytes();
+    let mut le = [0u8; 32];
+    for i in 0..32 {
+        le[i] = bytes[16 + (31 - i)];
+    }
+    eprintln!(
+        "FIRST STEP x2(LE)={:?} z2(LE)={:?} x3(LE)={:?} z3(LE)={:?}",
+        le,
+        {
+            let b = n_z2.to_bytes();
+            let mut v = [0u8; 32];
+            for i in 0..32 { v[i] = b[16 + (31 - i)]; }
+            v
+        },
+        {
+            let b = n_x3.to_bytes();
+            let mut v = [0u8; 32];
+            for i in 0..32 { v[i] = b[16 + (31 - i)]; }
+            v
+        },
+        {
+            let b = n_z3.to_bytes();
+            let mut v = [0u8; 32];
+            for i in 0..32 { v[i] = b[16 + (31 - i)]; }
+            v
+        }
+    );
+}
+
+#[test]
 fn x25519_library_matches_reference() {
     use tpt_crypto_curve::X25519;
     let scalar =
@@ -377,6 +433,140 @@ fn x25519_library_matches_reference() {
         "library != reference\n  lib = {:?}\n  ref = {:?}",
         lib, refr
     );
+}
+
+#[test]
+fn inline_mul_matches_truth() {
+    use tpt_crypto_curve::{EdwardsPoint, X25519};
+    use tpt_crypto_ct::lookup::ct_lookup;
+    let b = EdwardsPoint::basepoint();
+    let scalar = [0u8; 32];
+    // inline reimplementation of EdwardsPoint::mul
+    let mut table = [EdwardsPoint::identity(); 16];
+    let mut p = b;
+    for i in 1..16 {
+        table[i] = p;
+        p = p.add(&b);
+    }
+    let mut acc = EdwardsPoint::identity();
+    for i in (0..64).rev() {
+        let byte = scalar[i / 2] as usize;
+        let nibble = if (i % 2) == 0 {
+            (byte & 0x0F) as usize
+        } else {
+            ((byte >> 4) & 0x0F) as usize
+        };
+        for _ in 0..4 {
+            acc = acc.double();
+        }
+        let addend = ct_lookup(&table, nibble, EdwardsPoint::identity());
+        acc = acc.add(&addend);
+        if i >= 60 {
+            println!("INLINE i={} nibble={} acc={:?}", i, nibble, acc.compress());
+        }
+    }
+    let inline = acc.compress();
+    // ground truth
+    let mut g = EdwardsPoint::basepoint();
+    for _ in 0..254 {
+        g = g.double();
+    }
+    let truth = g.compress();
+    assert_eq!(inline, truth, "inline mul != 254 doublings");
+}
+
+#[test]
+fn ct_lookup_on_edwards() {
+    use tpt_crypto_curve::EdwardsPoint;
+    use tpt_crypto_ct::lookup::ct_lookup;
+    let b = EdwardsPoint::basepoint();
+    let mut table = [EdwardsPoint::identity(); 16];
+    let mut p = b;
+    for i in 1..16 {
+        table[i] = p;
+        p = p.add(&b);
+    }
+    let four = ct_lookup(&table, 4, EdwardsPoint::identity());
+    assert_eq!(four.compress(), b.double().double().compress(), "ct_lookup(table,4) != 4B");
+    let zero = ct_lookup(&table, 0, EdwardsPoint::identity());
+    assert_eq!(zero.compress(), EdwardsPoint::identity().compress(), "ct_lookup(table,0) != identity");
+}
+
+#[test]
+fn basepoint_montgomery_u_is_9() {
+    use tpt_crypto_curve::EdwardsPoint;
+    use tpt_crypto_field::{CtEq, Ed25519Field};
+    let u = EdwardsPoint::basepoint().to_montgomery_u();
+    let b = u.to_bytes();
+    let mut le = [0u8; 32];
+    for i in 0..32 {
+        le[i] = b[16 + (31 - i)];
+    }
+    eprintln!("basepoint u(LE) = {:?}", le);
+    // Should be 9.
+    let nine = Ed25519Field::from_u64(9);
+    assert!(u.ct_eq(&nine).into_bool(), "basepoint u != 9: {:?}", le);
+
+    // Does mul([0;32]) (= 2^254 * B) give identity? Print its compress.
+    let k = [0u8; 32];
+    let q = EdwardsPoint::basepoint().mul(&k);
+    eprintln!("2^254 * B compress = {:?}", q.compress());
+
+    // Ground truth for 2^254 * B via repeated doubling.
+    let mut acc = EdwardsPoint::basepoint();
+    for _ in 0..254 {
+        acc = acc.double();
+    }
+    let truth = acc.compress();
+    let m = EdwardsPoint::basepoint().mul(&[0u8; 32]);
+    eprintln!("2^254*B truth = {:?}", truth);
+    eprintln!("2^254*B mul   = {:?}", m.compress());
+    // sanity: doubling loop of identity-ish? just compare
+    assert_eq!(truth, m.compress(), "EdwardsPoint::mul high-bit broken");
+}
+
+#[test]
+fn x25519_matches_edwards_ladder() {
+    use tpt_crypto_curve::{EdwardsPoint, X25519};
+    use tpt_crypto_field::Ed25519Field;
+    fn clamp_k(s: &[u8; 32]) -> [u8; 32] {
+        let mut a = *s;
+        a[0] &= 248;
+        a[31] &= 127;
+        a[31] |= 64;
+        a
+    }
+    // u = 9 is the Montgomery u-coordinate of the Ed25519 base point, so
+    // X25519(9, k) must equal the u-coordinate of [clamp(k)]·B (birational map
+    // u = (1+y)/(1-y)). Edwards scalar mul is an independent code path, so
+    // disagreement isolates a Montgomery-ladder group-law bug.
+    let base_u = [9u8; 32];
+    let scalars: [&[u8]; 2] = [
+        b"77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a",
+        b"a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5e1859cb6e918c0c5e1f",
+    ];
+    for hs in scalars {
+        let mut k = [0u8; 32];
+        for i in 0..32 {
+            k[i] = u8::from_str_radix(core::str::from_utf8(&hs[2 * i..2 * i + 2]).unwrap(), 16)
+                .unwrap();
+        }
+        let kc = clamp_k(&k);
+        let mont = X25519::diffie_hellman(&k, &base_u);
+        let edw = EdwardsPoint::basepoint().mul(&kc);
+        let u_fe: Ed25519Field = edw.to_montgomery_u();
+        let ub = u_fe.to_bytes();
+        let mut edw_u = [0u8; 32];
+        for i in 0..32 {
+            edw_u[i] = ub[16 + (31 - i)];
+        }
+        assert_eq!(
+            mont.to_vec(),
+            edw_u.to_vec(),
+            "X25519 != Edwards-derived u for scalar {:?}",
+            k
+        );
+    }
 }
 
 mod hex {
