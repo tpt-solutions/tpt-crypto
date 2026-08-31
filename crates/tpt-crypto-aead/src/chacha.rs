@@ -461,7 +461,7 @@ impl Aead<24, 16> for XChaCha20Poly1305 {
         nonce16.copy_from_slice(&nonce.0[..16]);
         subkey.copy_from_slice(&hchacha20(&self.key, &nonce16));
         let mut inner_nonce = [0u8; 12];
-        inner_nonce.copy_from_slice(&nonce.0[16..]);
+        inner_nonce[4..12].copy_from_slice(&nonce.0[16..]);
         chacha_poly_seal(&subkey, &inner_nonce, aad, buf)
     }
 
@@ -477,7 +477,7 @@ impl Aead<24, 16> for XChaCha20Poly1305 {
         nonce16.copy_from_slice(&nonce.0[..16]);
         subkey.copy_from_slice(&hchacha20(&self.key, &nonce16));
         let mut inner_nonce = [0u8; 12];
-        inner_nonce.copy_from_slice(&nonce.0[16..]);
+        inner_nonce[4..12].copy_from_slice(&nonce.0[16..]);
         chacha_poly_open(&subkey, &inner_nonce, aad, buf, tag)
     }
 }

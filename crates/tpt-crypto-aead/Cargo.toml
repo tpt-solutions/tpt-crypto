@@ -29,6 +29,7 @@ aead-trait = ["dep:aead", "alloc", "tpt-crypto-core/alloc"]
 [dev-dependencies]
 hex = "0.4"
 proptest = "1"
+rand = "0.9"
 
 [package.metadata.docs.rs]
 all-features = true

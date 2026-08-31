@@ -866,6 +866,7 @@ dependencies = [
  "aead",
  "hex",
  "proptest",
+ "rand",
  "tpt-crypto-core",
  "tpt-crypto-ct",
 ]
