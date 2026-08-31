@@ -20,6 +20,8 @@ pub const N: usize = 256;
 const D: i32 = 13;
 /// `q⁻¹ mod 2³²` (reference `QINV`), used by the Montgomery reduction.
 const QINV: i32 = 58_728_449;
+/// `256⁻¹ mod q`, the inverse-NTT normalization factor (`invntt` divides by 256).
+const INV256: i32 = 8_347_681;
 
 /// NTT twiddle factors `ζ^{brv(i)}` in Montgomery form (reference `ZETAS`).
 pub const ZETAS: [i32; N] = [
@@ -126,17 +128,14 @@ impl Poly {
         Self::reduce_mod((c as i64) * Self::R)
     }
 
-    /// Convert a Montgomery-form coefficient back to canonical: `c·R⁻¹ mod q`.
-    #[inline]
-    const fn from_mont(c: i32) -> i32 {
-        Self::montgomery_reduce(c as i64)
-    }
-
-    /// Montgomery reduction used only to convert the Montgomery-form [`ZETAS`]
-    /// twiddles into canonical coefficients: `montgomery_reduce(m) = m·2⁻³² mod q`.
+    /// Montgomery reduction `m ⟶ m·2⁻³² mod q` (REDC), matching the FIPS 204
+    /// reference `montgomery_reduce`. The multiplier is taken from the **unsigned**
+    /// low 32 bits of `a` (i.e. `(int32_t)((uint64_t)a * QINV)`), so it is correct
+    /// for both positive and negative `a`.
     #[inline]
     const fn montgomery_reduce(a: i64) -> i32 {
-        let t = ((a as i32 as i64) * (QINV as i64)) as i32;
+        let a_u = a as u64;
+        let t = ((a_u.wrapping_mul(QINV as u64)) as u32) as i32;
         ((a - (t as i64) * (Q as i64)) >> 32) as i32
     }
 
@@ -165,11 +164,10 @@ impl Poly {
 
     /// Forward negacyclic NTT, in place (ring `Z_q[X]/(X^n + 1)`, canonical input).
     ///
-    /// The transform is evaluated in Montgomery form (the reference `ZETAS`
-    /// twiddles are already Montgomery-encoded), so the canonical input is
-    /// first lifted to Montgomery form; the output therefore lives in the
-    /// NTT/NTT-domain (Montgomery) representation consumed by [`Poly::pointwise`]
-    /// and [`Poly::pointwise_acc`].
+    /// The canonical input is first lifted into Montgomery form; the transform is
+    /// then evaluated with the Montgomery-encoded [`ZETAS`] twiddles, so the output
+    /// lives in the NTT-domain (Montgomery) representation consumed by
+    /// [`Poly::pointwise`] and [`Poly::pointwise_acc`].
     pub fn ntt(&mut self) {
         for c in self.coeffs.iter_mut() {
             *c = Self::to_mont(*c);
@@ -217,9 +215,10 @@ impl Poly {
             }
             len <<= 1;
         }
+        // The inverse butterfly yields `MONT(256·x)`; strip the Montgomery factor
+        // and divide by 256 (`MONT(256·x)·2⁻³²·256⁻¹ = x`).
         for c in a.iter_mut() {
-            *c = Self::montgomery_reduce(41978i64 * (*c as i64));
-            *c = Self::from_mont(*c);
+            *c = ((Self::montgomery_reduce(*c as i64) as i64 * INV256 as i64) % Q as i64) as i32;
         }
     }
 
@@ -310,7 +309,7 @@ impl Poly {
         let mut any = Choice::FALSE;
         for &c in &self.coeffs {
             let t = c - ((c >> 31) & (2 * c));
-            any = any | Choice::from_u8_lsb((t >= bound) as u8);
+            any = any | Choice::from_u8_lsb((t > bound) as u8);
         }
         any
     }
@@ -665,24 +664,32 @@ mod tests {
         c.inv_ntt();
         c.canonicalize();
 
-        // Schoolbook negacyclic product mod (X^256 + 1).
-        let mut expected = [0i32; N];
+        // Schoolbook negacyclic product mod (X^256 + 1). Accumulate in i64 to
+        // avoid overflow (coefficients can reach ~N·q²).
+        let mut expected = [0i64; N];
         for i in 0..N {
-            let ai = a.coeffs[i];
+            let ai = a.coeffs[i] as i64;
             for j in 0..N {
+                let bj = b.coeffs[j] as i64;
                 let k = i + j;
                 if k < N {
-                    expected[k] = (expected[k] as i64 + (ai as i64) * (b.coeffs[j] as i64)) as i32;
+                    expected[k] += ai * bj;
                 } else {
-                    let k = k - N;
-                    expected[k] =
-                        (expected[k] as i64 - (ai as i64) * (b.coeffs[j] as i64)) as i32;
+                    expected[k - N] -= ai * bj;
                 }
             }
         }
-        for e in expected.iter_mut() {
-            *e = canonicalize(*e);
-        }
+        let expected: [i32; N] = {
+            let mut e = [0i32; N];
+            for i in 0..N {
+                let mut r = expected[i] % (Q as i64);
+                if r < 0 {
+                    r += Q as i64;
+                }
+                e[i] = r as i32;
+            }
+            e
+        };
         assert_eq!(c.coeffs, expected, "NTT product != schoolbook");
     }
 
@@ -690,7 +697,14 @@ mod tests {
         for g in [(Q - 1) / 88, (Q - 1) / 32] {
             for r in [0i32, 1, g, g + 1, Q - 2, Q - 1, Q / 2] {
                 let (r1, r0) = decompose_impl(g, r);
-                assert_eq!(r, r1 * 2 * g + r0, "decompose identity failed for g={g} r={r}");
+                // The identity `r = r₁·2γ₂ + r₀` holds modulo `q`; at the top
+                // boundary (`r = q-2`, `r₁ = 0`, `r₀ = -2`) the integer equality
+                // is off by a multiple of `q`, so compare the canonical forms.
+                assert_eq!(
+                    canonicalize(r),
+                    canonicalize(r1 * 2 * g + r0),
+                    "decompose identity failed for g={g} r={r}"
+                );
                 assert!(r0.abs() <= g, "low bits out of range for g={g} r={r}: {r0}");
             }
         }
@@ -753,11 +767,13 @@ mod tests {
     }
 
     fn ntt_conv_kind() {
-        // Discriminate cyclic vs negacyclic: x*x == -1 (negacyclic) or x^2 (cyclic).
+        // Discriminate cyclic vs negacyclic: in R_q[X]/(X^n+1) we have X^n = -1,
+        // so X · X^{n-1} = -1. A cyclic NTT would instead yield X^n reduced
+        // modulo (X^n-1), i.e. the coefficient 1 at index 0.
         let mut a = Poly::ZERO;
         a.coeffs[1] = 1;
         let mut b = Poly::ZERO;
-        b.coeffs[1] = 1;
+        b.coeffs[N - 1] = 1;
         let mut a_hat = a;
         let mut b_hat = b;
         a_hat.ntt();

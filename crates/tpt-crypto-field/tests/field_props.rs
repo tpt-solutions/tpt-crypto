@@ -347,3 +347,70 @@ proptest! {
         field_props::<Bls12381FrParams>(a, b, c);
     }
 }
+
+#[test]
+fn p384_mul_debug() {
+    use tpt_crypto_field::params::P384BaseParams;
+    use tpt_crypto_field::{FieldElement, FieldParams, CtEq};
+    let p = &P384BaseParams::MODULUS;
+
+    // (1) to_bytes correctness for a small known value.
+    let two = FieldElement::<P384BaseParams>::from_u64(2);
+    let mut two_int = one_int();
+    two_int[0] = 2;
+    assert_eq!(two.to_bytes(), to_canon(&two_int), "to_bytes(2) wrong");
+
+    // (2) associativity + reference comparison for several inputs.
+    let ins: [[u64; N]; 4] = [
+        [0xFFFF_FFFF_FFFF_FFFE, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 1],
+        [0x1234_5678_9ABC_DEF0, 0, 0, 0, 0, 0],
+        [0xFFFF_FFFF_FFFF_FFFF, 0xFFFF_FFFF_FFFF_FFFF, 0, 0, 0, 0],
+    ];
+    for a_limbs in ins.iter() {
+        for b_limbs in ins.iter() {
+            for c_limbs in ins.iter() {
+                let xi = *a_limbs;
+                let yi = *b_limbs;
+                let zi = *c_limbs;
+                let a = FieldElement::<P384BaseParams>::from_limbs(xi);
+                let b = FieldElement::<P384BaseParams>::from_limbs(yi);
+                let c = FieldElement::<P384BaseParams>::from_limbs(zi);
+                let ab = a.mul(&b);
+                let bc = b.mul(&c);
+                let ab_ref = FieldElement::<P384BaseParams>::from_limbs(ref_mul(&xi, &yi, p));
+                let bc_ref = FieldElement::<P384BaseParams>::from_limbs(ref_mul(&yi, &zi, p));
+                assert!(
+                    ab.ct_eq(&ab_ref).into_bool(),
+                    "ab mismatch a={:?} b={:?}: got {:?} want {:?}",
+                    xi, yi, ab.to_bytes(), ab_ref.to_bytes()
+                );
+                assert!(
+                    bc.ct_eq(&bc_ref).into_bool(),
+                    "bc mismatch b={:?} c={:?}: got {:?} want {:?}",
+                    yi, zi, bc.to_bytes(), bc_ref.to_bytes()
+                );
+                let l = ab.mul(&c);
+                let r = a.mul(&bc);
+                let ref_l = ref_mul(&ref_mul(&xi, &yi, p), &zi, p);
+                let ref_r = ref_mul(&xi, &ref_mul(&yi, &zi, p), p);
+                assert_eq!(l.to_bytes(), to_canon(&ref_l), "l mismatch a={:?} b={:?} c={:?}", xi, yi, zi);
+                assert_eq!(r.to_bytes(), to_canon(&ref_r), "r mismatch a={:?} b={:?} c={:?}", xi, yi, zi);
+
+                // Independent oracle: the INTEGER product of the two operands must
+                // equal the integer recovered from mont_mul(a,b).
+                let ai_int = from_canon(&a.to_bytes());
+                let bi_int = from_canon(&b.to_bytes());
+                let expected = ref_mul(&ai_int, &bi_int, &P384BaseParams::MODULUS);
+                let actual = from_canon(&a.mul(&b).to_bytes());
+                assert_eq!(
+                    actual, expected,
+                    "mont_mul integer-product wrong a={:?} b={:?}: got {:?} want {:?}",
+                    ai_int, bi_int, actual, expected
+                );
+            }
+        }
+    }
+    eprintln!("p384 mul debug OK");
+}
+

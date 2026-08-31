@@ -4,4 +4,5 @@
 #
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
-cc 2ecc82e7526b24a28443b2aa0404069aa0c67865252fdc90857a9be8e9a274d2 # shrinks to a = [0, 0, 0, 0, 0, 1], b = [0, 0, 0, 0, 0, 0], c = [0, 0, 0, 0, 1168519692222775, 4446488174453098911]
+cc 4ff4571b56a290d19e039e97c7f9db79a2c07b7d3861901868346d1683401f6b # shrinks to a = [0, 0, 0, 0, 0, 1], b = [0, 0, 0, 0, 0, 0], c = [0, 0, 0, 0, 1383505137651051, 12091531777558147615]
+cc aa7a2d750e956465ab853102c8a52348ab9b6765e7c04a8b2ab8dee7be6e9efd # shrinks to a = [0, 0, 0, 0, 0, 1], b = [0, 0, 0, 0, 0, 0], c = [0, 0, 0, 0, 229567978736446, 6520762335164646588]

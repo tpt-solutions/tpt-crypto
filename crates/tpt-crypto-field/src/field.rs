@@ -92,12 +92,18 @@ impl<P: FieldParams> FieldElement<P> {
         let mut i = 0;
         while i < n {
             let ai = a[i];
+            // Each 128-bit product is split into low/high limbs so the per-limb
+            // accumulation never exceeds `u128`. A `u128` carry here would let
+            // `t[i+j] + ai*b[j] + carry` wrap, corrupting the high limbs — a bug
+            // that surfaces for 6-limb (P-384) fields.
             let mut carry: u128 = 0;
             let mut j = 0;
             while j < n {
-                let sum = (t[i + j] as u128) + (ai as u128) * (b[j] as u128) + carry;
+                let plo = (ai as u64).wrapping_mul(b[j]);
+                let phi = (((ai as u128) * (b[j] as u128)) >> 64) as u64;
+                let sum = (t[i + j] as u128) + (plo as u128) + carry;
                 t[i + j] = sum as u64;
-                carry = sum >> 64;
+                carry = (sum >> 64) + (phi as u128);
                 j += 1;
             }
             let mut k = i + n;
@@ -114,13 +120,18 @@ impl<P: FieldParams> FieldElement<P> {
         // the 2n-limb buffer), shifting the result one limb right each step.
         i = 0;
         while i < n {
-            let m = (t[i].wrapping_mul(mu)) as u128;
+            let m = t[i].wrapping_mul(mu);
+            // `m` is only ever used modulo 2^64, so keep it a `u64`. The product
+            // `m*p[j]` is split into low/high limbs so the per-limb accumulation
+            // stays within `u128` (see the operand-scan loop above).
             let mut carry: u128 = 0;
             let mut j = 0;
             while j < n {
-                let sum = (t[i + j] as u128) + m * (p[j] as u128) + carry;
+                let plo = m.wrapping_mul(p[j]);
+                let phi = (((m as u128) * (p[j] as u128)) >> 64) as u64;
+                let sum = (t[i + j] as u128) + (plo as u128) + carry;
                 t[i + j] = sum as u64;
-                carry = sum >> 64;
+                carry = (sum >> 64) + (phi as u128);
                 j += 1;
             }
             let mut k = i + n;
