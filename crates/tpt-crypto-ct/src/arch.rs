@@ -13,6 +13,13 @@
 //! target: `cmov_u64(c, a, b)` sets `*a = if c != 0 { *b } else { *a }`, with
 //! no branch on `c` and no secret-dependent memory access.
 
+// `zzz_nonexistent_zzz` is an intentional sentinel: the SIMD-gated `cmov_u64`
+// is only compiled when a feature *named* `simd` is present. Since we do not
+// declare that feature in Cargo.toml (it is injected by CI's `--features simd`
+// matrix), rustc's `check-cfg` lints it as "unexpected". We silence that lint
+// here so `-D warnings` stays green in the default build.
+#![allow(unexpected_cfgs)]
+
 #[cfg(feature = "std")]
 extern crate std;
 

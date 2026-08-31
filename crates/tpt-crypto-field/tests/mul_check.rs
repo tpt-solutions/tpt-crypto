@@ -1,8 +1,11 @@
+//! Integration tests for `tpt-crypto-field`.
+//!
+//! These tests verify Ed25519 field multiplication and inversion.
+
 use tpt_crypto_field::Ed25519Field;
 
 fn to_int(f: Ed25519Field) -> [u8; 32] {
     let b = f.to_bytes();
-    // to_bytes is big-endian in bytes 16..48; reverse to little-endian.
     let mut out = [0u8; 32];
     for i in 0..32 {
         out[i] = b[16 + (31 - i)];

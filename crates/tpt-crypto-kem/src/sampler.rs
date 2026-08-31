@@ -28,11 +28,11 @@ pub fn sample_ntt(rho: &[u8; 32], i: u8, j: u8) -> Poly {
         let d1 = (a & 0x0FFF) as i32;
         let d2 = (a >> 12) as i32;
         if d1 < Q && ctr < N {
-            r[ctr] = d1 as i32;
+            r[ctr] = d1;
             ctr += 1;
         }
         if d2 < Q && ctr < N {
-            r[ctr] = d2 as i32;
+            r[ctr] = d2;
             ctr += 1;
         }
     }
@@ -114,11 +114,11 @@ mod tests {
         let seed = [7u8; 32];
         let mut p = [0i32; N];
         cbd(&mut p, &seed, 0, 2);
-        let sum: i32 = p.iter().map(|&x| x as i32).sum();
+        let sum: i32 = p.iter().copied().sum();
         // Small absolute total expected for centered binomial.
         assert!(sum.unsigned_abs() < 200);
         for &c in &p {
-            assert!((c as i32).unsigned_abs() <= 2);
+            assert!(c.unsigned_abs() <= 2);
         }
     }
 
@@ -127,7 +127,7 @@ mod tests {
         let rho = [42u8; 32];
         let p = sample_ntt(&rho, 0, 0);
         for &c in &p {
-            assert!(c >= 0 && c < Q as i32);
+            assert!((0..Q).contains(&c));
         }
     }
 }

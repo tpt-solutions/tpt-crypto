@@ -25,11 +25,9 @@ pub type Poly = [i32; N];
 ///
 /// Defined in [`crate::pke`] because it is heap-backed (the KEM modules require
 /// `alloc`); this module stays heap-free.
-
 // ---------------------------------------------------------------------------
 // Montgomery arithmetic
 // ---------------------------------------------------------------------------
-
 /// Barrett-free Montgomery reduction with `R = 2^16`.
 ///
 /// Returns `(a * R^{-1}) mod q` for `a` the product of two Montgomery-encoded
@@ -99,7 +97,7 @@ pub fn ntt(r: &mut Poly) {
             while j < start + len {
                 let t = fqmul(zeta, r[j + len]);
                 r[j + len] = r[j] - t;
-                r[j] = r[j] + t;
+                r[j] += t;
                 j += 1;
             }
             start += 2 * len;
@@ -136,8 +134,8 @@ pub fn invntt_tomont(r: &mut Poly) {
         }
         len <<= 1;
     }
-    for j in 0..N {
-        r[j] = fqmul(r[j], f);
+    for rj in r.iter_mut() {
+        *rj = fqmul(*rj, f);
     }
 }
 
@@ -164,15 +162,15 @@ pub fn poly_basemul(r: &mut Poly, a: &Poly, b: &Poly) {
 /// Convert a canonical polynomial into Montgomery form (`x ↦ x·R mod q`),
 /// matching the reference `poly_tomont`.
 pub fn poly_tomont(r: &mut Poly) {
-    for i in 0..N {
-        r[i] = montgomery_reduce(r[i].wrapping_mul(R2));
+    for ri in r.iter_mut() {
+        *ri = montgomery_reduce(ri.wrapping_mul(R2));
     }
 }
 
 /// Convert an NTT-domain polynomial from Montgomery form to canonical form.
 pub fn poly_frommont(r: &mut Poly) {
-    for i in 0..N {
-        r[i] = montgomery_reduce(r[i].wrapping_mul(MONT));
+    for ri in r.iter_mut() {
+        *ri = montgomery_reduce(ri.wrapping_mul(MONT));
     }
 }
 
@@ -224,8 +222,7 @@ pub fn poly_sub(a: &Poly, b: &Poly) -> Poly {
 pub fn compress(x: i32, d: usize) -> i32 {
     let x = freeze(x);
     let shifted = x << d;
-    let v = ((shifted + Q / 2) / Q) & ((1i32 << d) - 1);
-    v
+    ((shifted + Q / 2) / Q) & ((1i32 << d) - 1)
 }
 
 /// `Decompress_q(y, d)`: recover a `q`-wide coefficient from a `d`-bit value.
@@ -269,8 +266,8 @@ mod tests {
 
     fn rand_poly(state: &mut u64) -> Poly {
         let mut p = [0i32; N];
-        for i in 0..N {
-            p[i] = (lcg(state) % Q as u32) as i32;
+        for item in p.iter_mut().take(N) {
+            *item = (lcg(state) % Q as u32) as i32;
         }
         p
     }
@@ -315,7 +312,7 @@ mod tests {
             let x = (lcg(&mut s) % Q as u32) as i32;
             for d in [1usize, 4, 5, 10, 11, 12] {
                 let c = compress(x, d);
-                let back = decompress(c as i32, d);
+                let back = decompress(c, d);
                 // Decompress(Compress(x)) == x for all but the boundary cases
                 // handled by rounding; re-compress must be stable.
                 assert_eq!(compress(back, d), c);

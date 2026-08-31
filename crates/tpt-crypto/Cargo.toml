@@ -1,0 +1,72 @@
+[package]
+name = "tpt-crypto"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Facade crate: feature-gated re-exports of all tpt-crypto primitives."
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/tpt-crypto"
+keywords = ["cryptography", "no-std", "constant-time", "post-quantum", "facade"]
+categories = ["cryptography", "no-std"]
+
+[dependencies]
+tpt-crypto-core = { workspace = true, default-features = false, optional = true }
+tpt-crypto-ct = { workspace = true, default-features = false, optional = true }
+tpt-crypto-hash = { workspace = true, default-features = false, optional = true }
+tpt-crypto-field = { workspace = true, default-features = false, optional = true }
+tpt-crypto-aead = { workspace = true, default-features = false, optional = true }
+tpt-crypto-curve = { workspace = true, default-features = false, optional = true }
+tpt-crypto-kem = { workspace = true, default-features = false, optional = true }
+tpt-crypto-sig = { workspace = true, default-features = false, optional = true }
+tpt-crypto-zk = { workspace = true, default-features = false, optional = true }
+tpt-crypto-mpc = { workspace = true, default-features = false, optional = true }
+
+[features]
+default = ["std"]
+std = [
+    "alloc",
+    "tpt-crypto-core/std",
+    "tpt-crypto-ct/std",
+    "tpt-crypto-hash/std",
+    "tpt-crypto-aead/std",
+    "tpt-crypto-curve/std",
+    "tpt-crypto-kem/std",
+    "tpt-crypto-sig/std",
+    "tpt-crypto-mpc/std",
+]
+alloc = [
+    "tpt-crypto-core/alloc",
+    "tpt-crypto-hash/alloc",
+    "tpt-crypto-field/alloc",
+    "tpt-crypto-aead/alloc",
+    "tpt-crypto-curve/alloc",
+    "tpt-crypto-kem/alloc",
+    "tpt-crypto-sig/alloc",
+    "tpt-crypto-mpc/alloc",
+]
+classical = [
+    "tpt-crypto-hash",
+    "tpt-crypto-aead",
+    "tpt-crypto-field",
+    "tpt-crypto-curve",
+    "tpt-crypto-sig",
+]
+pq = [
+    "tpt-crypto-kem",
+    "tpt-crypto-sig",
+]
+bls = ["tpt-crypto-curve"]
+zk = ["tpt-crypto-zk"]
+mpc = ["tpt-crypto-mpc"]
+full = ["classical", "pq", "bls", "zk", "mpc"]
+
+[lints.clippy]
+all = "warn"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

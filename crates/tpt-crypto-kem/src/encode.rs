@@ -31,7 +31,7 @@ pub fn unpack_bits(inp: &[u8], n: usize, bits: usize) -> [u32; 256] {
     let mut out = [0u32; 256];
     let mut byte_off = 0usize;
     let mut bit_in = 0u32;
-    for i in 0..n {
+    for out_i in out.iter_mut().take(n) {
         let mut val = 0u32;
         for b in 0..bits {
             let bit = (inp[byte_off] >> bit_in) & 1;
@@ -42,7 +42,7 @@ pub fn unpack_bits(inp: &[u8], n: usize, bits: usize) -> [u32; 256] {
                 byte_off += 1;
             }
         }
-        out[i] = val;
+        *out_i = val;
     }
     out
 }

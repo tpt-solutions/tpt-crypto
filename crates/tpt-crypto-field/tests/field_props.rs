@@ -54,18 +54,6 @@ fn lsub(a: &[u64; N], b: &[u64; N]) -> ([u64; N], u8) {
     (out, borrow as u8)
 }
 
-fn lge(a: &[u64; N], b: &[u64; N]) -> bool {
-    for i in (0..N).rev() {
-        if a[i] > b[i] {
-            return true;
-        }
-        if a[i] < b[i] {
-            return false;
-        }
-    }
-    true
-}
-
 fn bit_length(a: &[u64]) -> i64 {
     for i in (0..a.len()).rev() {
         if a[i] != 0 {
@@ -77,7 +65,7 @@ fn bit_length(a: &[u64]) -> i64 {
 
 fn shl(a: &[u64], n: u32) -> Vec<u64> {
     let ls = (n / 64) as usize;
-    let bs = (n % 64) as u32;
+    let bs = n % 64;
     let mut out = vec![0u64; a.len() + ls + 1];
     for i in 0..a.len() {
         let v = a[i];
@@ -107,7 +95,7 @@ fn big_ge(a: &[u64], b: &[u64]) -> bool {
 fn big_sub(a: &[u64], b: &[u64]) -> Vec<u64> {
     let mut out = vec![0u64; a.len().max(b.len())];
     let mut borrow = 0i128;
-    for i in 0..out.len() {
+    for (i, item) in out.iter_mut().enumerate() {
         let av = *a.get(i).unwrap_or(&0) as i128;
         let bv = *b.get(i).unwrap_or(&0) as i128;
         let mut d = av - bv - borrow;
@@ -117,15 +105,9 @@ fn big_sub(a: &[u64], b: &[u64]) -> Vec<u64> {
         } else {
             borrow = 0;
         }
-        out[i] = d as u64;
+        *item = d as u64;
     }
     out
-}
-
-fn trim(v: &mut Vec<u64>) {
-    while v.last() == Some(&0) {
-        v.pop();
-    }
 }
 
 /// Reduce `x` (arbitrary width) modulo `m` (N limbs) via long division.
@@ -141,8 +123,8 @@ fn ref_reduce(x: &[u64], m: &[u64; N]) -> [u64; N] {
         bit -= 1;
     }
     let mut out = [0u64; N];
-    for i in 0..N {
-        out[i] = *r.get(i).unwrap_or(&0);
+    for (i, item) in out.iter_mut().enumerate().take(N) {
+        *item = *r.get(i).unwrap_or(&0);
     }
     out
 }
@@ -200,8 +182,7 @@ fn one_int() -> [u64; N] {
 // Canonical fixed-width big-endian byte encoding (matches `FieldElement::to_bytes`).
 fn to_canon(int: &[u64; N]) -> [u8; N * 8] {
     let mut out = [0u8; N * 8];
-    for limb in 0..N {
-        let v = int[limb];
+    for (limb, &v) in int.iter().enumerate().take(N) {
         let base = (N - 1 - limb) * 8;
         for b in 0..8 {
             out[base + b] = (v >> (56 - b * 8)) as u8;
@@ -212,13 +193,13 @@ fn to_canon(int: &[u64; N]) -> [u8; N * 8] {
 
 fn from_canon(bytes: &[u8; N * 8]) -> [u64; N] {
     let mut out = [0u64; N];
-    for limb in 0..N {
+    for (limb, item) in out.iter_mut().enumerate().take(N) {
         let base = (N - 1 - limb) * 8;
         let mut v = 0u64;
         for b in 0..8 {
             v = (v << 8) | (bytes[base + b] as u64);
         }
-        out[limb] = v;
+        *item = v;
     }
     out
 }
@@ -229,7 +210,7 @@ fn fe_from_int<P: FieldParams>(int: &[u64; N]) -> FieldElement<P> {
 
 /// Build a uniformly random field element (independent of any crate helper).
 fn rand_fe<P: FieldParams>(limbs: [u64; N]) -> FieldElement<P> {
-    let reduced = ref_reduce(&limbs.to_vec(), &P::MODULUS);
+    let reduced = ref_reduce(&limbs, &P::MODULUS);
     fe_from_int::<P>(&reduced)
 }
 
@@ -245,7 +226,7 @@ fn field_props<P: FieldParams>(a: [u64; N], b: [u64; N], c: [u64; N]) {
 
     let xi = from_canon(&x.to_bytes());
     let yi = from_canon(&y.to_bytes());
-    let zi = from_canon(&z.to_bytes());
+    let _zi = from_canon(&z.to_bytes());
 
     // to_bytes / from_bytes is a constant-time canonical round trip.
     assert_eq!(

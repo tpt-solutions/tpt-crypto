@@ -1,3 +1,8 @@
+//! Integration tests for `tpt-crypto-field`.
+//!
+//! These tests verify field element construction and basic arithmetic
+//! operations across the supported field parameter sets.
+
 use tpt_crypto_field::{CtEq, FieldElement, P256BaseParams};
 
 const MAX_LIMBS: usize = 6;
@@ -20,8 +25,6 @@ fn one_round_trip() {
     let one = FieldElement::<P256BaseParams>::from_u64(1);
     let bytes = one.to_bytes();
     eprintln!("one.to_bytes = {:?}", &bytes[..]);
-    // `to_bytes` returns the full MAX_LIMBS*8 container; the value 1 sits in the
-    // least-significant byte (big-endian), i.e. the very last byte.
     let mut expected = [0u8; MAX_LIMBS * 8];
     expected[MAX_LIMBS * 8 - 1] = 1;
     assert_eq!(&bytes[..], &expected[..], "encoding of 1 is wrong");

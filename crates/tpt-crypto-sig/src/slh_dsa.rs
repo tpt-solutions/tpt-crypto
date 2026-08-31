@@ -16,9 +16,9 @@ pub enum SlhDsaParam {
     /// SHA2-128s (small/fast).
     Sha2_128s,
     /// SHAKE-128f.
-    Shake_128f,
+    Shake128f,
     /// SHAKE-128s.
-    Shake_128s,
+    Shake128s,
 }
 
 /// A SLH-DSA public key (stub).

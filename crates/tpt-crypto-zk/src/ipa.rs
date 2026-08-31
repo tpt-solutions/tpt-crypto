@@ -99,7 +99,7 @@ impl InnerProductProof {
 
         // First iteration: fold the (constant) G/H factors into the generators.
         if n != 1 {
-            n = n / 2;
+            n /= 2;
             let (a_l, a_r) = a.split_at_mut(n);
             let (b_l, b_r) = b.split_at_mut(n);
             let (g_l, g_r) = g.split_at_mut(n);
@@ -164,7 +164,7 @@ impl InnerProductProof {
 
         // Remaining iterations: factors are now baked into the folded generators.
         while n != 1 {
-            n = n / 2;
+            n /= 2;
             let (a_l, a_r) = a.split_at_mut(n);
             let (b_l, b_r) = b.split_at_mut(n);
             let (g_l, g_r) = g.split_at_mut(n);

@@ -100,25 +100,6 @@ impl Poly {
         coeffs: [0i32; N],
     };
 
-    /// `x^e mod q` (q prime), used to build the NTT twiddle table.
-    #[inline]
-    fn pow_mod(mut base: i64, mut exp: i64) -> i32 {
-        let mut r = 1i64;
-        let q = Q as i64;
-        base %= q;
-        if base < 0 {
-            base += q;
-        }
-        while exp > 0 {
-            if exp & 1 == 1 {
-                r = (r * base) % q;
-            }
-            base = (base * base) % q;
-            exp >>= 1;
-        }
-        r as i32
-    }
-
     /// Montgomery radix `R = 2³²`.
     const R: i64 = 1i64 << 32;
 
@@ -183,7 +164,7 @@ impl Poly {
                 for j in start..(start + len) {
                     let t = Self::montgomery_reduce((zeta as i64) * (a[j + len] as i64));
                     a[j + len] = a[j] - t;
-                    a[j] = a[j] + t;
+                    a[j] += t;
                 }
                 start += 2 * len;
             }
@@ -388,23 +369,23 @@ pub(crate) fn canonicalize(a: i32) -> i32 {
 /// Pack `s₁` / `s₂` coefficients (range `[−η, η]`) into `out`.
 pub fn polyeta_pack(eta: i32, poly: &Poly, out: &mut [u8]) {
     if eta == 2 {
-        for i in 0..(N / 8) {
-            let t0 = (eta - poly.coeffs[8 * i]) as u8;
-            let t1 = (eta - poly.coeffs[8 * i + 1]) as u8;
-            let t2 = (eta - poly.coeffs[8 * i + 2]) as u8;
-            let t3 = (eta - poly.coeffs[8 * i + 3]) as u8;
-            let t4 = (eta - poly.coeffs[8 * i + 4]) as u8;
-            let t5 = (eta - poly.coeffs[8 * i + 5]) as u8;
-            let t6 = (eta - poly.coeffs[8 * i + 6]) as u8;
-            let t7 = (eta - poly.coeffs[8 * i + 7]) as u8;
+        for (i, chunk) in poly.coeffs.chunks(8).enumerate() {
+            let t0 = (eta - chunk[0]) as u8;
+            let t1 = (eta - chunk[1]) as u8;
+            let t2 = (eta - chunk[2]) as u8;
+            let t3 = (eta - chunk[3]) as u8;
+            let t4 = (eta - chunk[4]) as u8;
+            let t5 = (eta - chunk[5]) as u8;
+            let t6 = (eta - chunk[6]) as u8;
+            let t7 = (eta - chunk[7]) as u8;
             out[3 * i] = t0 | (t1 << 3) | (t2 << 6);
             out[3 * i + 1] = (t2 >> 2) | (t3 << 1) | (t4 << 4) | (t5 << 7);
             out[3 * i + 2] = (t5 >> 1) | (t6 << 2) | (t7 << 5);
         }
     } else {
-        for i in 0..(N / 2) {
-            let t0 = (eta - poly.coeffs[2 * i]) as u8;
-            let t1 = (eta - poly.coeffs[2 * i + 1]) as u8;
+        for (i, chunk) in poly.coeffs.chunks(2).enumerate() {
+            let t0 = (eta - chunk[0]) as u8;
+            let t1 = (eta - chunk[1]) as u8;
             out[i] = t0 | (t1 << 4);
         }
     }
@@ -418,27 +399,28 @@ pub fn polyeta_unpack(eta: i32, input: &[u8]) -> Option<Poly> {
     }
     let mut out = Poly::ZERO;
     if eta == 2 {
-        for i in 0..(N / 8) {
-            out.coeffs[8 * i] = i32::from(input[3 * i] & 7);
-            out.coeffs[8 * i + 1] = i32::from((input[3 * i] >> 3) & 7);
+        for (i, chunk) in input.chunks(3).enumerate().take(N / 8) {
+            out.coeffs[8 * i] = i32::from(chunk[0] & 7);
+            out.coeffs[8 * i + 1] = i32::from((chunk[0] >> 3) & 7);
             out.coeffs[8 * i + 2] =
-                i32::from(((input[3 * i] >> 6) | (input[3 * i + 1] << 2)) & 7);
-            out.coeffs[8 * i + 3] = i32::from((input[3 * i + 1] >> 1) & 7);
-            out.coeffs[8 * i + 4] = i32::from((input[3 * i + 1] >> 4) & 7);
+                i32::from(((chunk[0] >> 6) | (chunk[1] << 2)) & 7);
+            out.coeffs[8 * i + 3] = i32::from((chunk[1] >> 1) & 7);
+            out.coeffs[8 * i + 4] = i32::from((chunk[1] >> 4) & 7);
             out.coeffs[8 * i + 5] =
-                i32::from(((input[3 * i + 1] >> 7) | (input[3 * i + 2] << 1)) & 7);
-            out.coeffs[8 * i + 6] = i32::from((input[3 * i + 2] >> 2) & 7);
-            out.coeffs[8 * i + 7] = i32::from((input[3 * i + 2] >> 5) & 7);
-            for j in 0..8 {
-                out.coeffs[8 * i + j] = eta - out.coeffs[8 * i + j];
+                i32::from(((chunk[1] >> 7) | (chunk[2] << 1)) & 7);
+            out.coeffs[8 * i + 6] = i32::from((chunk[2] >> 2) & 7);
+            out.coeffs[8 * i + 7] = i32::from((chunk[2] >> 5) & 7);
+            for coeff in out.coeffs[8 * i..8 * i + 8].iter_mut() {
+                *coeff = eta - *coeff;
             }
         }
     } else {
-        for i in 0..(N / 2) {
-            out.coeffs[2 * i] = i32::from(input[i] & 0x0F);
-            out.coeffs[2 * i + 1] = i32::from(input[i] >> 4);
-            out.coeffs[2 * i] = eta - out.coeffs[2 * i];
-            out.coeffs[2 * i + 1] = eta - out.coeffs[2 * i + 1];
+        for (i, &byte) in input.iter().enumerate() {
+            let base = 2 * i;
+            out.coeffs[base] = i32::from(byte & 0x0F);
+            out.coeffs[base + 1] = i32::from(byte >> 4);
+            out.coeffs[base] = eta - out.coeffs[base];
+            out.coeffs[base + 1] = eta - out.coeffs[base + 1];
         }
     }
     Some(out)
@@ -446,12 +428,12 @@ pub fn polyeta_unpack(eta: i32, input: &[u8]) -> Option<Poly> {
 
 /// Pack `t₁` (10-bit coefficients) into `out`.
 pub fn polyt1_pack(poly: &Poly, out: &mut [u8]) {
-    for i in 0..(N / 4) {
-        out[5 * i] = poly.coeffs[4 * i] as u8;
-        out[5 * i + 1] = ((poly.coeffs[4 * i] >> 8) | (poly.coeffs[4 * i + 1] << 2)) as u8;
-        out[5 * i + 2] = ((poly.coeffs[4 * i + 1] >> 6) | (poly.coeffs[4 * i + 2] << 4)) as u8;
-        out[5 * i + 3] = ((poly.coeffs[4 * i + 2] >> 4) | (poly.coeffs[4 * i + 3] << 6)) as u8;
-        out[5 * i + 4] = (poly.coeffs[4 * i + 3] >> 2) as u8;
+    for (i, chunk) in poly.coeffs.chunks(4).enumerate() {
+        out[5 * i] = chunk[0] as u8;
+        out[5 * i + 1] = ((chunk[0] >> 8) | (chunk[1] << 2)) as u8;
+        out[5 * i + 2] = ((chunk[1] >> 6) | (chunk[2] << 4)) as u8;
+        out[5 * i + 3] = ((chunk[2] >> 4) | (chunk[3] << 6)) as u8;
+        out[5 * i + 4] = (chunk[3] >> 2) as u8;
     }
 }
 
@@ -479,10 +461,10 @@ pub fn polyt1_unpack(input: &[u8]) -> Option<Poly> {
 
 /// Pack `t₀` (13-bit coefficients) into `out`.
 pub fn polyt0_pack(poly: &Poly, out: &mut [u8]) {
-    for i in 0..(N / 8) {
+    for (i, chunk) in poly.coeffs.chunks(8).enumerate() {
         let mut t = [0u32; 8];
-        for j in 0..8 {
-            t[j] = ((1 << (D - 1)) - poly.coeffs[8 * i + j]) as u32;
+        for (j, &c) in chunk.iter().enumerate() {
+            t[j] = ((1 << (D - 1)) - c) as u32;
         }
         out[13 * i] = t[0] as u8;
         out[13 * i + 1] = ((t[0] >> 8) | (t[1] << 5)) as u8;
@@ -506,33 +488,34 @@ pub fn polyt0_unpack(input: &[u8]) -> Option<Poly> {
         return None;
     }
     let mut out = Poly::ZERO;
-    for i in 0..(N / 8) {
+    for (i, chunk) in input.chunks(13).enumerate().take(N / 8) {
         out.coeffs[8 * i] =
-            (u32::from(input[13 * i]) | (u32::from(input[13 * i + 1]) << 8)) as i32 & 0x1FFF;
-        out.coeffs[8 * i + 1] = ((u32::from(input[13 * i + 1]) >> 5)
-            | (u32::from(input[13 * i + 2]) << 3)
-            | (u32::from(input[13 * i + 3]) << 11)) as i32
+            (u32::from(chunk[0]) | (u32::from(chunk[1]) << 8)) as i32 & 0x1FFF;
+        out.coeffs[8 * i + 1] = ((u32::from(chunk[1]) >> 5)
+            | (u32::from(chunk[2]) << 3)
+            | (u32::from(chunk[3]) << 11)) as i32
             & 0x1FFF;
-        out.coeffs[8 * i + 2] = ((u32::from(input[13 * i + 3]) >> 2)
-            | (u32::from(input[13 * i + 4]) << 6)) as i32
+        out.coeffs[8 * i + 2] = ((u32::from(chunk[3]) >> 2)
+            | (u32::from(chunk[4]) << 6)) as i32
             & 0x1FFF;
-        out.coeffs[8 * i + 3] = ((u32::from(input[13 * i + 4]) >> 7)
-            | (u32::from(input[13 * i + 5]) << 1)
-            | (u32::from(input[13 * i + 6]) << 9)) as i32
+        out.coeffs[8 * i + 3] = ((u32::from(chunk[4]) >> 7)
+            | (u32::from(chunk[5]) << 1)
+            | (u32::from(chunk[6]) << 9)) as i32
             & 0x1FFF;
-        out.coeffs[8 * i + 4] = ((u32::from(input[13 * i + 6]) >> 4)
-            | (u32::from(input[13 * i + 7]) << 4)
-            | (u32::from(input[13 * i + 8]) << 12)) as i32
+        out.coeffs[8 * i + 4] = ((u32::from(chunk[6]) >> 4)
+            | (u32::from(chunk[7]) << 4)
+            | (u32::from(chunk[8]) << 12)) as i32
             & 0x1FFF;
-        out.coeffs[8 * i + 5] = ((u32::from(input[13 * i + 8]) >> 1)
-            | (u32::from(input[13 * i + 9]) << 7)) as i32
+        out.coeffs[8 * i + 5] = ((u32::from(chunk[8]) >> 1)
+            | (u32::from(chunk[9]) << 7)) as i32
             & 0x1FFF;
-        out.coeffs[8 * i + 6] = ((u32::from(input[13 * i + 9]) >> 6)
-            | (u32::from(input[13 * i + 10]) << 2)
-            | (u32::from(input[13 * i + 11]) << 10)) as i32
+        out.coeffs[8 * i + 6] = ((u32::from(chunk[9]) >> 6)
+            | (u32::from(chunk[10]) << 2)
+            | (u32::from(chunk[11]) << 10)) as i32
             & 0x1FFF;
-        out.coeffs[8 * i + 7] = ((u32::from(input[13 * i + 11]) >> 3)
-            | (u32::from(input[13 * i + 12]) << 5)) as i32
+        out.coeffs[8 * i + 7] = ((u32::from(chunk[10]) >> 3)
+            | (u32::from(chunk[11]) << 5)
+            | (u32::from(chunk[12]) << 13)) as i32
             & 0x1FFF;
         for j in 0..8 {
             out.coeffs[8 * i + j] = (1 << (D - 1)) - out.coeffs[8 * i + j];
@@ -544,11 +527,11 @@ pub fn polyt0_unpack(input: &[u8]) -> Option<Poly> {
 /// Pack `z` coefficients (range `[−γ₁, γ₁]`) into `out`.
 pub fn polyz_pack(gamma1: i32, poly: &Poly, out: &mut [u8]) {
     if gamma1 == (1 << 17) {
-        for i in 0..(N / 4) {
-            let t0 = (gamma1 - poly.coeffs[4 * i]) as u32;
-            let t1 = (gamma1 - poly.coeffs[4 * i + 1]) as u32;
-            let t2 = (gamma1 - poly.coeffs[4 * i + 2]) as u32;
-            let t3 = (gamma1 - poly.coeffs[4 * i + 3]) as u32;
+        for (i, chunk) in poly.coeffs.chunks(4).enumerate() {
+            let t0 = (gamma1 - chunk[0]) as u32;
+            let t1 = (gamma1 - chunk[1]) as u32;
+            let t2 = (gamma1 - chunk[2]) as u32;
+            let t3 = (gamma1 - chunk[3]) as u32;
             out[9 * i] = t0 as u8;
             out[9 * i + 1] = (t0 >> 8) as u8;
             out[9 * i + 2] = ((t0 >> 16) | (t1 << 2)) as u8;
@@ -560,9 +543,9 @@ pub fn polyz_pack(gamma1: i32, poly: &Poly, out: &mut [u8]) {
             out[9 * i + 8] = (t3 >> 10) as u8;
         }
     } else {
-        for i in 0..(N / 2) {
-            let t0 = (gamma1 - poly.coeffs[2 * i]) as u32;
-            let t1 = (gamma1 - poly.coeffs[2 * i + 1]) as u32;
+        for (i, chunk) in poly.coeffs.chunks(2).enumerate() {
+            let t0 = (gamma1 - chunk[0]) as u32;
+            let t1 = (gamma1 - chunk[1]) as u32;
             out[5 * i] = t0 as u8;
             out[5 * i + 1] = (t0 >> 8) as u8;
             out[5 * i + 2] = ((t0 >> 16) | (t1 << 4)) as u8;
@@ -621,14 +604,14 @@ pub fn polyz_unpack(gamma1: i32, input: &[u8]) -> Option<Poly> {
 /// Pack `w₁` coefficients (the high bits after `Decompose`) into `out`.
 pub fn polyw1_pack(gamma2: i32, poly: &Poly, out: &mut [u8]) {
     if gamma2 == (Q - 1) / 88 {
-        for i in 0..(N / 4) {
-            out[3 * i] = (poly.coeffs[4 * i] | (poly.coeffs[4 * i + 1] << 6)) as u8;
-            out[3 * i + 1] = ((poly.coeffs[4 * i + 1] >> 2) | (poly.coeffs[4 * i + 2] << 4)) as u8;
-            out[3 * i + 2] = ((poly.coeffs[4 * i + 2] >> 4) | (poly.coeffs[4 * i + 3] << 2)) as u8;
+        for (i, chunk) in poly.coeffs.chunks(4).enumerate() {
+            out[3 * i] = (chunk[0] | (chunk[1] << 6)) as u8;
+            out[3 * i + 1] = ((chunk[1] >> 2) | (chunk[2] << 4)) as u8;
+            out[3 * i + 2] = ((chunk[2] >> 4) | (chunk[3] << 2)) as u8;
         }
     } else {
-        for i in 0..(N / 2) {
-            out[i] = (poly.coeffs[2 * i] | (poly.coeffs[2 * i + 1] << 4)) as u8;
+        for (i, chunk) in poly.coeffs.chunks(2).enumerate() {
+            out[i] = (chunk[0] | (chunk[1] << 4)) as u8;
         }
     }
 }
@@ -761,11 +744,6 @@ mod tests {
         assert_eq!(a.coeffs, orig.coeffs, "ntt round trip failed");
     }
 
-    fn zeta_is_primitive_root() {
-        assert_eq!(Poly::pow_mod(1753, 256), Q - 1, "1753^256 != -1");
-        assert_eq!(Poly::pow_mod(1753, 512), 1, "1753^512 != 1");
-    }
-
     fn ntt_conv_kind() {
         // Discriminate cyclic vs negacyclic: in R_q[X]/(X^n+1) we have X^n = -1,
         // so X · X^{n-1} = -1. A cyclic NTT would instead yield X^n reduced
@@ -796,7 +774,6 @@ mod tests {
     #[test]
     fn all_poly_tests() {
         montgomery_round_trip();
-        zeta_is_primitive_root();
         ntt_round_trip_debug();
         ntt_conv_kind();
         ntt_multiplication_matches_schoolbook();

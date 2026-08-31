@@ -55,11 +55,11 @@ fn big_ge(a: &[u64], b: &[u64]) -> bool {
 fn sub_big(a: &[u64], b: &[u64]) -> Vec<u64> {
     let mut out = vec![0u64; a.len().max(b.len())];
     let mut borrow = 0u64;
-    for i in 0..out.len() {
+    for (i, out_i) in out.iter_mut().enumerate() {
         let av = *a.get(i).unwrap_or(&0);
         let bv = *b.get(i).unwrap_or(&0);
         let (d, bo) = av.overflowing_sub(bv.wrapping_add(borrow));
-        out[i] = d;
+        *out_i = d;
         borrow = bo as u64;
     }
     trim(&mut out);
@@ -68,7 +68,7 @@ fn sub_big(a: &[u64], b: &[u64]) -> Vec<u64> {
 
 fn shl_bits(a: &[u64], n: u32) -> Vec<u64> {
     let ls = (n / 64) as usize;
-    let bs = (n % 64) as u32;
+    let bs = n % 64;
     let mut out = vec![0u64; a.len() + ls + 1];
     for i in 0..a.len() {
         let v = a[i];
@@ -83,7 +83,7 @@ fn shl_bits(a: &[u64], n: u32) -> Vec<u64> {
 
 fn shr_bits(a: &[u64], n: u32) -> Vec<u64> {
     let ls = (n / 64) as usize;
-    let bs = (n % 64) as u32;
+    let bs = n % 64;
     let mut out = vec![0u64; a.len()];
     for i in 0..a.len() {
         if i >= ls {
@@ -100,7 +100,7 @@ fn shr_bits(a: &[u64], n: u32) -> Vec<u64> {
 
 fn add_pow2(q: &mut Vec<u64>, shift: u32) {
     let ls = (shift / 64) as usize;
-    let bs = (shift % 64) as u32;
+    let bs = shift % 64;
     if q.len() <= ls {
         q.resize(ls + 1, 0);
     }
@@ -151,11 +151,11 @@ impl Big {
         let n = self.0.len().max(o.0.len());
         let mut out = vec![0u64; n + 1];
         let mut carry = 0u128;
-        for i in 0..n {
+        for (i, out_i) in out.iter_mut().enumerate().take(n) {
             let av = *self.0.get(i).unwrap_or(&0) as u128;
             let bv = *o.0.get(i).unwrap_or(&0) as u128;
             let s = av + bv + carry;
-            out[i] = s as u64;
+            *out_i = s as u64;
             carry = s >> 64;
         }
         out[n] = carry as u64;

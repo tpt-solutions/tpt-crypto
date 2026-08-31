@@ -76,8 +76,8 @@ pub fn kpke_keygen<P: MlKemParams>(d: &[u8; 32]) -> Vec<u8> {
     }
     for i in 0..P::K {
         let mut c = [0i32; N];
-        for k in 0..N {
-            c[k] = freeze(t_hat.vec[i][k] as i32);
+        for (k, ck) in c.iter_mut().enumerate() {
+            *ck = freeze(t_hat.vec[i][k]);
         }
         t_hat.vec[i] = c;
     }

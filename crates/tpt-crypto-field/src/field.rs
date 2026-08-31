@@ -99,7 +99,7 @@ impl<P: FieldParams> FieldElement<P> {
             let mut carry: u128 = 0;
             let mut j = 0;
             while j < n {
-                let plo = (ai as u64).wrapping_mul(b[j]);
+                let plo = ai.wrapping_mul(b[j]);
                 let phi = (((ai as u128) * (b[j] as u128)) >> 64) as u64;
                 let sum = (t[i + j] as u128) + (plo as u128) + carry;
                 t[i + j] = sum as u64;
@@ -185,7 +185,7 @@ impl<P: FieldParams> FieldElement<P> {
 
     /// Decode from Montgomery form to a plain integer (`< p`).
     #[inline]
-    fn to_integer(&self) -> [u64; MAX_LIMBS] {
+    fn to_integer(self) -> [u64; MAX_LIMBS] {
         let mut one = [0u64; MAX_LIMBS];
         one[0] = 1;
         Self::mont_mul(&self.limbs, &one)
@@ -425,7 +425,7 @@ impl<P: FieldParams> FieldElement<P> {
     #[must_use]
     pub fn invert(&self) -> CtOption<Self> {
         let r = self.pow(&Self::MOD_MINUS_2);
-        CtOption::new(r, self.is_zero().not())
+        CtOption::new(r, self.is_zero().invert())
     }
 
     /// Square root via Tonelli–Shanks. Returns `Some(s)` with `s^2 == self` iff
@@ -482,7 +482,7 @@ impl<P: FieldParams> FieldElement<P> {
             let b_new = b.mul(&c_new);
             // Apply the update only while we have not yet reached 1; applying once
             // `b == 1` would corrupt an already-correct `x`.
-            let apply = done.not().and(b_is_one.not());
+            let apply = done.invert().and(b_is_one.invert());
             x = Self::ct_select_fe(&x, &x_new, apply);
             c = Self::ct_select_fe(&c, &c_new, apply);
             b = Self::ct_select_fe(&b, &b_new, apply);
@@ -821,7 +821,7 @@ mod const_audit {
                 "BASE x^2 plain tail = {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
                 bfb[40], bfb[41], bfb[42], bfb[43], bfb[44], bfb[45], bfb[46], bfb[47]
             );
-            let p255: [u64; 5] = [
+            let _p255: [u64; 5] = [
                 0xFFFF_FFFF_FFFF_FFED,
                 0xFFFF_FFFF_FFFF_FFFF,
                 0xFFFF_FFFF_FFFF_FFFF,
@@ -1012,7 +1012,7 @@ mod const_audit {
             c = sum >> 64;
             let m = (t[0].wrapping_mul(mu)) as u128;
             let s0 = (t[0] as u128) + m * (p[0] as u128);
-            c = c + (s0 >> 64);
+            c += s0 >> 64;
             let mut j = 1;
             while j < n {
                 let mp = m * (p[j] as u128);

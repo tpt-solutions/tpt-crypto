@@ -215,7 +215,7 @@ pub(crate) const fn double_mod(a: &[u64; MAX_LIMBS], m: &[u64; MAX_LIMBS]) -> [u
 pub(crate) const fn shl_bits(m: &[u64; MAX_LIMBS], bits: u32) -> [u64; 2 * MAX_LIMBS] {
     let mut out = [0u64; 2 * MAX_LIMBS];
     let limb_shift = (bits / 64) as usize;
-    let bit_shift = (bits % 64) as u32;
+    let bit_shift = bits % 64;
     let mut i = 0;
     while i < MAX_LIMBS {
         let v = m[i];
@@ -395,7 +395,7 @@ pub(crate) const fn mod_minus_2(m: &[u64; MAX_LIMBS]) -> [u64; MAX_LIMBS] {
 pub(crate) const fn shr_limbs(a: &[u64; MAX_LIMBS], bits: u32) -> [u64; MAX_LIMBS] {
     let mut out = [0u64; MAX_LIMBS];
     let ls = (bits / 64) as usize;
-    let bs = (bits % 64) as u32;
+    let bs = bits % 64;
     let mut i = 0;
     while i < MAX_LIMBS {
         if i + ls < MAX_LIMBS {

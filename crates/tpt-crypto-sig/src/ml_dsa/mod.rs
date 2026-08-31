@@ -316,13 +316,13 @@ fn unpack_hint<P: MlDsaParams>(inp: &[u8], h: &mut [Poly]) {
     for p in h.iter_mut() {
         *p = Poly::ZERO;
     }
-    for i in 0..P::K {
+    for (i, h_poly) in h.iter_mut().enumerate().take(P::K) {
         let start = if i == 0 { 0 } else { inp[P::OMEGA + i - 1] as usize };
         let end = inp[P::OMEGA + i] as usize;
-        for idx in start..end {
-            let j = inp[idx] as usize;
+        for &j in &inp[start..end] {
+            let j = j as usize;
             if j < N {
-                h[i].coeffs[j] = 1;
+                h_poly.coeffs[j] = 1;
             }
         }
     }
@@ -336,13 +336,12 @@ where
     let mut rho = [0u8; 32];
     rho.copy_from_slice(&pk.bytes[..32]);
     let mut t1 = <P::VecK as PolyArray>::zeroed();
-    let mut off = 32;
     let t1s = t1.as_poly_slice_mut();
-    for i in 0..P::K {
+    for (idx, t1_poly) in t1s.iter_mut().enumerate().take(P::K) {
         let mut buf = [0u8; POLYT1_PACKED];
+        let off = 32 + idx * POLYT1_PACKED;
         buf.copy_from_slice(&pk.bytes[off..off + POLYT1_PACKED]);
-        off += POLYT1_PACKED;
-        t1s[i] = polyt1_unpack(&buf).expect("t1 unpack");
+        *t1_poly = polyt1_unpack(&buf).expect("t1 unpack");
     }
     (rho, t1)
 }
@@ -378,18 +377,18 @@ where
         sk_bytes[off..off + 64].copy_from_slice(&[0u8; 64]); // tr placeholder
         off += 64;
         let s1_slice = s1.as_poly_slice();
-        for i in 0..P::L {
+        for s1_poly in s1_slice.iter().take(P::L) {
             let n = if P::ETA == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED };
             let mut buf = [0u8; POLYETA4_PACKED];
-            polyeta_pack(P::ETA, &s1_slice[i], &mut buf);
+            polyeta_pack(P::ETA, s1_poly, &mut buf);
             sk_bytes[off..off + n].copy_from_slice(&buf[..n]);
             off += n;
         }
         let s2_slice = s2.as_poly_slice();
-        for i in 0..P::K {
+        for s2_poly in s2_slice.iter().take(P::K) {
             let n = if P::ETA == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED };
             let mut buf = [0u8; POLYETA4_PACKED];
-            polyeta_pack(P::ETA, &s2_slice[i], &mut buf);
+            polyeta_pack(P::ETA, s2_poly, &mut buf);
             sk_bytes[off..off + n].copy_from_slice(&buf[..n]);
             off += n;
         }
@@ -409,9 +408,9 @@ where
     {
         let t_slice = t.as_poly_slice_mut();
         let s2_slice = s2.as_poly_slice();
-        for i in 0..P::K {
-            t_slice[i].add_assign(&s2_slice[i]);
-            t_slice[i].reduce();
+        for (t_poly, s2_poly) in t_slice.iter_mut().zip(s2_slice.iter()).take(P::K) {
+            t_poly.add_assign(s2_poly);
+            t_poly.reduce();
         }
     }
 
@@ -422,8 +421,13 @@ where
         let t_slice = t.as_poly_slice();
         let t1_slice = t1.as_poly_slice_mut();
         let t0_slice = t0.as_poly_slice_mut();
-        for i in 0..P::K {
-            t_slice[i].power2round_into(&mut t1_slice[i], &mut t0_slice[i]);
+        for ((t_poly, t1_poly), t0_poly) in t_slice
+            .iter()
+            .zip(t1_slice.iter_mut())
+            .zip(t0_slice.iter_mut())
+            .take(P::K)
+        {
+            t_poly.power2round_into(t1_poly, t0_poly);
         }
     }
 
@@ -433,9 +437,9 @@ where
     {
         let t1_slice = t1.as_poly_slice();
         let mut off = 32;
-        for i in 0..P::K {
+        for t1_poly in t1_slice.iter().take(P::K) {
             let mut buf = [0u8; POLYT1_PACKED];
-            polyt1_pack(&t1_slice[i], &mut buf);
+            polyt1_pack(t1_poly, &mut buf);
             pk_bytes[off..off + POLYT1_PACKED].copy_from_slice(&buf);
             off += POLYT1_PACKED;
         }
@@ -454,9 +458,9 @@ where
         let n1 = if P::ETA == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED };
         off += P::L * n1 + P::K * n1;
         let t0_slice = t0.as_poly_slice();
-        for i in 0..P::K {
+        for t0_poly in t0_slice.iter().take(P::K) {
             let mut buf = [0u8; POLYT0_PACKED];
-            polyt0_pack(&t0_slice[i], &mut buf);
+            polyt0_pack(t0_poly, &mut buf);
             sk_bytes[off..off + POLYT0_PACKED].copy_from_slice(&buf);
             off += POLYT0_PACKED;
         }
@@ -529,19 +533,19 @@ where
     {
         let mut off = 128;
         let s1s = s1.as_poly_slice_mut();
-        for i in 0..P::L {
+        for s1_poly in s1s.iter_mut().take(P::L) {
             let n = if P::ETA == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED };
             let mut buf = [0u8; POLYETA4_PACKED];
             buf[..n].copy_from_slice(&sk.bytes[off..off + n]);
-            s1s[i] = polyeta_unpack(P::ETA, &buf[..n]).ok_or(Error::InvalidEncoding)?;
+            *s1_poly = polyeta_unpack(P::ETA, &buf[..n]).ok_or(Error::InvalidEncoding)?;
             off += n;
         }
         let s2s = s2.as_poly_slice_mut();
-        for i in 0..P::K {
+        for s2_poly in s2s.iter_mut().take(P::K) {
             let n = if P::ETA == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED };
             let mut buf = [0u8; POLYETA4_PACKED];
             buf[..n].copy_from_slice(&sk.bytes[off..off + n]);
-            s2s[i] = polyeta_unpack(P::ETA, &buf[..n]).ok_or(Error::InvalidEncoding)?;
+            *s2_poly = polyeta_unpack(P::ETA, &buf[..n]).ok_or(Error::InvalidEncoding)?;
             off += n;
         }
         // t₀ follows but is not needed by the signer.
@@ -580,8 +584,13 @@ where
             let w_slice = w.as_poly_slice();
             let w1_slice = w1.as_poly_slice_mut();
             let w0_slice = w0.as_poly_slice_mut();
-            for i in 0..P::K {
-                decompose_poly(P::GAMMA2, &w_slice[i], &mut w1_slice[i], &mut w0_slice[i]);
+            for ((w1_poly, w0_poly), w_poly) in w1_slice
+                .iter_mut()
+                .zip(w0_slice.iter_mut())
+                .zip(w_slice.iter())
+                .take(P::K)
+            {
+                decompose_poly(P::GAMMA2, w_poly, w1_poly, w0_poly);
             }
         }
 
@@ -590,10 +599,10 @@ where
         {
             let w1_slice = w1.as_poly_slice();
             let mut off = 0;
-            for i in 0..P::K {
+            for w1_poly in w1_slice.iter().take(P::K) {
                 let n = polyw1_len(P::GAMMA2);
                 let mut buf = [0u8; POLYW1_PACKED_MAX];
-                polyw1_pack(P::GAMMA2, &w1_slice[i], &mut buf[..n]);
+                polyw1_pack(P::GAMMA2, w1_poly, &mut buf[..n]);
                 w1_packed[off..off + n].copy_from_slice(&buf[..n]);
                 off += n;
             }
@@ -632,15 +641,20 @@ where
             let r0_slice = r0.as_poly_slice_mut();
             let w0_slice = w0.as_poly_slice();
             let s2_slice = s2hat.as_poly_slice();
-            for i in 0..P::K {
+            for ((r0_poly, w0_poly), s2_poly) in r0_slice
+                .iter_mut()
+                .zip(w0_slice.iter())
+                .zip(s2_slice.iter())
+                .take(P::K)
+            {
                 let mut t = Poly::ZERO;
-                t.pointwise(&chat, &s2_slice[i]);
+                t.pointwise(&chat, s2_poly);
                 t.inv_ntt();
                 t.reduce();
                 t.canonicalize();
-                r0_slice[i] = w0_slice[i];
-                r0_slice[i].sub_assign(&t);
-                r0_slice[i].reduce();
+                *r0_poly = *w0_poly;
+                r0_poly.sub_assign(&t);
+                r0_poly.reduce();
             }
         }
         if inf_norm(r0.as_poly_slice()) >= P::GAMMA2 - P::BETA {
@@ -653,10 +667,11 @@ where
         {
             let h_slice = h.as_poly_slice_mut();
             let r0_slice = r0.as_poly_slice();
-            for i in 0..P::K {
-                for j in 0..N {
-                    let hb = make_hint(-c.coeffs[j], r0_slice[i].coeffs[j], P::GAMMA2);
-                    h_slice[i].coeffs[j] = if bool::from(hb) { 1 } else { 0 };
+            let c_coeffs = c.coeffs;
+            for (h_poly, r0_poly) in h_slice.iter_mut().zip(r0_slice.iter()).take(P::K) {
+                for (j, (h_c, r0_c)) in h_poly.coeffs.iter_mut().zip(r0_poly.coeffs.iter()).enumerate() {
+                    let hb = make_hint(-c_coeffs[j], *r0_c, P::GAMMA2);
+                    *h_c = if bool::from(hb) { 1 } else { 0 };
                 }
             }
         }
@@ -667,10 +682,10 @@ where
         {
             let z_slice = z.as_poly_slice();
             let mut off = 32;
-            for i in 0..P::L {
+            for z_poly in z_slice.iter().take(P::L) {
                 let n = if P::GAMMA1 == (1 << 17) { POLYZ17_PACKED } else { POLYZ19_PACKED };
                 let mut buf = [0u8; POLYZ19_PACKED];
-                crate::poly::polyz_pack(P::GAMMA1, &z_slice[i], &mut buf[..n]);
+                crate::poly::polyz_pack(P::GAMMA1, z_poly, &mut buf[..n]);
                 sig_bytes[off..off + n].copy_from_slice(&buf[..n]);
                 off += n;
             }
@@ -753,11 +768,11 @@ where
     {
         let mut off = 32;
         let zs = z.as_poly_slice_mut();
-        for i in 0..P::L {
+        for z_poly in zs.iter_mut().take(P::L) {
             let n = if P::GAMMA1 == (1 << 17) { POLYZ17_PACKED } else { POLYZ19_PACKED };
             let mut buf = [0u8; POLYZ19_PACKED];
             buf[..n].copy_from_slice(&sig.bytes[off..off + n]);
-            zs[i] = crate::poly::polyz_unpack(P::GAMMA1, &buf[..n]).ok_or(Error::InvalidEncoding)?;
+            *z_poly = crate::poly::polyz_unpack(P::GAMMA1, &buf[..n]).ok_or(Error::InvalidEncoding)?;
             off += n;
         }
         let hbuf = &sig.bytes[off..off + P::OMEGA + P::K];
@@ -796,14 +811,14 @@ where
         let mut t1d_ntt = t1d;
         to_ntt(t1d_ntt.as_poly_slice_mut());
         let t1d_slice = t1d_ntt.as_poly_slice();
-        for i in 0..P::K {
+        for (w_poly, t1d_poly) in w_slice.iter_mut().zip(t1d_slice.iter()).take(P::K) {
             let mut t = Poly::ZERO;
-            t.pointwise(&chat, &t1d_slice[i]);
+            t.pointwise(&chat, t1d_poly);
             t.inv_ntt();
             t.reduce();
             t.canonicalize();
-            w_slice[i].sub_assign(&t);
-            w_slice[i].reduce();
+            w_poly.sub_assign(&t);
+            w_poly.reduce();
         }
     }
 
@@ -813,10 +828,15 @@ where
         let w_slice = w.as_poly_slice();
         let w1_slice = w1_rec.as_poly_slice_mut();
         let h_slice = h.as_poly_slice();
-        for i in 0..P::K {
-            for j in 0..N {
-                let hb = Choice::from_u8_lsb(h_slice[i].coeffs[j] as u8);
-                w1_slice[i].coeffs[j] = use_hint(hb, w_slice[i].coeffs[j], P::GAMMA2);
+        for ((w1_poly, w_poly), h_poly) in w1_slice
+            .iter_mut()
+            .zip(w_slice.iter())
+            .zip(h_slice.iter())
+            .take(P::K)
+        {
+            for (j, (w1_c, w_c)) in w1_poly.coeffs.iter_mut().zip(w_poly.coeffs.iter()).enumerate() {
+                let hb = Choice::from_u8_lsb(h_poly.coeffs[j] as u8);
+                *w1_c = use_hint(hb, *w_c, P::GAMMA2);
             }
         }
     }
@@ -826,10 +846,10 @@ where
     {
         let w1_slice = w1_rec.as_poly_slice();
         let mut off = 0;
-        for i in 0..P::K {
+        for w1_poly in w1_slice.iter().take(P::K) {
             let n = polyw1_len(P::GAMMA2);
             let mut buf = [0u8; POLYW1_PACKED_MAX];
-            polyw1_pack(P::GAMMA2, &w1_slice[i], &mut buf[..n]);
+            polyw1_pack(P::GAMMA2, w1_poly, &mut buf[..n]);
             w1_packed[off..off + n].copy_from_slice(&buf[..n]);
             off += n;
         }

@@ -1,3 +1,8 @@
+//! Integration tests for `tpt-crypto-field`.
+//!
+//! These tests verify field element construction and basic arithmetic
+//! operations across the supported field parameter sets.
+
 use tpt_crypto_field::{CtEq, FieldElement};
 use tpt_crypto_field::params::P256BaseParams;
 

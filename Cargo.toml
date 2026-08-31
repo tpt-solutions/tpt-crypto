@@ -22,6 +22,8 @@ tpt-crypto-hash = { version = "0.1.0", path = "crates/tpt-crypto-hash", default-
 tpt-crypto-aead = { version = "0.1.0", path = "crates/tpt-crypto-aead", default-features = false }
 tpt-crypto-sig = { version = "0.1.0", path = "crates/tpt-crypto-sig", default-features = false }
 tpt-crypto-mpc = { version = "0.1.0", path = "crates/tpt-crypto-mpc", default-features = false }
+tpt-crypto-zk = { version = "0.1.0", path = "crates/tpt-crypto-zk", default-features = false }
+tpt-crypto = { version = "0.1.0", path = "crates/tpt-crypto", default-features = false }
 digest = { version = "0.10", default-features = false }
 proptest = "1"
 

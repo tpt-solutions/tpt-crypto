@@ -844,6 +844,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
 
 [[package]]
+name = "tpt-crypto"
+version = "0.1.0"
+dependencies = [
+ "tpt-crypto-aead",
+ "tpt-crypto-core",
+ "tpt-crypto-ct",
+ "tpt-crypto-curve",
+ "tpt-crypto-field",
+ "tpt-crypto-hash",
+ "tpt-crypto-kem",
+ "tpt-crypto-mpc",
+ "tpt-crypto-sig",
+ "tpt-crypto-zk",
+]
+
+[[package]]
 name = "tpt-crypto-aead"
 version = "0.1.0"
 dependencies = [

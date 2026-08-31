@@ -137,8 +137,8 @@ impl EdwardsPoint {
     pub fn mul(&self, scalar: &[u8; 32]) -> Self {
         let mut table = [EdwardsPoint::identity(); 16];
         let mut p = *self;
-        for i in 1..16 {
-            table[i] = p;
+        for tbl in table.iter_mut().skip(1) {
+            *tbl = p;
             p = p.add(self);
         }
         let mut acc = EdwardsPoint::identity();
@@ -146,9 +146,9 @@ impl EdwardsPoint {
         for i in (0..64).rev() {
             let byte = scalar[i / 2] as usize;
             let nibble = if (i % 2) == 0 {
-                (byte & 0x0F) as usize
+                byte & 0x0F
             } else {
-                ((byte >> 4) & 0x0F) as usize
+                (byte >> 4) & 0x0F
             };
             for _ in 0..4 {
                 acc = acc.double();

@@ -6,6 +6,8 @@
 //! trips. Random inputs come from a seeded xorshift so the suite is deterministic
 //! and needs no `proptest`/network dependency.
 
+use std::ops::Not;
+
 use tpt_crypto_field::{
     Bls12381Fp, Bls12381FpParams, Bls12381Fr, Bls12381FrParams, Choice, CtEq, Field, FieldElement,
     FieldParams, Fp12, Fp2, Fp6, P256Base, P256BaseParams, P256Scalar, P256ScalarParams, P384Base,
@@ -87,7 +89,7 @@ fn ref_mod(a: &[u64; 2 * MAX], m: &[u64; MAX]) -> [u64; MAX] {
         let shift = bit - (mbits - 1);
         let mut sm = [0u64; 2 * MAX];
         let ls = (shift / 64) as usize;
-        let bs = (shift % 64) as u32;
+        let bs = shift % 64;
         for i in 0..MAX {
             let v = m[i];
             if bs > 0 {
@@ -133,6 +135,7 @@ fn ref_mul_mod(a: &[u64; MAX], b: &[u64; MAX], m: &[u64; MAX]) -> [u64; MAX] {
     ref_mod(&t, m)
 }
 
+#[allow(dead_code)]
 fn ref_pow_mod(base: &[u64; MAX], exp: &[u64; MAX], m: &[u64; MAX]) -> [u64; MAX] {
     let mut result = [0u64; MAX];
     result[0] = 1;
@@ -164,6 +167,7 @@ impl Rng {
         self.0 = x;
         x.wrapping_mul(0x2545F4914F6CDD1D)
     }
+    #[allow(dead_code)]
     fn below(&mut self, m: u64) -> u64 {
         // simple rejection for values < m (m is small here).
         loop {
@@ -426,7 +430,7 @@ fn fp6_fp12_properties() {
 fn noncanonical_rejection() {
     // A 48-byte value with a set high byte is >= 2^256 > p for the 256-bit
     // fields, and >= p for the 384-bit fields as well; all must be rejected.
-    let mut bad = [0xFFu8; 48];
+    let bad = [0xFFu8; 48];
     assert!(P256Base::from_bytes(&bad).is_none().into_bool());
     assert!(Bls12381Fr::from_bytes(&bad).is_none().into_bool());
     assert!(P384Base::from_bytes(&bad).is_none().into_bool());

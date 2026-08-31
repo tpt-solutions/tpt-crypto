@@ -222,7 +222,7 @@ fn shift_rows(state: &mut [u32; 4]) {
         }
     }
     for r in 1..4 {
-        let row: [u8; 4] = [b[4 * 0 + r], b[4 * 1 + r], b[4 * 2 + r], b[4 * 3 + r]];
+        let row: [u8; 4] = [b[r], b[4 + r], b[8 + r], b[12 + r]];
         for col in 0..4 {
             b[4 * col + r] = row[(col + 4 - r) % 4];
         }
@@ -263,12 +263,12 @@ fn mix_columns(state: &mut [u32; 4]) {
 #[inline(always)]
 fn aesni_encrypt(core: &Aes, block: &[u8; 16]) -> [u8; 16] {
     let mut rk: [arch::Block128; 15] = [arch::Block128 { lo: 0, hi: 0 }; 15];
-    for i in 0..=core.rounds {
+    for (i, item) in rk.iter_mut().enumerate().take(core.rounds + 1) {
         let mut kb = [0u8; 16];
         for j in 0..4 {
             kb[4 * j..4 * j + 4].copy_from_slice(&core.rk[4 * i + j].to_be_bytes());
         }
-        rk[i] = arch::Block128::from_le_bytes(kb);
+        *item = arch::Block128::from_le_bytes(kb);
     }
     let b = arch::Block128::from_le_bytes(*block);
     let out = arch::aes_ni_encrypt_block_safe(&rk[..=core.rounds], b)

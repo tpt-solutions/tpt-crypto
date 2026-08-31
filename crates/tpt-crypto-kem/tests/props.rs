@@ -32,17 +32,17 @@ fn round_trip<P: MlKemParams>(rng: &mut TestRng) -> Result<(), TestCaseError> {
 proptest! {
     #[test]
     fn round_trip_512(seed in any::<u64>()) {
-        round_trip::<MlKem512>(&mut TestRng(seed.wrapping_add(1)));
+        let _ = round_trip::<MlKem512>(&mut TestRng(seed.wrapping_add(1)));
     }
 
     #[test]
     fn round_trip_768(seed in any::<u64>()) {
-        round_trip::<MlKem768>(&mut TestRng(seed.wrapping_add(2)));
+        let _ = round_trip::<MlKem768>(&mut TestRng(seed.wrapping_add(2)));
     }
 
     #[test]
     fn round_trip_1024(seed in any::<u64>()) {
-        round_trip::<MlKem1024>(&mut TestRng(seed.wrapping_add(3)));
+        let _ = round_trip::<MlKem1024>(&mut TestRng(seed.wrapping_add(3)));
     }
 
     // Malformed ciphertext: a wrong-length input is rejected without panic, and a

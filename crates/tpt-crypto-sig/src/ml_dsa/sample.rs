@@ -180,12 +180,12 @@ pub fn expand_s<P: MlDsaParams>(rhoprime: &[u8; 64]) -> (P::VecL, P::VecK) {
     let mut s1 = P::VecL::zeroed();
     let mut s2 = P::VecK::zeroed();
     let s1m = s1.as_poly_slice_mut();
-    for i in 0..P::L {
-        s1m[i] = poly_uniform_eta(rhoprime, i as u16, P::ETA);
+    for (i, s1m_i) in s1m.iter_mut().enumerate().take(P::L) {
+        s1m_i.clone_from(&poly_uniform_eta(rhoprime, i as u16, P::ETA));
     }
     let s2m = s2.as_poly_slice_mut();
-    for i in 0..P::K {
-        s2m[i] = poly_uniform_eta(rhoprime, (P::L as u16) + i as u16, P::ETA);
+    for (i, s2m_i) in s2m.iter_mut().enumerate().take(P::K) {
+        s2m_i.clone_from(&poly_uniform_eta(rhoprime, (P::L as u16) + i as u16, P::ETA));
     }
     (s1, s2)
 }
@@ -194,9 +194,9 @@ pub fn expand_s<P: MlDsaParams>(rhoprime: &[u8; 64]) -> (P::VecL, P::VecK) {
 pub fn expand_mask<P: MlDsaParams>(rhoprime: &[u8; 64], kappa: u16) -> P::VecL {
     let mut y = P::VecL::zeroed();
     let ym = y.as_poly_slice_mut();
-    for i in 0..P::L {
+    for (i, ym_i) in ym.iter_mut().enumerate().take(P::L) {
         let nonce = (P::L as u16).wrapping_mul(kappa) + i as u16;
-        ym[i] = poly_uniform_gamma1(rhoprime, nonce, P::GAMMA1);
+        *ym_i = poly_uniform_gamma1(rhoprime, nonce, P::GAMMA1);
     }
     y
 }

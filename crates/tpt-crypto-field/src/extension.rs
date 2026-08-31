@@ -103,7 +103,7 @@ impl Field for Fp2 {
     fn invert(&self) -> CtOption<Self> {
         let info = tower_info(2);
         let r = self.pow_vartime(&info.q_minus_2);
-        CtOption::new(r, self.is_zero().not())
+        CtOption::new(r, self.is_zero().invert())
     }
     #[inline]
     fn pow_vartime(&self, exp: &[u64]) -> Self {
@@ -231,7 +231,7 @@ impl Field for Fp6 {
     fn invert(&self) -> CtOption<Self> {
         let info = tower_info(6);
         let r = self.pow_vartime(&info.q_minus_2);
-        CtOption::new(r, self.is_zero().not())
+        CtOption::new(r, self.is_zero().invert())
     }
     #[inline]
     fn pow_vartime(&self, exp: &[u64]) -> Self {
@@ -344,7 +344,7 @@ impl Field for Fp12 {
     fn invert(&self) -> CtOption<Self> {
         let info = tower_info(12);
         let r = self.pow_vartime(&info.q_minus_2);
-        CtOption::new(r, self.is_zero().not())
+        CtOption::new(r, self.is_zero().invert())
     }
     #[inline]
     fn pow_vartime(&self, exp: &[u64]) -> Self {
@@ -418,7 +418,7 @@ fn tonelli_shanks_field<F: Field + CtEq>(
         let x_new = x.mul(&d);
         let c_new = d.square();
         let b_new = b.mul(&c_new);
-        let apply = done.not();
+        let apply = done.invert();
         x = F::ct_select(&x, &x_new, apply);
         c = F::ct_select(&c, &c_new, apply);
         b = F::ct_select(&b, &b_new, apply);

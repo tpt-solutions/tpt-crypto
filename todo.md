@@ -213,9 +213,16 @@ variant (feature-gated re-exports instead of steps 3–6).
       `mul` matches `tpt-math-exact` mod P
       — `tests/field_props.rs` now exists (`proptest` is a workspace dep).
       P-256 (base+scalar), BLS12-381 (Fp+Fr) pass; `p384_base_props` and
-      `p384_scalar_props` currently **FAIL** (`field_props.proptest-regressions`).
-      Scratch `tests/dbg_check.rs` + `consts::dbg_consts` trace tests are
-      debugging aids, prune before publish.
+      `p384_scalar_props` still **FAIL** but are much closer after two fixes in
+      the working tree: (a) `P384BaseParams` low modulus limb was
+      `0x0000_0000_FFFF_FFFF`, corrected to `0x0000_0001_FFFF_FFFF`
+      (p = 2^384 − 2^128 − 2^96 + 2^32 − 1); (b) the CIOS `mont_mul` operand-scan
+      and reduction loops let a `u128` carry wrap on 6-limb fields — now split
+      each 128-bit partial product into low/high limbs. Remaining P-384 failure
+      is a small off-by-one in the low limb (`p384_mul_debug` isolates it).
+      Scratch `tests/dbg_check.rs` + `consts::dbg_consts` trace tests +
+      `tests/field_props.rs::p384_mul_debug` are debugging aids, prune before
+      publish.
       NOTE: `src/params.rs` in `4e6c0d9` shipped with literal `]\n);` typos in
       8 `declare_params!` calls (broke `--features alloc`); since fixed in the
       working tree, along with corrected `Ed25519ScalarParams` limbs.
@@ -238,7 +245,10 @@ variant (feature-gated re-exports instead of steps 3–6).
       — `ed25519_rfc8032_test1` + `..._signature` still FAIL.
 - [~] X25519 (RFC 7748) Montgomery ladder
        — WIP in `src/montgomery25519.rs`: clamp + ladder + `cswap` + final invert.
-       X25519 KATs still failing. **DIAGNOSED (2026-08-30):** the entire data
+       X25519 KATs still failing. `src/montgomery25519.rs` was substantially
+       rewritten/simplified in the working tree (−154 lines); RFC 7748 KATs
+       (`tests/kat.rs`, plus untracked scratch `tests/ref_x25519.rs`) still
+       **FAIL**. **DIAGNOSED (2026-08-30):** the entire data
        plane the ladder depends on was verified correct in isolation — field
        `add`/`sub`/`mul`/`square`/`invert`/`from_bytes`/`to_bytes` (3·5=15),
        `EdwardsPoint::add(x,x)==double(x)`, `EdwardsPoint::mul` (RFC 8032 pubkey
@@ -348,13 +358,15 @@ variant (feature-gated re-exports instead of steps 3–6).
 - [~] Reuse `-kem::poly` for ML-DSA ring (q=8380417, n=256); power2round,
       decompose, `makeHint`/`useHint`, ct
       — own `src/poly.rs` (does **not** reuse `-kem::poly`); power2round /
-      decompose / hint helpers present. `poly::tests::all_poly_tests` currently
-      **FAILS** ("ntt round trip failed"); `poly.rs` under active edit.
+      decompose / hint helpers present. `poly::tests::all_poly_tests` now
+      **PASSES** — the NTT round-trip bug is fixed (working tree).
 - [~] ML-DSA (FIPS 204) keygen/sign/verify → ML-DSA-44 / 65 / 87; hedged +
       deterministic; rejection-sampling loop with ct primitives; `ctx` domain sep
       — `src/ml_dsa/mod.rs` + `src/ml_dsa/sample.rs`; keygen/sign/verify wired for
       all three sets, deterministic + hedged, `Ctx` domain separation. All 6
-      `ml_dsa::tests` round-trips currently **FAIL** (blocked on the poly NTT bug).
+      `ml_dsa::tests` round-trips still **FAIL**, but no longer blocked on the
+      poly NTT bug (now fixed) — remaining defect is in the ML-DSA
+      sign/verify/packing path itself.
 - [~] SLH-DSA (FIPS 205): WOTS+, XMSS, FORS, hypertree; SHA2 + SHAKE param sets;
       `slh-dsa` feature (large)
       — `src/slh_dsa.rs` scaffolded (now an unconditional `pub mod`, no longer
@@ -368,7 +380,7 @@ variant (feature-gated re-exports instead of steps 3–6).
       `verify_aggregate` (same-message + distinct-message), proof-of-possession;
       ciphersuite `BLS_SIG_..._NUL_`
 - [~] Spec API: `ml_dsa::keygen::<MlDsa65>`, `sign(sk, msg, ctx)`, `verify(...)`
-      — surface exists; blocked on the failing round-trips above.
+      — surface exists; blocked on the failing ML-DSA round-trips above.
 - [~] Optional `signature` trait-compat impls behind `signature` feature
       — `src/signature_impls.rs` is a stub.
 - [ ] KATs: FIPS 204 & 205 ACVP, RFC 8032 (Ed25519), RFC 6979 + NIST CAVP (ECDSA),
@@ -376,7 +388,8 @@ variant (feature-gated re-exports instead of steps 3–6).
       — `tests/ml_dsa_kat.rs` present (placeholder), no ACVP vectors.
 - [~] proptest: `verify(pk, m, sign(sk, m))` ok; wrong key/msg/ctx → `Verification`;
       `verify_aggregate` iff all inputs valid
-      — `tests/ml_dsa_props.rs` present; blocked on the failing round-trips.
+      — `tests/ml_dsa_props.rs` present; blocked on the failing ML-DSA
+      round-trips (sign/verify path, no longer the NTT).
 - [ ] `specs/bls_aggregate.telos` (`valid iff all input sigs valid`),
       `specs/ecdsa_nonce_ct.telos`
 

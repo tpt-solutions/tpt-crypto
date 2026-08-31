@@ -44,7 +44,7 @@ impl Choice {
     /// Logical NOT.
     #[inline]
     #[must_use]
-    pub fn not(self) -> Choice {
+    pub fn invert(self) -> Choice {
         Choice(self.0 ^ 1)
     }
 
@@ -66,7 +66,7 @@ impl Choice {
     #[inline]
     #[must_use]
     pub fn mask_u8(self) -> u8 {
-        (self.0.wrapping_neg()) & 0xFF
+        self.0.wrapping_neg()
     }
 
     /// The choice as a full-width `u64` mask (`0` or `!0`).
@@ -85,6 +85,15 @@ impl PartialEq for Choice {
     }
 }
 impl Eq for Choice {}
+
+impl core::ops::Not for Choice {
+    type Output = Self;
+
+    #[inline]
+    fn not(self) -> Self {
+        self.invert()
+    }
+}
 
 /// A constant-time optional value.
 ///
@@ -139,7 +148,7 @@ impl<T> CtOption<T> {
     #[inline]
     #[must_use]
     pub fn is_none(&self) -> Choice {
-        self.is_some.not()
+        self.is_some.invert()
     }
 
     /// Map the contained value, leaving the presence flag untouched.
@@ -237,7 +246,7 @@ mod tests {
         assert_eq!(Choice::from_bool(false), Choice::FALSE);
         assert_eq!(Choice::from_u8(5), Choice::TRUE);
         assert_eq!(Choice::from_u8(0), Choice::FALSE);
-        assert_eq!(Choice::TRUE.not(), Choice::FALSE);
+        assert_eq!(Choice::TRUE.invert(), Choice::FALSE);
         assert_eq!(Choice::TRUE.and(Choice::FALSE), Choice::FALSE);
         assert_eq!(Choice::TRUE.or(Choice::FALSE), Choice::TRUE);
     }

@@ -154,9 +154,7 @@ fn gcm_siv_inner(
         let s = polyval_step(&auth_key, &s, &length_block);
 
         let mut tag_input = s;
-        for i in 0..12 {
-            tag_input[i] ^= nonce.0[i];
-        }
+        tag_input.iter_mut().enumerate().take(12).for_each(|(i, v)| *v ^= nonce.0[i]);
         tag_input[15] &= 0x7f;
         let tag = enc_cipher.encrypt_block(&tag_input);
 
@@ -173,9 +171,7 @@ fn gcm_siv_inner(
         let s = polyval_step(&auth_key, &s, &length_block);
 
         let mut tag_input = s;
-        for i in 0..12 {
-            tag_input[i] ^= nonce.0[i];
-        }
+        tag_input.iter_mut().enumerate().take(12).for_each(|(i, v)| *v ^= nonce.0[i]);
         tag_input[15] &= 0x7f;
         let expected = enc_cipher.encrypt_block(&tag_input);
 

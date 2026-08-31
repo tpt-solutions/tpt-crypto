@@ -7,6 +7,23 @@
 use tpt_crypto_ct::{cswap, Choice};
 use tpt_crypto_field::{Ed25519Field, MAX_LIMBS};
 
+/// A single step of the X25519 Montgomery ladder trace.
+#[derive(Clone, Copy, Debug)]
+pub struct LadderTrace {
+    /// The bit index `t` processed.
+    pub t: usize,
+    /// The running swap parity before processing this bit.
+    pub swap: bool,
+    /// x2 state before the step.
+    pub x2: [u8; 32],
+    /// z2 state before the step.
+    pub z2: [u8; 32],
+    /// x3 state before the step.
+    pub x3: [u8; 32],
+    /// z3 state before the step.
+    pub z3: [u8; 32],
+}
+
 /// X25519 (Curve25519) Montgomery ladder Diffie–Hellman.
 pub struct X25519;
 
@@ -42,6 +59,11 @@ impl X25519 {
             let sc = Choice::from(swap);
             cswap(sc, &mut x2, &mut x3);
             cswap(sc, &mut z2, &mut z3);
+            // RFC 7748 §5: reset the running swap flag to the current bit so the
+            // next iteration's cswap reflects only the adjacency of consecutive
+            // bits. Without this reset the ladder accumulates the full running
+            // parity and produces a wrong shared secret.
+            swap = bit;
 
             let a0 = x2.add(&z2);
             let a1 = x2.sub(&z2);
@@ -76,7 +98,7 @@ impl X25519 {
     pub fn dbg_trace(
         scalar: &[u8; 32],
         public_u: &[u8; 32],
-    ) -> [(usize, bool, [u8; 32], [u8; 32], [u8; 32], [u8; 32]); 255] {
+    ) -> [LadderTrace; 255] {
         let mut k = *scalar;
         k[0] &= 248;
         k[31] &= 127;
@@ -87,9 +109,15 @@ impl X25519 {
         let mut x3 = x1;
         let mut z3 = Ed25519Field::one();
         let mut swap = false;
-        let mut out = [(0usize, false, [0u8; 32], [0u8; 32], [0u8; 32], [0u8; 32]); 255];
-        let mut idx = 0usize;
-        for t in (0..255).rev() {
+        let mut out = [LadderTrace {
+            t: 0,
+            swap: false,
+            x2: [0u8; 32],
+            z2: [0u8; 32],
+            x3: [0u8; 32],
+            z3: [0u8; 32],
+        }; 255];
+        for (idx, t) in (0..255).rev().enumerate() {
             let bit = ((k[t / 8] >> (t % 8)) & 1) != 0;
             swap ^= bit;
             let sc = Choice::from(swap);
@@ -108,15 +136,14 @@ impl X25519 {
             z3 = x1.mul(&da.sub(&cb).square());
             x2 = aa.mul(&bb);
             z2 = e.mul(&aa.add(&e.mul(&Self::a24())));
-            out[idx] = (
+            out[idx] = LadderTrace {
                 t,
                 swap,
-                Self::to_le32(&x2),
-                Self::to_le32(&z2),
-                Self::to_le32(&x3),
-                Self::to_le32(&z3),
-            );
-            idx += 1;
+                x2: Self::to_le32(&x2),
+                z2: Self::to_le32(&z2),
+                x3: Self::to_le32(&x3),
+                z3: Self::to_le32(&z3),
+            };
         }
         out
     }

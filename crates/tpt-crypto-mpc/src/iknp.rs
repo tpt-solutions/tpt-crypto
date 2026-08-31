@@ -57,6 +57,9 @@ fn xor_bytes(a: &mut [u8], b: &[u8]) {
     }
 }
 
+/// A pair of OT messages `(m0, m1)` carried by the sender.
+type OtMsg = (Vec<u8>, Vec<u8>);
+
 /// IKNP 1-of-2 OT extension.
 ///
 /// Returns `(sender_ciphertexts, receiver_messages)` where `sender_ciphertexts[j] =
@@ -65,9 +68,9 @@ fn xor_bytes(a: &mut [u8], b: &[u8]) {
 /// `<= KAPPA`.
 pub fn extend_1of2<R: CryptoRng>(
     rng: &mut R,
-    sender_msgs: &[(Vec<u8>, Vec<u8>)],
+    sender_msgs: &[OtMsg],
     receiver_choices: &[u8],
-) -> (Vec<(Vec<u8>, Vec<u8>)>, Vec<Vec<u8>>) {
+) -> (Vec<OtMsg>, Vec<Vec<u8>>) {
     let m = sender_msgs.len();
     assert!(m <= KAPPA, "IKNP supports at most KAPPA extended OTs");
     assert_eq!(m, receiver_choices.len(), "choice count must match message count");
@@ -85,7 +88,7 @@ pub fn extend_1of2<R: CryptoRng>(
         let mut m1 = ui;
         xor_bytes(&mut m1, &delta);
         let choice = Choice::from(delta[i] & 1 == 1);
-        let got = ot::transfer_base_ot_1of2(rng, &ui.to_vec(), &m1.to_vec(), choice.into());
+        let got = ot::transfer_base_ot_1of2(rng, &ui, &m1, choice.into());
         let mut g = [0u8; MASK_BYTES];
         g.copy_from_slice(&got[..MASK_BYTES]);
         // Recover U[i] = got ⊕ (choice_bit · Δ).
