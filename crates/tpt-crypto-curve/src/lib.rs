@@ -9,6 +9,8 @@
 
 pub mod edwards25519;
 pub mod montgomery25519;
+pub mod weierstrass;
 
 pub use edwards25519::EdwardsPoint;
 pub use montgomery25519::X25519;
+pub use weierstrass::{P256Point, P384Point, ProjectivePoint, WeierstrassParams, P256, P384};

@@ -2,11 +2,9 @@
 //! scalar multiplication (fixed-window + `ct_lookup`), point compress/decompress,
 //! cofactored verification, and the RFC 8032 signing/verification algorithms.
 
-use tpt_crypto_field::{
-    Choice, CtEq, CtOption, Ed25519Field, Ed25519Scalar, Field, MAX_LIMBS,
-};
 use tpt_crypto_ct::lookup::ct_lookup;
 use tpt_crypto_ct::{Choice as CtChoice, CtSelect};
+use tpt_crypto_field::{Choice, CtEq, CtOption, Ed25519Field, Ed25519Scalar, Field, MAX_LIMBS};
 use tpt_crypto_hash::sha2::Sha512;
 use tpt_crypto_hash::Hasher;
 
@@ -66,9 +64,7 @@ impl EdwardsPoint {
         let u = y2.sub(&Ed25519Field::one());
         let v = d.mul(&y2).add(&Ed25519Field::one());
         let x2 = u.mul(&v.invert().unwrap());
-        let x = x2
-            .sqrt()
-            .unwrap_or_else(Ed25519Field::zero);
+        let x = x2.sqrt().unwrap_or_else(Ed25519Field::zero);
         let xb = x.to_bytes();
         // sign of x = LSB of canonical x (byte 47 of the big-endian encoding).
         let negate = Choice::from_bool((xb[47] & 1 != 0) ^ sign);
@@ -231,7 +227,10 @@ impl EdwardsPoint {
             z: Ed25519Field::one(),
             t: x.mul(&y),
         };
-        CtOption::new(point, y_opt.is_some().and(x_opt.is_some()).and(v_inv.is_some()))
+        CtOption::new(
+            point,
+            y_opt.is_some().and(x_opt.is_some()).and(v_inv.is_some()),
+        )
     }
 
     /// Clamp a 32-byte seed into the Ed25519 secret scalar `a` (RFC 8032 §5.1.5).
@@ -321,9 +320,7 @@ impl EdwardsPoint {
         let k = reduce_wide(&k_digest);
 
         let lhs = Self::basepoint().mul(&scalar_to_le32(s)).mul_by_cofactor();
-        let rhs = r
-            .add(&a.mul(&scalar_to_le32(k)))
-            .mul_by_cofactor();
+        let rhs = r.add(&a.mul(&scalar_to_le32(k))).mul_by_cofactor();
         (present.and(lhs.ct_eq(&rhs))).into_bool()
     }
 }

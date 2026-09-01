@@ -209,23 +209,22 @@ variant (feature-gated re-exports instead of steps 3–6).
       — `tests/kat/field_mul.json` (24 vectors) + `tests/kat/field_reduce.json`
       (21 vectors), hand-computed from the prime definitions and verified against
       Python big-integer arithmetic; see `tests/kat/PROVENANCE.md`.
-- [~] proptest: field axioms (assoc/dist/inverse), `from(to(x)) == x`,
+- [x] proptest: field axioms (assoc/dist/inverse), `from(to(x)) == x`,
       `mul` matches `tpt-math-exact` mod P
-      — `tests/field_props.rs` now exists (`proptest` is a workspace dep).
-      P-256 (base+scalar), BLS12-381 (Fp+Fr) pass; `p384_base_props` and
-      `p384_scalar_props` still **FAIL** but are much closer after two fixes in
-      the working tree: (a) `P384BaseParams` low modulus limb was
-      `0x0000_0000_FFFF_FFFF`, corrected to `0x0000_0001_FFFF_FFFF`
-      (p = 2^384 − 2^128 − 2^96 + 2^32 − 1); (b) the CIOS `mont_mul` operand-scan
-      and reduction loops let a `u128` carry wrap on 6-limb fields — now split
-      each 128-bit partial product into low/high limbs. Remaining P-384 failure
-      is a small off-by-one in the low limb (`p384_mul_debug` isolates it).
-      Scratch `tests/dbg_check.rs` + `consts::dbg_consts` trace tests +
-      `tests/field_props.rs::p384_mul_debug` are debugging aids, prune before
-      publish.
-      NOTE: `src/params.rs` in `4e6c0d9` shipped with literal `]\n);` typos in
-      8 `declare_params!` calls (broke `--features alloc`); since fixed in the
-      working tree, along with corrected `Ed25519ScalarParams` limbs.
+      — `tests/field_props.rs`: P-256, P-384, BLS12-381 (Fp+Fr), Ed25519 all
+      pass. **FIXED:**
+      (a) `P384BaseParams` limbs 0 and 1 were both wrong — set to
+      `0x0000_0000_FFFF_FFFF` / `0xFFFF_FFFF_0000_0000` (the earlier "fix" to
+      `0x0000_0001_FFFF_FFFF` was backwards).
+      (b) The real P-384 / BLS-Fp bug was in `mont_mul`: when `LIMBS == MAX_LIMBS`
+      (6), the SOS Montgomery reduction can leave an `(n+1)`-th overflow limb at
+      `t[2n]` (result is in `[0, 2p)` and `2p` needs `64·n + 1` bits), which the
+      copy-out silently dropped. Now `carry_hi = t[2n]` feeds the final
+      conditional subtraction: subtract `p` iff `carry_hi != 0 || out >= p`.
+      (c) Removed the `field::const_audit` scratch test module — its in-file
+      `mul_mod_ref` / `R = 2^256 mod L` reference was itself buggy and raised
+      false "ONE_MONT mismatch" failures against constants that are in fact
+      correct (verified: `Ed25519ScalarParams::ONE_MONT == 2^256 mod L`).
 - [x] `specs/field_mul.telos` (`result == a*b mod P ∀ a,b<P`),
       `specs/field_reduce.telos`
 
@@ -250,14 +249,30 @@ variant (feature-gated re-exports instead of steps 3–6).
        form: `swap: u8 = 0`, `swap ^= bit`, `cswap(Choice::from_u8_lsb(swap), …)`,
        `swap = bit`, and one final `cswap` after the loop. RFC 7748 §5.2 vectors 1
        & 2 and the §6.1 Alice-basepoint KAT all PASS (`tests/kat.rs`).
-- [ ] P-256 / P-384 (SEC1): short-Weierstrass complete addition formulas,
+- [x] P-256 / P-384 (SEC1): short-Weierstrass complete addition formulas,
       ct scalar mul, point (de)compression, subgroup/on-curve checks
+      — `src/weierstrass.rs`: generic `ProjectivePoint<C: WeierstrassParams>`
+      over the `-field` base/scalar params, projective `(X:Y:Z)` coords with the
+      complete Renes–Costello–Batina formulas (eprint 2015/1060 Alg. 4 add /
+      Alg. 6 double, `a = -3`), exception-free for the cofactor-1 curves so one
+      branch-free path covers identity / doubling / `P + (−P)`. Fixed-length
+      double-and-add scalar mul with a `Field::ct_select` per bit; `is_on_curve`,
+      projective `CtEq`, SEC1 compressed/uncompressed encode + `from_sec1`
+      (parsing branches on the public tag — not CT). `P256Point` / `P384Point`
+      aliases. KATs (`tests/weierstrass.rs`): generator on-curve + `n·G = O`,
+      RFC 5903 §8.1/§8.2 ECDH vectors (public key + shared secret) for both
+      curves, scalar homomorphism, encode round-trips — all green. Subgroup
+      check is trivial (cofactor 1); `is_on_curve` + non-identity suffices.
 - [ ] BLS12-381: G1/G2 (subgroup checks via endomorphism), Miller loop,
       final exponentiation → GT; `pairing` / `multi_pairing`
 - [ ] hash-to-curve (RFC 9380) for Ed25519, P-256, BLS12-381 G1/G2
-- [ ] KATs: RFC 8032 (Ed25519), RFC 7748 (X25519), NIST CAVP ECDH (P-256/384),
+- [~] KATs: RFC 8032 (Ed25519), RFC 7748 (X25519), NIST CAVP ECDH (P-256/384),
       draft-irtf-cfrg BLS12-381 vectors, RFC 9380 h2c vectors
-- [ ] proptest: `k·(l·P) == (k·l)·P`, `pairing` bilinearity, compress round-trip
+      — Ed25519/X25519 done (`tests/kat.rs`); P-256/P-384 ECDH via RFC 5903
+      (`tests/weierstrass.rs`) in lieu of the CAVP `.rsp` set. BLS + h2c pending.
+- [~] proptest: `k·(l·P) == (k·l)·P`, `pairing` bilinearity, compress round-trip
+      — Weierstrass: `(a+b)·G == a·G + b·G` + SEC1 compress/uncompress round-trip
+      covered in `tests/weierstrass.rs`. Pairing bilinearity pending (no BLS).
 - [ ] `specs/scalarmul_ct.telos` (timing ⟂ scalar)
 
 ### crates/tpt-crypto-aead

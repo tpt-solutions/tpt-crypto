@@ -893,6 +893,7 @@ dependencies = [
 name = "tpt-crypto-curve"
 version = "0.1.0"
 dependencies = [
+ "hex",
  "tpt-crypto-core",
  "tpt-crypto-ct",
  "tpt-crypto-field",

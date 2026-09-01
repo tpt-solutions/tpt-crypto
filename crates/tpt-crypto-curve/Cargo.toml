@@ -14,6 +14,9 @@ tpt-crypto-ct = { workspace = true }
 tpt-crypto-hash = { workspace = true }
 tpt-crypto-core = { workspace = true }
 
+[dev-dependencies]
+hex = "0.4"
+
 [features]
 default = ["std"]
 std = ["alloc"]

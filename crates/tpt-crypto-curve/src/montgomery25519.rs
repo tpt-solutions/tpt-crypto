@@ -88,10 +88,7 @@ impl X25519 {
     }
 
     #[doc(hidden)]
-    pub fn dbg_trace(
-        scalar: &[u8; 32],
-        public_u: &[u8; 32],
-    ) -> [LadderTrace; 255] {
+    pub fn dbg_trace(scalar: &[u8; 32], public_u: &[u8; 32]) -> [LadderTrace; 255] {
         let mut k = *scalar;
         k[0] &= 248;
         k[31] &= 127;
