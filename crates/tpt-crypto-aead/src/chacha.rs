@@ -147,194 +147,196 @@ fn hchacha20(key: &[u8; 32], nonce: &[u8; 16]) -> [u8; 32] {
 // secret-dependent branches: the only data-dependent step is the final
 // conditional subtraction of the prime, done with a branchless borrow mask.
 
-const P0: u64 = 0x3fffffa;
-const P1: u64 = 0x3ffffff;
-const P2: u64 = 0x3ffffff;
-const P3: u64 = 0x3ffffff;
-const P4: u64 = 0x3ffffff;
-
 /// Streaming Poly1305 MAC (Z/(2¹³⁰−5)), constant-time.
 ///
-/// The one-shot [`poly1305_mac`] is a thin wrapper around this struct; the AEAD
-/// constructions drive it directly so no contiguous buffering is required (and
-/// the AEAD works under `no_std` without `alloc`).
+/// Standard 5×26-bit-limb arithmetic (the "poly1305-donna" layout). Partial
+/// blocks are buffered across [`update`](Self::update) calls, so the AEAD may
+/// feed it the AAD, padding, ciphertext and length block as separate slices.
+/// The one-shot [`poly1305_mac`] is a thin wrapper.
 pub struct Poly1305 {
-    h: [u64; 5],
-    r0: u64,
-    r1: u64,
-    r2: u64,
-    r3: u64,
-    r4: u64,
-    r1_5: u64,
-    r2_5: u64,
-    r3_5: u64,
-    r4_5: u64,
+    r: [u32; 5],
+    h: [u32; 5],
+    buffer: [u8; 16],
+    leftover: usize,
+}
+
+#[inline]
+fn u8to32(s: &[u8]) -> u32 {
+    u32::from_le_bytes([s[0], s[1], s[2], s[3]])
 }
 
 impl Poly1305 {
     /// Initialize from a 32-byte one-time key (first 16 clamped to `r`, last 16
-    /// are `s`).
+    /// are the `s` addend passed to [`finalize`](Self::finalize)).
     pub fn new(key: &[u8; 32]) -> Self {
-        let mut r = [0u8; 16];
-        r.copy_from_slice(&key[..16]);
-        r[3] &= 15;
-        r[7] &= 15;
-        r[11] &= 15;
-        r[15] &= 15;
-
-        let r0 = r[0] as u64 | (r[1] as u64) << 8 | ((r[2] & 3) as u64) << 16;
-        let r1 = (r[2] >> 2) as u64 | (r[3] as u64) << 6 | (r[4] as u64) << 14 | ((r[5] & 15) as u64) << 22;
-        let r2 = (r[5] >> 4) as u64 | (r[6] as u64) << 4 | (r[7] as u64) << 12 | ((r[8] & 63) as u64) << 20;
-        let r3 = (r[8] >> 6) as u64 | (r[9] as u64) << 2 | (r[10] as u64) << 10 | (r[11] as u64) << 18;
-        let r4 = r[12] as u64 | (r[13] as u64) << 8 | (r[14] as u64) << 16 | ((r[15] & 3) as u64) << 24;
-
+        let r = [
+            u8to32(&key[0..]) & 0x3ff_ffff,
+            (u8to32(&key[3..]) >> 2) & 0x3ff_ff03,
+            (u8to32(&key[6..]) >> 4) & 0x3ff_c0ff,
+            (u8to32(&key[9..]) >> 6) & 0x3f0_3fff,
+            (u8to32(&key[12..]) >> 8) & 0x00f_ffff,
+        ];
         Poly1305 {
-            h: [0u64; 5],
-            r0,
-            r1,
-            r2,
-            r3,
-            r4,
-            r1_5: r1.wrapping_mul(5),
-            r2_5: r2.wrapping_mul(5),
-            r3_5: r3.wrapping_mul(5),
-            r4_5: r4.wrapping_mul(5),
+            r,
+            h: [0u32; 5],
+            buffer: [0u8; 16],
+            leftover: 0,
         }
     }
 
-    /// Absorb `data` (any length).
-    pub fn update(&mut self, data: &[u8]) {
+    /// Absorb `data` (any length), buffering a trailing partial block.
+    pub fn update(&mut self, mut data: &[u8]) {
+        if self.leftover > 0 {
+            let want = core::cmp::min(16 - self.leftover, data.len());
+            self.buffer[self.leftover..self.leftover + want].copy_from_slice(&data[..want]);
+            self.leftover += want;
+            data = &data[want..];
+            if self.leftover < 16 {
+                return;
+            }
+            let block = self.buffer;
+            self.block(&block, false);
+            self.leftover = 0;
+        }
         let mut chunks = data.chunks_exact(16);
         for c in &mut chunks {
             let m: &[u8; 16] = c.try_into().unwrap();
-            self.block(m, 16);
+            self.block(m, false);
         }
         let rem = chunks.remainder();
         if !rem.is_empty() {
-            let mut m = [0u8; 16];
-            m[..rem.len()].copy_from_slice(rem);
-            self.block(&m, rem.len());
+            self.buffer[..rem.len()].copy_from_slice(rem);
+            self.leftover = rem.len();
         }
     }
 
-    /// Process a single 16-byte block (with the `2^(8*blen)` bit already implied
-    /// by `blen`).
-    fn block(&mut self, m: &[u8; 16], blen: usize) {
-        let mut n = [0u64; 5];
-        n[0] = m[0] as u64 | (m[1] as u64) << 8 | ((m[2] & 3) as u64) << 16;
-        n[1] = (m[2] >> 2) as u64
-            | (m[3] as u64) << 6
-            | (m[4] as u64) << 14
-            | ((m[5] & 15) as u64) << 22;
-        n[2] = (m[5] >> 4) as u64
-            | (m[6] as u64) << 4
-            | (m[7] as u64) << 12
-            | ((m[8] & 63) as u64) << 20;
-        n[3] = (m[8] >> 6) as u64
-            | (m[9] as u64) << 2
-            | (m[10] as u64) << 10
-            | (m[11] as u64) << 18;
-        n[4] =
-            m[12] as u64 | (m[13] as u64) << 8 | (m[14] as u64) << 16 | ((m[15] & 3) as u64) << 24;
+    /// Process one 16-byte block. `final_block` omits the high `2^128` bit and is
+    /// only set for a short trailing block from [`finalize`](Self::finalize).
+    fn block(&mut self, m: &[u8; 16], final_block: bool) {
+        let hibit: u32 = if final_block { 0 } else { 1 << 24 };
+        let [r0, r1, r2, r3, r4] = self.r;
+        let s1 = r1.wrapping_mul(5);
+        let s2 = r2.wrapping_mul(5);
+        let s3 = r3.wrapping_mul(5);
+        let s4 = r4.wrapping_mul(5);
 
-        // Fold in the 2^(8*blen) bit (the "1" appended before the field mul).
-        let bit = 8 * blen;
-        n[bit / 26] |= 1u64 << (bit % 26);
+        let mut h0 = self.h[0] + (u8to32(&m[0..]) & 0x3ff_ffff);
+        let mut h1 = self.h[1] + ((u8to32(&m[3..]) >> 2) & 0x3ff_ffff);
+        let mut h2 = self.h[2] + ((u8to32(&m[6..]) >> 4) & 0x3ff_ffff);
+        let mut h3 = self.h[3] + ((u8to32(&m[9..]) >> 6) & 0x3ff_ffff);
+        let mut h4 = self.h[4] + ((u8to32(&m[12..]) >> 8) | hibit);
 
-        let h = &mut self.h;
-        h[0] = h[0].wrapping_add(n[0]);
-        h[1] = h[1].wrapping_add(n[1]);
-        h[2] = h[2].wrapping_add(n[2]);
-        h[3] = h[3].wrapping_add(n[3]);
-        h[4] = h[4].wrapping_add(n[4]);
+        let mul = |a: u32, b: u32| (a as u64) * (b as u64);
+        let d0 = mul(h0, r0) + mul(h1, s4) + mul(h2, s3) + mul(h3, s2) + mul(h4, s1);
+        let d1 = mul(h0, r1) + mul(h1, r0) + mul(h2, s4) + mul(h3, s3) + mul(h4, s2);
+        let d2 = mul(h0, r2) + mul(h1, r1) + mul(h2, r0) + mul(h3, s4) + mul(h4, s3);
+        let d3 = mul(h0, r3) + mul(h1, r2) + mul(h2, r1) + mul(h3, r0) + mul(h4, s4);
+        let d4 = mul(h0, r4) + mul(h1, r3) + mul(h2, r2) + mul(h3, r1) + mul(h4, r0);
 
-        let mul = |a: u64, b: u64| (a as u128) * (b as u128);
-        let d0 = mul(h[0], self.r0)
-            + mul(h[1], self.r4_5)
-            + mul(h[2], self.r3_5)
-            + mul(h[3], self.r2_5)
-            + mul(h[4], self.r1_5);
-        let d1 = mul(h[0], self.r1)
-            + mul(h[1], self.r0)
-            + mul(h[2], self.r4_5)
-            + mul(h[3], self.r3_5)
-            + mul(h[4], self.r2_5);
-        let d2 = mul(h[0], self.r2)
-            + mul(h[1], self.r1)
-            + mul(h[2], self.r0)
-            + mul(h[3], self.r4_5)
-            + mul(h[4], self.r3_5);
-        let d3 = mul(h[0], self.r3)
-            + mul(h[1], self.r2)
-            + mul(h[2], self.r1)
-            + mul(h[3], self.r0)
-            + mul(h[4], self.r4_5);
-        let d4 = mul(h[0], self.r4)
-            + mul(h[1], self.r3)
-            + mul(h[2], self.r2)
-            + mul(h[3], self.r1)
-            + mul(h[4], self.r0);
+        let mut c;
+        c = (d0 >> 26) as u32;
+        h0 = (d0 as u32) & 0x3ff_ffff;
+        let d1 = d1 + c as u64;
+        c = (d1 >> 26) as u32;
+        h1 = (d1 as u32) & 0x3ff_ffff;
+        let d2 = d2 + c as u64;
+        c = (d2 >> 26) as u32;
+        h2 = (d2 as u32) & 0x3ff_ffff;
+        let d3 = d3 + c as u64;
+        c = (d3 >> 26) as u32;
+        h3 = (d3 as u32) & 0x3ff_ffff;
+        let d4 = d4 + c as u64;
+        c = (d4 >> 26) as u32;
+        h4 = (d4 as u32) & 0x3ff_ffff;
+        h0 += c.wrapping_mul(5);
+        c = h0 >> 26;
+        h0 &= 0x3ff_ffff;
+        h1 += c;
 
-        // Carry propagation into 26-bit limbs.
-        let mut c = d0 >> 26;
-        h[0] = (d0 & 0x3ffffff) as u64;
-        let d1 = d1 + c;
-        c = d1 >> 26;
-        h[1] = (d1 & 0x3ffffff) as u64;
-        let d2 = d2 + c;
-        c = d2 >> 26;
-        h[2] = (d2 & 0x3ffffff) as u64;
-        let d3 = d3 + c;
-        c = d3 >> 26;
-        h[3] = (d3 & 0x3ffffff) as u64;
-        let d4 = d4 + c;
-
-        // Fold the overflow of d4 back in (2^130 ≡ 5 mod p).
-        h[4] = (d4 & 0x3ffffff) as u64;
-        h[0] = h[0].wrapping_add(((d4 >> 26) as u64).wrapping_mul(5));
-        h[1] = h[1].wrapping_add(h[0] >> 26);
-        h[0] &= 0x3ffffff;
-        h[2] = h[2].wrapping_add(h[1] >> 26);
-        h[1] &= 0x3ffffff;
-        h[3] = h[3].wrapping_add(h[2] >> 26);
-        h[2] &= 0x3ffffff;
-        h[4] = h[4].wrapping_add(h[3] >> 26);
-        h[3] &= 0x3ffffff;
-        h[4] &= 0x3ffffff;
-
-        // Constant-time conditional subtraction of p = 2^130 - 5.
-        let mut b = 0u64;
-        let r0 = h[0].wrapping_sub(P0).wrapping_sub(b);
-        b = (r0 >> 63) & 1;
-        let r1 = h[1].wrapping_sub(P1).wrapping_sub(b);
-        b = (r1 >> 63) & 1;
-        let r2 = h[2].wrapping_sub(P2).wrapping_sub(b);
-        b = (r2 >> 63) & 1;
-        let r3 = h[3].wrapping_sub(P3).wrapping_sub(b);
-        b = (r3 >> 63) & 1;
-        let r4 = h[4].wrapping_sub(P4).wrapping_sub(b);
-        b = (r4 >> 63) & 1;
-        let keep = (b ^ 1).wrapping_neg();
-        let drop = !keep;
-        h[0] = (r0 & keep) | (h[0] & drop);
-        h[1] = (r1 & keep) | (h[1] & drop);
-        h[2] = (r2 & keep) | (h[2] & drop);
-        h[3] = (r3 & keep) | (h[3] & drop);
-        h[4] = (r4 & keep) | (h[4] & drop);
+        self.h = [h0, h1, h2, h3, h4];
     }
 
-    /// Finalize, folding in the 16-byte `s` key half (no modular reduction of the
-    /// sum; the tag is the low 128 bits).
-    pub fn finalize(self, s: &[u8; 16]) -> [u8; 16] {
-        let s0 = u128::from_le_bytes(*s);
-        let hval = self.h[0] as u128
-            | (self.h[1] as u128) << 26
-            | (self.h[2] as u128) << 52
-            | (self.h[3] as u128) << 78
-            | ((self.h[4] as u128) & 0x3) << 104;
-        let tag_val = hval.wrapping_add(s0);
+    /// Finalize, folding in the 16-byte `s` key half; returns the 16-byte tag.
+    pub fn finalize(mut self, s: &[u8; 16]) -> [u8; 16] {
+        if self.leftover > 0 {
+            self.buffer[self.leftover] = 1;
+            for b in self.buffer[self.leftover + 1..].iter_mut() {
+                *b = 0;
+            }
+            let block = self.buffer;
+            self.block(&block, true);
+        }
+
+        let [mut h0, mut h1, mut h2, mut h3, mut h4] = self.h;
+
+        // Fully carry h.
+        let mut c = h1 >> 26;
+        h1 &= 0x3ff_ffff;
+        h2 += c;
+        c = h2 >> 26;
+        h2 &= 0x3ff_ffff;
+        h3 += c;
+        c = h3 >> 26;
+        h3 &= 0x3ff_ffff;
+        h4 += c;
+        c = h4 >> 26;
+        h4 &= 0x3ff_ffff;
+        h0 += c.wrapping_mul(5);
+        c = h0 >> 26;
+        h0 &= 0x3ff_ffff;
+        h1 += c;
+
+        // Compute h + -p.
+        let mut g0 = h0.wrapping_add(5);
+        c = g0 >> 26;
+        g0 &= 0x3ff_ffff;
+        let mut g1 = h1.wrapping_add(c);
+        c = g1 >> 26;
+        g1 &= 0x3ff_ffff;
+        let mut g2 = h2.wrapping_add(c);
+        c = g2 >> 26;
+        g2 &= 0x3ff_ffff;
+        let mut g3 = h3.wrapping_add(c);
+        c = g3 >> 26;
+        g3 &= 0x3ff_ffff;
+        let g4 = h4.wrapping_add(c).wrapping_sub(1 << 26);
+
+        // Select h if h < p (g4 borrow), else g — branch-free.
+        let mask = (g4 >> 31).wrapping_sub(1);
+        g0 &= mask;
+        g1 &= mask;
+        g2 &= mask;
+        g3 &= mask;
+        let g4m = g4 & mask;
+        let nmask = !mask;
+        h0 = (h0 & nmask) | g0;
+        h1 = (h1 & nmask) | g1;
+        h2 = (h2 & nmask) | g2;
+        h3 = (h3 & nmask) | g3;
+        h4 = (h4 & nmask) | g4m;
+
+        // Collapse to 4×32-bit little-endian words (each expression already fits
+        // in 32 bits after the shifts).
+        let h0f = h0 | (h1 << 26);
+        let h1f = (h1 >> 6) | (h2 << 20);
+        let h2f = (h2 >> 12) | (h3 << 14);
+        let h3f = (h3 >> 18) | (h4 << 8);
+
+        // mac = (h + s) mod 2^128.
+        let mut f = h0f as u64 + u8to32(&s[0..]) as u64;
+        let w0 = f as u32;
+        f = h1f as u64 + u8to32(&s[4..]) as u64 + (f >> 32);
+        let w1 = f as u32;
+        f = h2f as u64 + u8to32(&s[8..]) as u64 + (f >> 32);
+        let w2 = f as u32;
+        f = h3f as u64 + u8to32(&s[12..]) as u64 + (f >> 32);
+        let w3 = f as u32;
+
         let mut tag = [0u8; 16];
-        tag.copy_from_slice(&tag_val.to_le_bytes()[..16]);
+        tag[0..4].copy_from_slice(&w0.to_le_bytes());
+        tag[4..8].copy_from_slice(&w1.to_le_bytes());
+        tag[8..12].copy_from_slice(&w2.to_le_bytes());
+        tag[12..16].copy_from_slice(&w3.to_le_bytes());
         tag
     }
 }
@@ -426,8 +428,8 @@ fn poly1305_mac_polykey(poly_key: &[u8; 32], aad: &[u8], ciphertext: &[u8]) -> [
     mac.update(ciphertext);
     mac.update(&[0u8; 16][..pad_len(ciphertext.len())]);
     let mut len_block = [0u8; 16];
-    len_block[..8].copy_from_slice(&((aad.len() as u64) << 3).to_le_bytes());
-    len_block[8..].copy_from_slice(&((ciphertext.len() as u64) << 3).to_le_bytes());
+    len_block[..8].copy_from_slice(&(aad.len() as u64).to_le_bytes());
+    len_block[8..].copy_from_slice(&(ciphertext.len() as u64).to_le_bytes());
     mac.update(&len_block);
     mac.finalize(&s)
 }
@@ -532,12 +534,36 @@ mod tests {
 
     #[test]
     fn poly1305_rfc8439() {
-        // RFC 8439 §2.5.2 test vector
-        let key = hex::decode("0000000000000000000000000000000000000000000000000000000000000000")
-            .unwrap();
-        let key: [u8; 32] = key.try_into().unwrap();
-        let msg = hex::decode("").unwrap();
-        let tag = poly1305_mac(&msg, &key);
+        // Degenerate case: empty message, zero key -> zero tag.
+        let tag = poly1305_mac(&[], &[0u8; 32]);
         assert_eq!(tag, [0u8; 16]);
+
+        // RFC 8439 §2.5.2 test vector.
+        let key: [u8; 32] = hex::decode(
+            "85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b",
+        )
+        .unwrap()
+        .try_into()
+        .unwrap();
+        let msg = b"Cryptographic Forum Research Group";
+        let tag = poly1305_mac(msg, &key);
+        assert_eq!(
+            tag.to_vec(),
+            hex::decode("a8061dc1305136c6c22b8baf0c0127a9").unwrap()
+        );
+
+        // RFC 8439 A.3 test #1: all-zero key and 64-byte all-zero message.
+        let tag = poly1305_mac(&[0u8; 64], &[0u8; 32]);
+        assert_eq!(tag, [0u8; 16]);
+
+        // Feed the §2.5.2 message in awkward 7-byte chunks to exercise buffering.
+        let mut mac = Poly1305::new(&key);
+        for chunk in msg.chunks(7) {
+            mac.update(chunk);
+        }
+        assert_eq!(
+            mac.finalize(&key[16..32].try_into().unwrap()).to_vec(),
+            hex::decode("a8061dc1305136c6c22b8baf0c0127a9").unwrap()
+        );
     }
 }

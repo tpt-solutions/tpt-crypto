@@ -17,7 +17,7 @@
 //! # Note on the message hash
 //!
 //! Both signing *and* verification compute the message commitment
-//! `μ = H(tr ‖ 0x00 ‖ Ctx ‖ M)` (SHAKE256, 64 bytes), independent of the
+//! `μ = H(tr ‖ 0x00 ‖ |Ctx| ‖ Ctx ‖ M)` (SHAKE256, 64 bytes), independent of the
 //! per-signature randomness `rnd`. The randomness enters only `ρ′`, so hedged
 //! and deterministic signatures are both verifiable and the verifier never
 //! needs `rnd`.
@@ -34,7 +34,7 @@ use tpt_crypto_ct::Choice;
 use tpt_crypto_hash::sha3::shake256;
 
 use crate::poly::{
-    decompose_impl, make_hint, polyt0_pack, polyt1_pack, polyt1_unpack,
+    decompose_impl, make_hint, polyt0_pack, polyt0_unpack, polyt1_pack, polyt1_unpack,
     polyeta_pack, polyeta_unpack, polyw1_pack, use_hint, Poly, Q,
 };
 use crate::Error;
@@ -312,20 +312,40 @@ fn pack_hint<P: MlDsaParams>(h: &[Poly], out: &mut [u8]) {
 }
 
 /// Unpack the hint vector `h` into `k` polynomials of `{0, 1}` coefficients.
-fn unpack_hint<P: MlDsaParams>(inp: &[u8], h: &mut [Poly]) {
+///
+/// Returns `None` for a malformed encoding (FIPS 204 `HintBitUnpack` ⊥ cases:
+/// non-monotone section counts, count above `ω`, non-increasing indices within a
+/// section, or a non-zero unused tail).
+fn unpack_hint<P: MlDsaParams>(inp: &[u8], h: &mut [Poly]) -> Option<()> {
     for p in h.iter_mut() {
         *p = Poly::ZERO;
     }
+    let mut idx = 0usize;
     for (i, h_poly) in h.iter_mut().enumerate().take(P::K) {
-        let start = if i == 0 { 0 } else { inp[P::OMEGA + i - 1] as usize };
         let end = inp[P::OMEGA + i] as usize;
-        for &j in &inp[start..end] {
-            let j = j as usize;
+        if end < idx || end > P::OMEGA {
+            return None;
+        }
+        let mut last: i32 = -1;
+        while idx < end {
+            let j = inp[idx] as usize;
+            if (j as i32) <= last {
+                return None;
+            }
+            last = j as i32;
             if j < N {
                 h_poly.coeffs[j] = 1;
             }
+            idx += 1;
         }
     }
+    // The unused tail of the index section must be all zero.
+    for &b in &inp[idx..P::OMEGA] {
+        if b != 0 {
+            return None;
+        }
+    }
+    Some(())
 }
 
 /// Decode the public key into `(ρ, t₁)` where `t₁` is a `k`-vector of polys.
@@ -411,6 +431,8 @@ where
         for (t_poly, s2_poly) in t_slice.iter_mut().zip(s2_slice.iter()).take(P::K) {
             t_poly.add_assign(s2_poly);
             t_poly.reduce();
+            // Power2Round needs a canonical (`[0, q)`) input.
+            t_poly.canonicalize();
         }
     }
 
@@ -492,8 +514,8 @@ where
 
 /// Compute the message commitment `μ` from `tr`, `ctx`, `msg`.
 fn compute_mu(tr: &[u8; 64], ctx: &[u8], msg: &[u8], mu: &mut [u8; 64]) {
-    // μ = H(tr ‖ 0x00 ‖ Ctx ‖ M)
-    shake256_concat(&[tr, &[0u8], ctx, msg], mu);
+    // μ = H(tr ‖ 0x00 ‖ IntegerToBytes(|Ctx|, 1) ‖ Ctx ‖ M)   (FIPS 204 §5.2)
+    shake256_concat(&[tr, &[0u8, ctx.len() as u8], ctx, msg], mu);
 }
 
 /// Compute `ρ′` from `K`, `μ`, and optional `rnd`.
@@ -530,6 +552,7 @@ where
 
     let mut s1 = <P::VecL as PolyArray>::zeroed();
     let mut s2 = <P::VecK as PolyArray>::zeroed();
+    let mut t0 = <P::VecK as PolyArray>::zeroed();
     {
         let mut off = 128;
         let s1s = s1.as_poly_slice_mut();
@@ -548,7 +571,14 @@ where
             *s2_poly = polyeta_unpack(P::ETA, &buf[..n]).ok_or(Error::InvalidEncoding)?;
             off += n;
         }
-        // t₀ follows but is not needed by the signer.
+        // t₀ (needed for the hint: h ← MakeHint(−c∘t₀, w − c∘s₂ + c∘t₀)).
+        let t0s = t0.as_poly_slice_mut();
+        for t0_poly in t0s.iter_mut().take(P::K) {
+            let mut buf = [0u8; POLYT0_PACKED];
+            buf.copy_from_slice(&sk.bytes[off..off + POLYT0_PACKED]);
+            *t0_poly = polyt0_unpack(&buf).ok_or(Error::InvalidEncoding)?;
+            off += POLYT0_PACKED;
+        }
     }
 
     let mut mu = [0u8; 64];
@@ -563,6 +593,8 @@ where
     to_ntt(s1hat.as_poly_slice_mut());
     let mut s2hat = s2;
     to_ntt(s2hat.as_poly_slice_mut());
+    let mut t0hat = t0;
+    to_ntt(t0hat.as_poly_slice_mut());
 
     let mut kappa: u16 = 0;
 
@@ -635,25 +667,35 @@ where
             continue;
         }
 
-        // r₀ = w₀ − c ∘ s₂
-        let mut r0 = <P::VecK as PolyArray>::zeroed();
+        // cs2 = c ∘ s₂ (time domain)
+        let mut cs2 = <P::VecK as PolyArray>::zeroed();
         {
-            let r0_slice = r0.as_poly_slice_mut();
-            let w0_slice = w0.as_poly_slice();
+            let cs2_slice = cs2.as_poly_slice_mut();
             let s2_slice = s2hat.as_poly_slice();
-            for ((r0_poly, w0_poly), s2_poly) in r0_slice
-                .iter_mut()
-                .zip(w0_slice.iter())
-                .zip(s2_slice.iter())
-                .take(P::K)
-            {
+            for (cs2_poly, s2_poly) in cs2_slice.iter_mut().zip(s2_slice.iter()).take(P::K) {
                 let mut t = Poly::ZERO;
                 t.pointwise(&chat, s2_poly);
                 t.inv_ntt();
                 t.reduce();
-                t.canonicalize();
+                *cs2_poly = t;
+            }
+        }
+
+        // r₀ = LowBits(w − c ∘ s₂), approximated by w₀ − c ∘ s₂ (exact under the
+        // norm check below).
+        let mut r0 = <P::VecK as PolyArray>::zeroed();
+        {
+            let r0_slice = r0.as_poly_slice_mut();
+            let w0_slice = w0.as_poly_slice();
+            let cs2_slice = cs2.as_poly_slice();
+            for ((r0_poly, w0_poly), cs2_poly) in r0_slice
+                .iter_mut()
+                .zip(w0_slice.iter())
+                .zip(cs2_slice.iter())
+                .take(P::K)
+            {
                 *r0_poly = *w0_poly;
-                r0_poly.sub_assign(&t);
+                r0_poly.sub_assign(cs2_poly);
                 r0_poly.reduce();
             }
         }
@@ -662,18 +704,52 @@ where
             continue;
         }
 
-        // h = MakeHint(−c, r₀)
+        // ct0 = c ∘ t₀ (time domain)
+        let mut ct0 = <P::VecK as PolyArray>::zeroed();
+        {
+            let ct0_slice = ct0.as_poly_slice_mut();
+            let t0_slice = t0hat.as_poly_slice();
+            for (ct0_poly, t0_poly) in ct0_slice.iter_mut().zip(t0_slice.iter()).take(P::K) {
+                let mut t = Poly::ZERO;
+                t.pointwise(&chat, t0_poly);
+                t.inv_ntt();
+                t.reduce();
+                *ct0_poly = t;
+            }
+        }
+        if inf_norm(ct0.as_poly_slice()) >= P::GAMMA2 {
+            kappa = kappa.wrapping_add(1);
+            continue;
+        }
+
+        // h = MakeHint(−c ∘ t₀, w − c ∘ s₂ + c ∘ t₀); reject if popcount > ω.
         let mut h = <P::VecK as PolyArray>::zeroed();
+        let mut hint_ones = 0usize;
         {
             let h_slice = h.as_poly_slice_mut();
-            let r0_slice = r0.as_poly_slice();
-            let c_coeffs = c.coeffs;
-            for (h_poly, r0_poly) in h_slice.iter_mut().zip(r0_slice.iter()).take(P::K) {
-                for (j, (h_c, r0_c)) in h_poly.coeffs.iter_mut().zip(r0_poly.coeffs.iter()).enumerate() {
-                    let hb = make_hint(-c_coeffs[j], *r0_c, P::GAMMA2);
-                    *h_c = if bool::from(hb) { 1 } else { 0 };
+            let w_slice = w.as_poly_slice();
+            let cs2_slice = cs2.as_poly_slice();
+            let ct0_slice = ct0.as_poly_slice();
+            for (((h_poly, w_poly), cs2_poly), ct0_poly) in h_slice
+                .iter_mut()
+                .zip(w_slice.iter())
+                .zip(cs2_slice.iter())
+                .zip(ct0_slice.iter())
+                .take(P::K)
+            {
+                for j in 0..N {
+                    let wcs2 = w_poly.coeffs[j] - cs2_poly.coeffs[j];
+                    let r_full = wcs2 + ct0_poly.coeffs[j];
+                    let hb = make_hint(-ct0_poly.coeffs[j], r_full, P::GAMMA2);
+                    let bit = u8::from(bool::from(hb));
+                    h_poly.coeffs[j] = i32::from(bit);
+                    hint_ones += usize::from(bit);
                 }
             }
+        }
+        if hint_ones > P::OMEGA {
+            kappa = kappa.wrapping_add(1);
+            continue;
         }
 
         // Encode: c̃ ‖ z ‖ h
@@ -779,7 +855,7 @@ where
         if hbuf.len() != P::OMEGA + P::K {
             return Err(Error::InvalidLength);
         }
-        unpack_hint::<P>(hbuf, h.as_poly_slice_mut());
+        unpack_hint::<P>(hbuf, h.as_poly_slice_mut()).ok_or(Error::InvalidEncoding)?;
     }
 
     if inf_norm(z.as_poly_slice()) >= P::GAMMA1 - P::BETA {

@@ -165,7 +165,15 @@ fn gcm_siv_inner(
 
         Ok(Some(Tag::new(tag)))
     } else {
-        // Recompute expected tag from (AAD || C), compare, then decrypt.
+        // GCM-SIV authenticates the *plaintext*, so decrypt first (CTR keystream
+        // keyed by the provided tag), then recompute POLYVAL over the recovered
+        // plaintext and compare. Restore the ciphertext if the tag is wrong so a
+        // failed open leaves the buffer untouched.
+        let provided = provided.ok_or(Error::Verification)?;
+        let mut cb = provided.0;
+        cb[15] |= 0x80;
+        ctr_xor(&enc_cipher, &cb, buf);
+
         let s = polyval_update(&auth_key, [0u8; 16], aad);
         let s = polyval_update(&auth_key, s, buf);
         let s = polyval_step(&auth_key, &s, &length_block);
@@ -175,14 +183,12 @@ fn gcm_siv_inner(
         tag_input[15] &= 0x7f;
         let expected = enc_cipher.encrypt_block(&tag_input);
 
-        match provided {
-            Some(tag) if tag.ct_eq(&Tag::new(expected)) => {
-                let mut cb = expected;
-                cb[15] |= 0x80;
-                ctr_xor(&enc_cipher, &cb, buf);
-                Ok(None)
-            }
-            _ => Err(Error::Verification),
+        if provided.ct_eq(&Tag::new(expected)) {
+            Ok(None)
+        } else {
+            // Re-encrypt to undo the in-place decryption.
+            ctr_xor(&enc_cipher, &cb, buf);
+            Err(Error::Verification)
         }
     }
 }

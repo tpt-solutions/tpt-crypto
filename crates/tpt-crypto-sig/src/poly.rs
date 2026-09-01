@@ -513,9 +513,8 @@ pub fn polyt0_unpack(input: &[u8]) -> Option<Poly> {
             | (u32::from(chunk[10]) << 2)
             | (u32::from(chunk[11]) << 10)) as i32
             & 0x1FFF;
-        out.coeffs[8 * i + 7] = ((u32::from(chunk[10]) >> 3)
-            | (u32::from(chunk[11]) << 5)
-            | (u32::from(chunk[12]) << 13)) as i32
+        out.coeffs[8 * i + 7] = ((u32::from(chunk[11]) >> 3)
+            | (u32::from(chunk[12]) << 5)) as i32
             & 0x1FFF;
         for j in 0..8 {
             out.coeffs[8 * i + j] = (1 << (D - 1)) - out.coeffs[8 * i + j];
@@ -695,14 +694,21 @@ mod tests {
 
     fn hint_round_trip() {
         for g in [(Q - 1) / 88, (Q - 1) / 32] {
-            for r in [0i32, 100, g, Q - 1, Q / 2, 4096, -4096] {
-                let r = canonicalize(r);
-                let z = 1i32; // small perturbation
+            let mut st = 0x9e3779b97f4a7c15u64;
+            let mut next = || {
+                st ^= st << 13;
+                st ^= st >> 7;
+                st ^= st << 17;
+                st
+            };
+            for _ in 0..20000 {
+                let r = canonicalize((next() % Q as u64) as i32);
+                // z uniform in [-g, g]
+                let z = ((next() % (2 * g as u64 + 1)) as i32) - g;
                 let h = make_hint(z, r, g);
                 let recon = use_hint(h, r, g);
-                // UseHint must recover HighBits(r + z).
                 let want = high_bits(g, canonicalize(r + z));
-                assert_eq!(recon, want, "hint round trip failed for g={g} r={r}");
+                assert_eq!(recon, want, "hint round trip failed for g={g} r={r} z={z}");
             }
         }
     }

@@ -8,7 +8,7 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use tpt_crypto_aead::Aead;
 use tpt_crypto_aead::{Aes128Gcm, Aes128GcmSiv, Aes256Gcm, Aes256GcmSiv, ChaCha20Poly1305, XChaCha20Poly1305};
-use tpt_crypto_aead::{Nonce, Tag};
+use tpt_crypto_aead::Nonce;
 
 const fn nonce12() -> Nonce<12> {
     Nonce::new([0u8; 12])

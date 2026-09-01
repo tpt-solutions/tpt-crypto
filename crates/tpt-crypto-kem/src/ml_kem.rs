@@ -21,8 +21,8 @@ use crate::pke;
 use tpt_crypto_core::{CryptoRng, Error};
 use tpt_crypto_ct::ct_eq_bytes;
 use tpt_crypto_ct::select::ct_select_array;
-use tpt_crypto_hash::Xof;
-use tpt_crypto_hash::sha3::Shake256;
+use tpt_crypto_hash::sha3::{Sha3_256, Sha3_512, Shake256};
+use tpt_crypto_hash::{Hasher, Xof};
 
 // Re-expose the parameter-set markers for `ml_kem::MlKem768` style usage.
 pub use crate::params::{MlKem512, MlKem768, MlKem1024};
@@ -101,18 +101,24 @@ impl Ciphertext {
 
 // --- SHAKE256 helpers (streaming, no large temp buffers) ---------------------
 
-/// `G(a ‖ b) = SHAKE256(a ‖ b, 64)`.
+/// `G(a ‖ b) = SHA3-512(a ‖ b)` (FIPS 203 §4.1).
 fn g_parts(a: &[u8], b: &[u8]) -> [u8; 64] {
-    let mut x = Shake256::new();
+    let mut x = Sha3_512::new();
     x.update(a);
     x.update(b);
-    let mut out = [0u8; 64];
-    x.squeeze(&mut out);
-    out
+    x.finalize()
 }
 
-/// `H(a ‖ b) = SHAKE256(a ‖ b, 32)`.
+/// `H(a ‖ b) = SHA3-256(a ‖ b)` (FIPS 203 §4.1).
 fn h_parts(a: &[u8], b: &[u8]) -> [u8; 32] {
+    let mut x = Sha3_256::new();
+    x.update(a);
+    x.update(b);
+    x.finalize()
+}
+
+/// `J(a ‖ b) = SHAKE256(a ‖ b, 32)` — the implicit-rejection PRF (FIPS 203 §4.1).
+fn j_parts(a: &[u8], b: &[u8]) -> [u8; 32] {
     let mut x = Shake256::new();
     x.update(a);
     x.update(b);
@@ -208,10 +214,12 @@ pub fn decapsulate<P: MlKemParams>(sk: &DecapsKey, ct: &[u8]) -> Result<SharedSe
     if ct.len() != P::CT_LEN {
         return Err(Error::InvalidCiphertext);
     }
-    let (pk, _d_slice, h, z) = split_sk::<P>(sk);
+    let (pk, d_slice, h, z) = split_sk::<P>(sk);
+    let d: [u8; 32] = d_slice.try_into().map_err(|_| Error::InvalidLength)?;
+    let s_hat = pke::derive_s_hat::<P>(&d);
 
     let (rho, t_hat) = pke::decode_pk::<P>(pk)?;
-    let m_prime = pke::kpke_decrypt::<P>(&t_hat, ct)?;
+    let m_prime = pke::kpke_decrypt::<P>(&s_hat, ct)?;
 
     let g = g_parts(&m_prime, h);
     let mut k_prime = [0u8; 32];
@@ -223,7 +231,7 @@ pub fn decapsulate<P: MlKemParams>(sk: &DecapsKey, ct: &[u8]) -> Result<SharedSe
 
     // Constant-time comparison of the recomputed ciphertext with the input.
     let eq = ct_eq_bytes(&ct_prime, ct);
-    let reject = h_parts(z, ct);
+    let reject = j_parts(z, ct);
 
     Ok(ct_select_array(eq, k_prime, reject))
 }

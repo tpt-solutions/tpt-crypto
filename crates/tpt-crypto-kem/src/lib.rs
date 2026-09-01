@@ -9,15 +9,21 @@
 //!
 //! The high-level API lives in [`ml_kem`]:
 //!
-//! ```ignore
+//! ```
 //! use tpt_crypto_kem::ml_kem::{keygen, encapsulate, decapsulate, MlKem768};
 //! # use tpt_crypto_core::CryptoRng;
-//! # fn demo(mut rng: impl CryptoRng) {
+//! # struct DemoRng(u64);
+//! # impl CryptoRng for DemoRng {
+//! #     fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), tpt_crypto_core::Error> {
+//! #         for b in dst { self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1); *b = (self.0 >> 33) as u8; }
+//! #         Ok(())
+//! #     }
+//! # }
+//! # let mut rng = DemoRng(42);
 //! let (pk, sk) = keygen::<MlKem768>(&mut rng);
 //! let (ss, ct) = encapsulate::<MlKem768>(&pk, &mut rng);
-//! let ss2 = decapsulate::<MlKem768>(&sk, &ct).unwrap();
+//! let ss2 = decapsulate::<MlKem768>(&sk, &ct.bytes).unwrap();
 //! assert_eq!(ss, ss2);
-//! # }
 //! ```
 //!
 //! Parameter sets [`MlKem512`], [`MlKem768`], and [`MlKem1024`] are provided.

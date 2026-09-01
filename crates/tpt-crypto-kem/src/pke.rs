@@ -20,7 +20,8 @@ use crate::poly::{
 };
 use crate::sampler::{cbd, sample_ntt};
 use tpt_crypto_core::Error;
-use tpt_crypto_hash::sha3::shake256;
+use tpt_crypto_hash::sha3::Sha3_512;
+use tpt_crypto_hash::Hasher;
 
 /// A vector of `K` polynomials. Heap-backed because the KEM modules require
 /// `alloc`; this keeps the `poly` core heap-free.
@@ -39,15 +40,37 @@ impl PolyVec {
     }
 }
 
-/// Derive the K-PKE public key from the 32-byte seed `d`.
-pub fn kpke_keygen<P: MlKemParams>(d: &[u8; 32]) -> Vec<u8> {
-    // G(d) = SHAKE256(d, 64): ρ ‖ σ
-    let mut g = [0u8; 64];
-    shake256(d, &mut g);
+/// Expand the 32-byte seed `d` into `(ρ, σ)` via `G(d ‖ ⟨k⟩) = SHA3-512(...)`
+/// (FIPS 203 Algorithm 13, line 1).
+fn expand_d<P: MlKemParams>(d: &[u8; 32]) -> ([u8; 32], [u8; 32]) {
+    let mut h = Sha3_512::new();
+    h.update(d);
+    h.update(&[P::K as u8]);
+    let g = h.finalize();
     let mut rho = [0u8; 32];
     rho.copy_from_slice(&g[..32]);
     let mut sigma = [0u8; 32];
     sigma.copy_from_slice(&g[32..]);
+    (rho, sigma)
+}
+
+/// Re-derive the NTT-domain secret vector `ŝ` from the K-PKE seed `d`. Used by
+/// decapsulation, which keeps the seed rather than the packed `dk_PKE`.
+pub fn derive_s_hat<P: MlKemParams>(d: &[u8; 32]) -> PolyVec {
+    let (_rho, sigma) = expand_d::<P>(d);
+    let mut s_hat = PolyVec::zero(P::K);
+    for i in 0..P::K {
+        let mut si = [0i32; N];
+        cbd(&mut si, &sigma, i as u8, P::ETA1);
+        s_hat.vec[i] = ntt_p(&si);
+    }
+    s_hat
+}
+
+/// Derive the K-PKE public key from the 32-byte seed `d`.
+pub fn kpke_keygen<P: MlKemParams>(d: &[u8; 32]) -> Vec<u8> {
+    // (ρ, σ) = G(d ‖ ⟨k⟩)
+    let (rho, sigma) = expand_d::<P>(d);
 
     let mut s = PolyVec::zero(P::K);
     for i in 0..P::K {
@@ -55,22 +78,22 @@ pub fn kpke_keygen<P: MlKemParams>(d: &[u8; 32]) -> Vec<u8> {
     }
     let mut e = PolyVec::zero(P::K);
     for i in 0..P::K {
-        cbd(&mut e.vec[i], &sigma, (P::K + i) as u8, P::ETA2);
+        // FIPS 203 Algorithm 13: `e` uses η₁ in K-PKE key generation.
+        cbd(&mut e.vec[i], &sigma, (P::K + i) as u8, P::ETA1);
     }
 
+    let s_hat: Vec<Poly> = (0..P::K).map(|j| ntt_p(&s.vec[j])).collect();
     let mut t_hat = PolyVec::zero(P::K);
-    for j in 0..P::K {
-        let s_hat_j = ntt_p(&s.vec[j]);
-        for i in 0..P::K {
-            let a = sample_ntt(&rho, i as u8, j as u8);
-            let a_hat = ntt_p(&a);
-            let prod = basemul_polys(&a_hat, &s_hat_j);
+    for i in 0..P::K {
+        for (j, s_hat_j) in s_hat.iter().enumerate() {
+            // Â[i][j] = SampleNTT(XOF(ρ, j, i)); already in the NTT domain.
+            let a_hat = sample_ntt(&rho, j as u8, i as u8);
+            let prod = basemul_polys(&a_hat, s_hat_j);
             t_hat.vec[i] = poly_add(&t_hat.vec[i], &prod);
         }
-        // Lift the accumulated row into Montgomery form (reference `poly_tomont`).
-        poly_tomont(&mut t_hat.vec[j]);
-    }
-    for i in 0..P::K {
+        // `basemul` leaves an R^-1 deficit; lift the whole row back (reference
+        // `polyvec_tomont`), then add the (already NTT-domain) error term.
+        poly_tomont(&mut t_hat.vec[i]);
         let e_hat = ntt_p(&e.vec[i]);
         t_hat.vec[i] = poly_add(&t_hat.vec[i], &e_hat);
     }
@@ -134,22 +157,21 @@ pub fn kpke_encrypt<P: MlKemParams>(
     cbd(&mut e2, r_seed, (2 * P::K) as u8, P::ETA2);
 
     // û = Aᵀ · r + e1
+    let r_hat: Vec<Poly> = (0..P::K).map(|j| ntt_p(&rv.vec[j])).collect();
     let mut u_hat = PolyVec::zero(P::K);
     for i in 0..P::K {
-        let r_hat_i = ntt_p(&rv.vec[i]);
-        for j in 0..P::K {
-            let a = sample_ntt(rho, j as u8, i as u8);
-            let a_hat = ntt_p(&a);
-            let prod = basemul_polys(&a_hat, &r_hat_i);
+        for (j, r_hat_j) in r_hat.iter().enumerate() {
+            // (Âᵀ)[i][j] = Â[j][i] = SampleNTT(XOF(ρ, i, j)); NTT domain already.
+            let a_hat = sample_ntt(rho, i as u8, j as u8);
+            let prod = basemul_polys(&a_hat, r_hat_j);
             u_hat.vec[i] = poly_add(&u_hat.vec[i], &prod);
         }
     }
 
     // v̂ = t̂ · r + e2 + m
     let mut v_hat = [0i32; N];
-    for i in 0..P::K {
-        let r_hat_i = ntt_p(&rv.vec[i]);
-        let prod = basemul_polys(&t_hat.vec[i], &r_hat_i);
+    for (i, r_hat_i) in r_hat.iter().enumerate() {
+        let prod = basemul_polys(&t_hat.vec[i], r_hat_i);
         v_hat = poly_add(&v_hat, &prod);
     }
 
@@ -187,7 +209,7 @@ pub fn kpke_encrypt<P: MlKemParams>(
 }
 
 /// K-PKE decryption: recover the 32-byte message from a ciphertext.
-pub fn kpke_decrypt<P: MlKemParams>(t_hat: &PolyVec, ct: &[u8]) -> Result<[u8; 32], Error> {
+pub fn kpke_decrypt<P: MlKemParams>(s_hat: &PolyVec, ct: &[u8]) -> Result<[u8; 32], Error> {
     if ct.len() != P::CT_LEN {
         return Err(Error::InvalidLength);
     }
@@ -201,11 +223,11 @@ pub fn kpke_decrypt<P: MlKemParams>(t_hat: &PolyVec, ct: &[u8]) -> Result<[u8; 3
     }
     let v = unpack_poly(c2, P::DV);
 
+    // w = ŝᵀ · NTT(u)  (s_hat is already in the NTT domain).
     let mut w_hat = [0i32; N];
     for i in 0..P::K {
         let u_hat_i = ntt_p(&u.vec[i]);
-        let t_hat_i = ntt_p(&t_hat.vec[i]);
-        let prod = basemul_polys(&t_hat_i, &u_hat_i);
+        let prod = basemul_polys(&s_hat.vec[i], &u_hat_i);
         w_hat = poly_add(&w_hat, &prod);
     }
     let w = invntt_p(&w_hat);

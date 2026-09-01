@@ -277,15 +277,26 @@ variant (feature-gated re-exports instead of steps 3–6).
       CTR-then-GHASH ordering per SP 800-38D, ct tag verify before plaintext
       release. `pclmulqdq` path routed via `tpt-crypto-ct`. NIST GCM Appendix B
       TC1/TC2 inline KATs pass (verified against OpenSSL).
-- [~] ChaCha20 + Poly1305 (RFC 8439); XChaCha20-Poly1305 (draft-irtf-cfrg)
+- [x] ChaCha20 + Poly1305 (RFC 8439); XChaCha20-Poly1305 (draft-irtf-cfrg)
       — `src/chacha.rs`: ChaCha20 block/stream, Poly1305, `ChaCha20Poly1305`,
-      `XChaCha20Poly1305` (HChaCha20). RFC 8439 §2.3.2 block + §2.4.2 encrypt +
-      §2.5.2 Poly1305 inline KATs pass.
+      `XChaCha20Poly1305` (HChaCha20). **FIXED:** the Poly1305 core used a
+      non-standard, incorrect 26-bit limb layout (only the low 2 bits of several
+      message bytes were absorbed, so ciphertext tampering in the dropped bits
+      went undetected) and `update` treated every call's trailing partial block
+      as a terminal short block — broken for the multi-slice AEAD MAC. Replaced
+      with the standard poly1305-donna 5×26-bit arithmetic + cross-call
+      buffering; the AEAD length block now uses byte counts (RFC 8439), not
+      bit counts. `poly1305_rfc8439` now checks the real §2.5.2 vector (plus a
+      7-byte-chunked feed). RFC 8439 §2.3.2/§2.4.2 KATs still pass.
 - [~] AES-GCM-SIV (RFC 8452) — nonce-misuse resistant; POLYVAL
-      — `src/gcm_siv.rs`: POLYVAL (rewritten — left-shift multiply, correct
+      — `src/gcm_siv.rs`: POLYVAL (left-shift multiply, correct
       `x¹²⁸+x¹²⁷+x¹²⁶+x¹²¹+1` reduction constant, branch-free), key-derivation,
-      `Aes128GcmSiv`/`Aes256GcmSiv`. RFC 8452 Appendix C.1 KAT + POLYVAL identity
-      test pass. Needs the full C.1–C.6 vector set.
+      `Aes128GcmSiv`/`Aes256GcmSiv`. **FIXED:** `decrypt` recomputed POLYVAL over
+      the *ciphertext* — GCM-SIV authenticates the plaintext, so it now decrypts
+      first (CTR keyed by the provided tag), then hashes the recovered plaintext,
+      then compares (restoring the buffer on a tag mismatch). RFC 8452 C.1 KAT +
+      POLYVAL identity + rand round-trip/bitflip props all pass. Still needs the
+      full C.1–C.6 vector set.
 - [~] `CtrDrbg` (SP 800-90A) implementing `DrbgCore`
       — `src/ctr_drbg.rs`: AES-256 CTR-DRBG, `update` (key rebuilt into fresh
       `Zeroizing` buffer), instantiate/reseed/generate, inline tests. Not yet
@@ -302,8 +313,10 @@ variant (feature-gated re-exports instead of steps 3–6).
       — inline per-module vectors only (FIPS-197 AES, RFC 8439 ChaCha/Poly1305,
       RFC 8452 GCM-SIV C.1, NIST GCM Appendix B TC1/TC2); all 15 lib tests green.
       No `tests/` dir, no NIST CAVP / Wycheproof JSON, no PROVENANCE.
-- [ ] proptest: `decrypt(encrypt(m)) == m`; any ciphertext/tag/AAD bitflip → error
-      — `proptest` is a dev-dep but no property tests written yet.
+- [x] proptest: `decrypt(encrypt(m)) == m`; any ciphertext/tag/AAD bitflip → error
+      — `tests/props.rs` (rand-based): round-trip + single-bit-flip rejection for
+      AES-128/256-GCM, ChaCha20/XChaCha20-Poly1305, AES-128/256-GCM-SIV. All
+      12 pass.
 - [ ] `specs/aead_tag_verify.telos` (accept iff tag valid; timing ⟂ tag)
 
 - [ ] **Milestone**: dry-run clean for `-field`,`-curve`,`-aead`;
@@ -324,37 +337,61 @@ variant (feature-gated re-exports instead of steps 3–6).
       — `src/encode.rs`.
 - [~] K-PKE (IND-CPA) keygen/encrypt/decrypt; ML-KEM (FIPS 203) FO transform →
       ML-KEM-512 / 768 / 1024; implicit-rejection decapsulation (ct)
-      — `src/pke.rs` + `src/ml_kem.rs` (alloc-gated); `tests/props.rs`
-      encaps/decaps round-trip passes for all three parameter sets.
-      `ml_kem.rs` under active edit.
+      — `src/pke.rs` + `src/ml_kem.rs` (alloc-gated). **The round trip was
+      silently broken** — `tests/props.rs` discarded its `prop_assert` results
+      (`let _ = round_trip(...)`), so a real `decapsulate ∘ encapsulate` never
+      recovered the shared secret. Fixes: (a) `kpke_decrypt` used the *public*
+      `t̂` instead of the secret `ŝ` (and re-NTT'd it) — now `decapsulate`
+      re-derives `ŝ` from the stored seed via `pke::derive_s_hat` and `kpke_decrypt`
+      takes `ŝ`; (b) `kpke_encrypt`'s `û = Âᵀr` loop reused `r̂_i` for every
+      column instead of `r̂_j` — no matrix-vector product at all; (c) keygen
+      applied `poly_tomont` per-iteration to the wrong row index while the inner
+      loop kept accumulating un-lifted terms; (d) keygen sampled `e` with η₂
+      instead of η₁. FIPS-conformance pass on top: `G = SHA3-512(d ‖ ⟨k⟩)`,
+      `H = SHA3-256`, `J = SHAKE256` (were all SHAKE256; `d ‖ k` byte was
+      missing), matrix entries taken straight from `SampleNTT` in the correct
+      `XOF(ρ, j, i)` index order (no double forward-NTT). `tests/props.rs`
+      round-trips now really assert and pass for 512/768/1024; doctest un-ignored.
 - [x] Spec API: `ml_kem::keygen::<MlKem768>(rng)`, `encapsulate`, `decapsulate`
 - [~] FrodoKEM (feature `frodo`) and Classic McEliece (feature `mceliece`,
       long-term secrets) — gated, larger
       — `src/frodo.rs` / `src/mceliece.rs` are feature-gated stubs returning
       `Error::Unsupported`; API surface only.
 - [ ] KATs: FIPS 203 ACVP vectors + NIST `.rsp` KAT files (all param sets)
-      — `tests/kat/` dir present; one KAT test currently `#[ignore]`, no ACVP
-      vectors wired.
-- [~] proptest: `decapsulate(sk, encapsulate(pk).0) == encapsulate(pk).1`;
+      — the committed `tests/kat/ml_kem_*.kat` files are **not trustworthy**
+      (no provenance; their expected `pk` matches no standard `G` construction and
+      leaks `SHA3-512(d‖0x02)` into the key tail — see
+      `tests/kat/PROVENANCE.md`). A draft `tests/ml_kem_kat.rs` was written and
+      then removed. Still need real ACVP/NIST vectors + PROVENANCE.
+- [x] proptest: `decapsulate(sk, encapsulate(pk).0) == encapsulate(pk).1`;
       malformed ciphertext → implicit-reject (no panic, no distinguishable time)
-      — `tests/props.rs`: round-trip for 512/768/1024 + implicit-reject on
-      tampered ciphertext, all green (4 tests).
+      — `tests/props.rs`: round-trip for 512/768/1024 (now with live assertions)
+      + implicit-reject on tampered ciphertext, all green.
 - [ ] `specs/ml_kem_decapsulate.telos` (`ensures: timing ⟂ sk`),
       `specs/ntt_roundtrip.telos`
 
 ### crates/tpt-crypto-sig
-- [~] Reuse `-kem::poly` for ML-DSA ring (q=8380417, n=256); power2round,
+- [x] Reuse `-kem::poly` for ML-DSA ring (q=8380417, n=256); power2round,
       decompose, `makeHint`/`useHint`, ct
       — own `src/poly.rs` (does **not** reuse `-kem::poly`); power2round /
-      decompose / hint helpers present. `poly::tests::all_poly_tests` now
-      **PASSES** — the NTT round-trip bug is fixed (working tree).
-- [~] ML-DSA (FIPS 204) keygen/sign/verify → ML-DSA-44 / 65 / 87; hedged +
+      decompose / hint helpers. `poly::tests::all_poly_tests` passes.
+      **FIXED:** `polyt0_unpack` coefficient `8i+7` read bytes `chunk[10/11/12]`
+      instead of `chunk[11/12]` and OR'd in a `<< 13` term that `& 0x1FFF`
+      masks away entirely — so ~12.5% of `t₀` coefficients round-tripped wrong,
+      which is why `2^d·t1 + t0 ≠ A·s1 + s2` and every verify failed.
+      `hint_round_trip` now stress-tests `UseHint(MakeHint(z,r), r)` over 20k
+      random `(r, z ∈ [−γ₂, γ₂])` pairs.
+- [x] ML-DSA (FIPS 204) keygen/sign/verify → ML-DSA-44 / 65 / 87; hedged +
       deterministic; rejection-sampling loop with ct primitives; `ctx` domain sep
-      — `src/ml_dsa/mod.rs` + `src/ml_dsa/sample.rs`; keygen/sign/verify wired for
-      all three sets, deterministic + hedged, `Ctx` domain separation. All 6
-      `ml_dsa::tests` round-trips still **FAIL**, but no longer blocked on the
-      poly NTT bug (now fixed) — remaining defect is in the ML-DSA
-      sign/verify/packing path itself.
+      — `src/ml_dsa/mod.rs` + `src/ml_dsa/sample.rs`. All 6 `ml_dsa::tests`
+      round-trips PASS. Fixes beyond the `polyt0_unpack` one: (a) the signer never
+      loaded `t₀` and computed the hint as `MakeHint(−c, LowBits(w−c·s₂))` — now
+      the FIPS 204 Alg 7 line 33 form `MakeHint(−c·t₀, w − c·s₂ + c·t₀)` with the
+      `‖c·t₀‖∞ < γ₂` and `popcount ≤ ω` rejections; (b) keygen now canonicalises
+      `t` before `Power2Round`; (c) `HintBitUnpack` now validates (monotone
+      counts ≤ ω, strictly-increasing indices, zero tail) and `verify` returns
+      `InvalidEncoding` instead of panicking on a mutated signature;
+      (d) `μ` now includes the `|Ctx|` length byte (FIPS 204 §5.2).
 - [~] SLH-DSA (FIPS 205): WOTS+, XMSS, FORS, hypertree; SHA2 + SHAKE param sets;
       `slh-dsa` feature (large)
       — `src/slh_dsa.rs` scaffolded (now an unconditional `pub mod`, no longer
@@ -367,8 +404,8 @@ variant (feature-gated re-exports instead of steps 3–6).
 - [ ] BLS12-381 (spec API): `sign`, `verify`, `aggregate`,
       `verify_aggregate` (same-message + distinct-message), proof-of-possession;
       ciphersuite `BLS_SIG_..._NUL_`
-- [~] Spec API: `ml_dsa::keygen::<MlDsa65>`, `sign(sk, msg, ctx)`, `verify(...)`
-      — surface exists; blocked on the failing ML-DSA round-trips above.
+- [x] Spec API: `ml_dsa::keygen::<MlDsa65>`, `sign(sk, msg, ctx)`, `verify(...)`
+      — working for all three parameter sets.
 - [~] Optional `signature` trait-compat impls behind `signature` feature
       — `src/signature_impls.rs` is a stub.
 - [ ] KATs: FIPS 204 & 205 ACVP, RFC 8032 (Ed25519), RFC 6979 + NIST CAVP (ECDSA),
@@ -376,8 +413,10 @@ variant (feature-gated re-exports instead of steps 3–6).
       — `tests/ml_dsa_kat.rs` present (placeholder), no ACVP vectors.
 - [~] proptest: `verify(pk, m, sign(sk, m))` ok; wrong key/msg/ctx → `Verification`;
       `verify_aggregate` iff all inputs valid
-      — `tests/ml_dsa_props.rs` present; blocked on the failing ML-DSA
-      round-trips (sign/verify path, no longer the NTT).
+      — `tests/ml_dsa_props.rs` now real (rand-based, all 3 param sets): honest
+      round-trip, wrong msg/ctx/key → `Verification`, hedged verifies, and every
+      single-bit signature mutation is rejected. BLS `verify_aggregate` still
+      pending (no BLS impl yet).
 - [ ] `specs/bls_aggregate.telos` (`valid iff all input sigs valid`),
       `specs/ecdsa_nonce_ct.telos`
 
