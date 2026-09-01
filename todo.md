@@ -273,7 +273,9 @@ variant (feature-gated re-exports instead of steps 3–6).
 - [~] proptest: `k·(l·P) == (k·l)·P`, `pairing` bilinearity, compress round-trip
       — Weierstrass: `(a+b)·G == a·G + b·G` + SEC1 compress/uncompress round-trip
       covered in `tests/weierstrass.rs`. Pairing bilinearity pending (no BLS).
-- [ ] `specs/scalarmul_ct.telos` (timing ⟂ scalar)
+- [x] `specs/scalarmul_ct.telos` (timing ⟂ scalar)
+      — covers the P-256/P-384 fixed-length double-and-add (`ct_select` per bit,
+      complete RCB formulas); functional side discharged by the RFC 5903 KATs.
 
 ### crates/tpt-crypto-aead
 - [x] Scaffold `crates/tpt-crypto-aead/` — `Cargo.toml` (deps `-core`, `-ct`;

@@ -1,0 +1,57 @@
+spec scalarmul_ct
+
+description:
+  Constant-time scalar multiplication on a prime-order short-Weierstrass curve
+  (`y^2 = x^3 - 3x + b`, cofactor 1: NIST P-256 / P-384). For a curve point `P`
+  and a scalar `k` (an arbitrary big-endian byte string, secret-eligible), the
+  result is the group element `[k] P`. The functional law is ordinary scalar
+  multiplication; the security contract is that the observable execution trace
+  is independent of the secret scalar `k` and of the secret coordinates of `P`.
+
+  The implementation (`tpt-crypto-curve::weierstrass`) is a fixed-length
+  double-and-add over the bits of `k`, most-significant bit first, using the
+  complete Renes-Costello-Batina addition and doubling formulas (eprint
+  2015/1060, Alg. 4 and 6, specialised to `a = -3`). Every bit performs exactly
+  one `double`, one `add`, and one `Field::ct_select` between the running
+  accumulator and `accumulator + P`; there is no early exit and no windowing
+  table indexed by secret bits.
+
+inputs:
+  p : ProjectivePoint<C>   // curve point, coordinates secret-eligible
+  k : &[u8]                // scalar, big-endian, secret-eligible; length public
+
+outputs:
+  result : ProjectivePoint<C>   // [k] p, in projective coordinates
+
+assumes:
+  - C is a prime-order curve with cofactor 1 (P-256 or P-384)
+  - `p` lies on the curve (or is the identity)
+
+ensures:
+  // functional correctness
+  result == group_scalar_mul(k, p)
+  // the RCB formulas are complete on a prime-order curve, so no input pair
+  // (including identity, doubling, and P + (-P)) triggers an exceptional case
+  result_is_always_on_curve
+  // side-channel contract: the trace (branch pattern, memory-access pattern,
+  // micro-op sequence, iteration count) is independent of the value of `k`
+  // and of the secret coordinates of `p`. Only `k.len()` is public.
+  execution_trace ⟂ (k_bits, p_coords)
+
+non_leaks:
+  - loop trip count depends only on `k.len() * 8`, never on the bit values
+  - the per-bit accumulator update is a branch-free `Field::ct_select`, not an
+    `if`; no conditional branch targets depend on a scalar bit
+  - no memory access (no lookup table) is indexed by a secret bit
+  - `add` and `double` are the single complete-formula code paths: no
+    point-at-infinity special case, no secret-dependent conditional subtract
+    (those live entirely inside the constant-time field layer)
+
+verification:
+  // functional: RFC 5903 ECDH known-answer vectors for P-256 and P-384
+  // (public key `[i] G` and shared secret `[i]([r] G)`), plus `[n] G == O`
+  // and the homomorphism `[a + b] G == [a] G + [b] G`, in
+  // `tpt-crypto-curve/tests/weierstrass.rs`.
+  // side-channel: discharged structurally (fixed-length loop, `ct_select` per
+  // bit, no secret-indexed memory) and by the `-ct` / `-field` leakage harness
+  // covering the underlying `ct_select` and field multiply.
