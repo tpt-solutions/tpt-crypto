@@ -1,6 +1,7 @@
 /target
 Cargo.lock.bak
 *.log
+tmp_test.*
 /fuzz/target
 **/*.rs.bk
 .DS_Store
