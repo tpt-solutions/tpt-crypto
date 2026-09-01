@@ -114,7 +114,9 @@ pub fn receiver_init<R: CryptoRng>(
     clamp_scalar(&mut r);
     let a_pt = EdwardsPoint::decompress(a).unwrap();
     let id = EdwardsPoint::identity();
-    let addend = <EdwardsPoint as CtSelect>::ct_select(choice, id, a_pt);
+    // `ct_select(cond, a, b)` returns `a` when `cond` is true: pick `A` for
+    // choice 1, the identity for choice 0.
+    let addend = <EdwardsPoint as CtSelect>::ct_select(choice, a_pt, id);
     let b = EdwardsPoint::basepoint().mul(&r).add(&addend);
     let k = a_pt.mul(&r).compress();
     (ReceiverRound1 { b: b.compress() }, ReceiverState { k, choice })

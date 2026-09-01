@@ -146,7 +146,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo +nightly fuzz build
+      - run: cd fuzz && cargo +nightly fuzz build
 
   semver-checks:
     name: semver-checks

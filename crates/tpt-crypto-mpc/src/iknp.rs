@@ -4,18 +4,18 @@
 //! 1-of-2 OTs (with sender-chosen messages) using the Ishai–Kushilevitz–
 //! Nissim–Pinkas correlation-robust hash construction.
 //!
-//! Security parameter `κ = 128` (16-byte masks). The base phase runs `κ` Chou–
-//! Orlandi base OTs whose messages carry the seed correlation `m1 = m0 ⊕ Δ`
-//! (Δ a receiver-chosen string with `Δ[0] = 1`). The extension phase then derives
-//! one correlated mask pair `(M0[j], M1[j] = M0[j] ⊕ Δ)` per output OT, encrypts
-//! the sender's two payloads under those masks, and lets the receiver recover the
-//! mask for its (independent, random) choice bit.
+//! Roles follow the textbook protocol: in the base phase the *extension receiver*
+//! acts as the OT sender, offering column `i` of its random matrix `T` and that
+//! column XOR its choice vector `r`; the *extension sender* acts as the OT
+//! receiver with a random κ-bit string `s`, so it learns
+//! `q_i = t_i ⊕ (s_i · r)`. Row-wise this gives `q_j = t_j ⊕ (r_j · s)`, and the
+//! correlated masks `H(j, q_j)` / `H(j, q_j ⊕ s)` let the receiver open exactly
+//! the branch matching `r_j` via `H(j, t_j)`.
 
 use alloc::vec;
 use alloc::vec::Vec;
 
 use tpt_crypto_core::CryptoRng;
-use tpt_crypto_ct::Choice;
 use tpt_crypto_hash::blake3::Blake3;
 use tpt_crypto_hash::Xof;
 
@@ -32,20 +32,21 @@ const KS_KEY: [u8; 32] = [
     0x55, 0x0c, 0x8b, 0x73, 0x29, 0xe2, 0x61, 0x0d, 0x4f, 0xa9, 0xb8, 0x17, 0x6c, 0x93, 0xe5, 0x02,
 ];
 
-/// Fixed-output PRG: 16-byte seed -> 16-byte value (BLAKE3 keyed, squeezed to 16 bytes).
-fn prg(seed: &[u8; MASK_BYTES]) -> [u8; MASK_BYTES] {
-    let mut out = [0u8; MASK_BYTES];
-    let mut h = Blake3::with_key(&KS_KEY);
-    h.update(seed);
-    h.finalize_xof(&mut out);
-    out
-}
-
 /// Keystream of `len` bytes from a `seed` (BLAKE3 keyed mode).
 fn keystream(seed: &[u8], len: usize) -> Vec<u8> {
     let mut h = Blake3::with_key(&KS_KEY);
     h.update(seed);
     let mut out = vec![0u8; len];
+    h.finalize_xof(&mut out);
+    out
+}
+
+/// Correlation-robust row hash `H(j, row)` -> 32-byte key.
+fn row_hash(j: usize, row: &[u8; MASK_BYTES]) -> [u8; 32] {
+    let mut h = Blake3::with_key(&KS_KEY);
+    h.update(&[j as u8]);
+    h.update(row);
+    let mut out = [0u8; 32];
     h.finalize_xof(&mut out);
     out
 }
@@ -75,87 +76,74 @@ pub fn extend_1of2<R: CryptoRng>(
     assert!(m <= KAPPA, "IKNP supports at most KAPPA extended OTs");
     assert_eq!(m, receiver_choices.len(), "choice count must match message count");
 
-    // Receiver picks a random correlation string Δ with LSB = 1.
-    let mut delta = rng.gen_array::<MASK_BYTES>();
-    delta[0] |= 1;
-
-    // --- Base phase: κ base OTs with messages (U[i], U[i] ⊕ Δ). ---
-    let mut u = [[0u8; MASK_BYTES]; KAPPA];
-    let mut recv_u = [[0u8; MASK_BYTES]; KAPPA];
-    for i in 0..KAPPA {
-        let ui = rng.gen_array::<MASK_BYTES>();
-        u[i] = ui;
-        let mut m1 = ui;
-        xor_bytes(&mut m1, &delta);
-        let choice = Choice::from(delta[i] & 1 == 1);
-        let got = ot::transfer_base_ot_1of2(rng, &ui, &m1, choice.into());
-        let mut g = [0u8; MASK_BYTES];
-        g.copy_from_slice(&got[..MASK_BYTES]);
-        // Recover U[i] = got ⊕ (choice_bit · Δ).
-        if (delta[i] & 1) == 1 {
-            xor_bytes(&mut g, &delta);
-        }
-        recv_u[i] = g;
-    }
-
-    // Sender's T-matrices: T0[i] = prg(U[i]); T1[i] = prg(U[i] ⊕ Δ).
-    let mut t0 = [[0u8; MASK_BYTES]; KAPPA];
-    let mut t1 = [[0u8; MASK_BYTES]; KAPPA];
-    for i in 0..KAPPA {
-        t0[i] = prg(&u[i]);
-        let mut k1 = u[i];
-        xor_bytes(&mut k1, &delta);
-        t1[i] = prg(&k1);
-    }
-
-    // --- Extension phase: encrypt each output under its correlated mask. ---
-    let mut sender_cts = Vec::with_capacity(m);
+    // Receiver choice vector `r` as a bitstring (bit j = choice j).
+    let mut r_bits = [0u8; MASK_BYTES];
     for j in 0..m {
-        let mut m0_mask = [0u8; MASK_BYTES];
-        let mut m1_mask = [0u8; MASK_BYTES];
-        for i in 0..KAPPA {
-            let bit0 = (t0[i][j / 8] >> (j % 8)) & 1;
-            let bit1 = (t1[i][j / 8] >> (j % 8)) & 1;
-            if bit0 == 1 {
-                m0_mask[i / 8] |= 1u8 << (i % 8);
-            }
-            if bit1 == 1 {
-                m1_mask[i / 8] |= 1u8 << (i % 8);
-            }
+        if receiver_choices[j] & 1 == 1 {
+            r_bits[j / 8] |= 1 << (j % 8);
         }
-        let len = sender_msgs[j].0.len();
-        let mut c0 = sender_msgs[j].0.clone();
-        xor_bytes(&mut c0, &keystream(&m0_mask, len));
-        let mut c1 = sender_msgs[j].1.clone();
-        xor_bytes(&mut c1, &keystream(&m1_mask, len));
-        sender_cts.push((c0, c1));
     }
 
-    // Receiver recovers M0[j] from its U-values and decrypts the chosen branch.
+    // Receiver's random matrix `T`, stored by rows (row j spans κ bits).
+    let mut t_rows = [[0u8; MASK_BYTES]; KAPPA];
+    for row in t_rows.iter_mut().take(m) {
+        *row = rng.gen_array::<MASK_BYTES>();
+    }
+
+    // Column `i` of `T` as an m-bit bitstring.
+    fn column(rows: &[[u8; MASK_BYTES]; KAPPA], m: usize, i: usize) -> [u8; MASK_BYTES] {
+        let mut c = [0u8; MASK_BYTES];
+        for j in 0..m {
+            if (rows[j][i / 8] >> (i % 8)) & 1 == 1 {
+                c[j / 8] |= 1 << (j % 8);
+            }
+        }
+        c
+    }
+
+    // Sender's random choice string `s` (κ bits).
+    let s_bits = rng.gen_array::<MASK_BYTES>();
+
+    // Base phase: for column `i`, receiver (OT sender) offers
+    // `(t_col_i, t_col_i ⊕ r)`; sender (OT receiver) uses choice bit `s_i` and
+    // obtains `q_col_i = t_col_i ⊕ (s_i · r)`. Scatter it into `q_rows`.
+    let mut q_rows = [[0u8; MASK_BYTES]; KAPPA];
+    for i in 0..KAPPA {
+        let t_col_i = column(&t_rows, m, i);
+        let mut m1 = t_col_i;
+        xor_bytes(&mut m1, &r_bits);
+        let s_i = (s_bits[i / 8] >> (i % 8)) & 1;
+        let got = ot::transfer_base_ot_1of2(rng, &t_col_i, &m1, s_i == 1);
+        for j in 0..m {
+            if (got[j / 8] >> (j % 8)) & 1 == 1 {
+                q_rows[j][i / 8] |= 1 << (i % 8);
+            }
+        }
+    }
+
+    // Extension phase: correlated masks per output OT.
+    let mut sender_cts = Vec::with_capacity(m);
     let mut recv_out = Vec::with_capacity(m);
     for j in 0..m {
-        let mut m0_mask = [0u8; MASK_BYTES];
-        for i in 0..KAPPA {
-            let t = prg(&recv_u[i]);
-            let bit = (t[j / 8] >> (j % 8)) & 1;
-            if bit == 1 {
-                m0_mask[i / 8] |= 1u8 << (i % 8);
-            }
-        }
+        let len = sender_msgs[j].0.len();
+
+        let mut q_xor_s = q_rows[j];
+        xor_bytes(&mut q_xor_s, &s_bits);
+        let k0 = row_hash(j, &q_rows[j]);
+        let k1 = row_hash(j, &q_xor_s);
+        let mut c0 = sender_msgs[j].0.clone();
+        xor_bytes(&mut c0, &keystream(&k0, len));
+        let mut c1 = sender_msgs[j].1.clone();
+        xor_bytes(&mut c1, &keystream(&k1, len));
+
+        // Receiver opens the branch matching `r_j` with `H(j, t_j)`.
+        let kr = row_hash(j, &t_rows[j]);
         let choice = receiver_choices[j] & 1;
-        let mut mask = m0_mask;
-        if choice == 1 {
-            xor_bytes(&mut mask, &delta); // M1 = M0 ⊕ Δ
-        }
-        let len = sender_cts[j].0.len();
-        let ct = if choice == 1 {
-            &sender_cts[j].1
-        } else {
-            &sender_cts[j].0
-        };
+        let ct = if choice == 1 { &c1 } else { &c0 };
         let mut out = ct.clone();
-        xor_bytes(&mut out, &keystream(&mask, len));
+        xor_bytes(&mut out, &keystream(&kr, len));
         recv_out.push(out);
+        sender_cts.push((c0, c1));
     }
 
     (sender_cts, recv_out)

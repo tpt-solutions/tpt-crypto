@@ -97,7 +97,8 @@ fn x25519_rfc7748_vec2() {
 fn x25519_rfc7748_alice() {
     let scalar = hex::decode("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
         .unwrap();
-    let base = [9u8; 32];
+    // Curve25519 base point u-coordinate = 9 (little-endian), not `[9; 32]`.
+    let base = X25519::BASE;
     let expected = hex::decode("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a")
         .unwrap();
 

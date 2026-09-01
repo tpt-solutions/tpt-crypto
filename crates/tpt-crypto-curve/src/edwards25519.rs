@@ -386,7 +386,7 @@ fn reduce_wide(d: &[u8; 64]) -> Ed25519Scalar {
         acc = acc.add(&term);
         j += 1;
     }
-    acc
+    Ed25519Scalar::from_limbs(acc.to_integer())
 }
 
 /// Incremental SHA-512 over a list of byte slices (no allocation).

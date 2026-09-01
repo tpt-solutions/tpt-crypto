@@ -234,34 +234,22 @@ variant (feature-gated re-exports instead of steps 3–6).
       `-hash`, `-core`), `lib.rs` (`#![no_std]`, `#![forbid(unsafe_code)]`),
       modules `edwards25519`, `montgomery25519`; `tests/kat.rs` with RFC 8032 §7.1
       test 1 and RFC 7748 X25519 vectors
-- [~] Ed25519 (RFC 8032): Edwards25519, ct scalar mul (fixed-window + `ct_lookup`),
+- [x] Ed25519 (RFC 8032): Edwards25519, ct scalar mul (fixed-window + `ct_lookup`),
       point compress/decompress, cofactored verify
-      — WIP in `src/edwards25519.rs`: extended-coord add/double, w=4 fixed-window
-      scalar mul, compress/decompress, `CtEq`. KAT `ed25519_rfc8032_test1` currently
-      FAILS (`field.rs:418` subtract-with-overflow in `recover_x`/`sqrt` path);
-      scalar-mul window uses a secret-dependent `if n != 0` branch — not yet ct.
-      No cofactored verify yet. `edwards25519.rs` gained helper methods in
-      `4e6c0d9` (consumed by `-zk`); `tests/xref.rs` cross-reference suite added
-      — `ed25519_rfc8032_test1` + `..._signature` still FAIL.
-- [~] X25519 (RFC 7748) Montgomery ladder
-       — WIP in `src/montgomery25519.rs`: clamp + ladder + `cswap` + final invert.
-       X25519 KATs still failing. `src/montgomery25519.rs` was substantially
-       rewritten/simplified in the working tree (−154 lines); RFC 7748 KATs
-       (`tests/kat.rs`, plus untracked scratch `tests/ref_x25519.rs`) still
-       **FAIL**. **DIAGNOSED (2026-08-30):** the entire data
-       plane the ladder depends on was verified correct in isolation — field
-       `add`/`sub`/`mul`/`square`/`invert`/`from_bytes`/`to_bytes` (3·5=15),
-       `EdwardsPoint::add(x,x)==double(x)`, `EdwardsPoint::mul` (RFC 8032 pubkey
-       KAT passes; `mul([8,0,..])`==triple-double), `ct_lookup`, `ct_select`,
-       `cswap`, and `to_montgomery_u(basepoint)==9` all check out. The ladder
-       formula matches RFC 7748 §5 exactly (the `da`/`cb` swap is arithmetically
-       equivalent). So the defect is a subtle Montgomery-ladder bug that does NOT
-       surface in the isolated component tests — needs step-traced
-       intermediate values to pin down (likely a residual `mont_mul` overflow on
-       large ladder intermediates, or a `swap`/`cswap` timing subtlety). NOT yet
-       fixed. `tests/xref.rs` now compiles (str→bytes fix); scratch
-       `tests/dbg_r.rs` pruned. Curve25519 breakage remains the root cause of the
-       `-mpc` base-OT / IKNP / Beaver-from-OT test failures.
+      — `src/edwards25519.rs`: extended-coord add/double, w=4 fixed-window
+      scalar mul, compress/decompress, `CtEq`, sign/verify. RFC 8032 §7.1 test 1
+      (pubkey + full signature + verify + tamper-reject) and compress round-trip
+      all PASS (`tests/kat.rs`). Broken scratch `tests/xref.rs` (buggy in-file
+      reference impl + wrong `[9u8;32]` base-point vectors) removed.
+- [x] X25519 (RFC 7748) Montgomery ladder
+       — `src/montgomery25519.rs`: clamp + ladder + `cswap` + final invert.
+       **FIXED:** the conditional-swap bookkeeping was wrong — it initialised the
+       running parity to `true` and fed `Choice::from(swap).not()` into `cswap`,
+       an inversion trick that broke as soon as the post-step `swap = bit` reset
+       desynced it from the real accumulated parity. Now the plain RFC 7748 §5
+       form: `swap: u8 = 0`, `swap ^= bit`, `cswap(Choice::from_u8_lsb(swap), …)`,
+       `swap = bit`, and one final `cswap` after the loop. RFC 7748 §5.2 vectors 1
+       & 2 and the §6.1 Alice-basepoint KAT all PASS (`tests/kat.rs`).
 - [ ] P-256 / P-384 (SEC1): short-Weierstrass complete addition formulas,
       ct scalar mul, point (de)compression, subgroup/on-curve checks
 - [ ] BLS12-381: G1/G2 (subgroup checks via endomorphism), Miller loop,
@@ -435,32 +423,38 @@ variant (feature-gated re-exports instead of steps 3–6).
 ### crates/tpt-crypto-mpc  (`no_std` + `alloc`)
 > Crate scaffolded and committed (`4e6c0d9`). Deps: `-core`, `-ct`, `-field`,
 > `-curve`, `-hash` (so this crate sits on `field+curve+hash`, not just
-> `field+hash`). Lib builds; the OT-backed paths fail at test time only because
-> Curve25519 in `-curve` is still failing its RFC 7748 / RFC 8032 KATs.
+> `field+hash`). **All `-mpc` tests now PASS** (`tests/kat.rs` 6/6,
+> `tests/props.rs` 9/9) after the `-curve` Curve25519 fix plus two `-mpc` bugs:
+> (a) `ot::receiver_init` had the `ct_select` operands reversed — `ct_select(cond,
+> a, b)` returns `a` when `cond` is true, so `ct_select(choice, id, a_pt)` added
+> `A` for choice 0 and the identity for choice 1, the wrong way round; now
+> `ct_select(choice, a_pt, id)`. (b) `iknp::extend_1of2` indexed `delta[i]` for
+> `i` up to `KAPPA = 128` into a 16-byte buffer (panic) and its correlation
+> structure was wrong (`recv_u[i]` always recovered `U[i]`, so choice-1 opens
+> never worked); rewritten as the textbook IKNP (receiver is the base-OT sender
+> offering `T`-columns and `T`-columns⊕`r`, extension sender picks random `s`,
+> correlated row masks `H(j,q_j)` / `H(j,q_j⊕s)`).
 - [x] Additive secret sharing over `-field` (`share`, `reconstruct`,
       `add`/`scalar_mul` on shares)
       — `src/field_share.rs` (`share_secret`, `share_secret_2`, `reconstruct`,
       `Share::add` / `Share::scale`); `share_reconstruct_kat` + `tests/props.rs`
       `reconstruct(share(x)) == x` pass.
-- [~] Beaver triple representation; offline gen (from OT) + online multiply
+- [x] Beaver triple representation; offline gen (from OT) + online multiply
       — `src/beaver.rs` (`BeaverTriple::deal` / `deal_from_base_ot` /
-      `deal_many_from_iknp`, `multiply`). Dealer path OK; `beaver_from_base_ot_kat`
-      currently **FAILS** (downstream of the `-curve` OT failure).
-- [~] Base OT (Chou–Orlandi / simplest OT) on `-curve`; 1-of-2 and 1-of-N
-      — `src/ot.rs` (`transfer_base_ot_1of2`, `transfer_1ofn`); `oneofn_kat`
-      passes, `base_ot_kat` currently **FAILS** — root cause is broken
-      Curve25519 in `-curve`.
-- [~] IKNP OT extension
-      — `src/iknp.rs` (`extend_1of2`, κ=128); `iknp_kat` currently **FAILS**
-      (same `-curve` root cause).
-- [~] KATs: cross-impl vectors where available; otherwise documented reference runs
-      — `tests/kat.rs` + `tests/kat/PROVENANCE.md` (reference runs, not RFC
-      vectors — none exist for these primitives). `share_reconstruct_kat` +
-      `oneofn_kat` pass; `base_ot_kat` / `beaver_from_base_ot_kat` / `iknp_kat`
-      fail on the `-curve` Curve25519 issue.
-- [~] proptest: `reconstruct(share(x)) == x`; Beaver-multiplied shares
+      `deal_many_from_iknp`, `multiply`). `beaver_from_base_ot_kat` +
+      `beaver_batch_from_iknp` + `beaver_multiply_from_base_ot` all PASS.
+- [x] Base OT (Chou–Orlandi / simplest OT) on `-curve`; 1-of-2 and 1-of-N
+      — `src/ot.rs` (`transfer_base_ot_1of2`, `transfer_1ofn`); `oneofn_kat` +
+      `base_ot_kat` pass (`base_ot_kat`'s independent `reference_base_ot`
+      cross-check rewritten to run the full encrypt-then-decrypt round trip).
+- [x] IKNP OT extension
+      — `src/iknp.rs` (`extend_1of2`, κ=128) rewritten to the textbook protocol;
+      `iknp_kat` passes.
+- [x] KATs: cross-impl vectors where available; otherwise documented reference runs
+      — `tests/kat.rs` + `tests/kat/PROVENANCE.md`. All 6 KAT tests pass.
+- [x] proptest: `reconstruct(share(x)) == x`; Beaver-multiplied shares
       reconstruct to `a*b`; OT receiver learns exactly one message
-      — `tests/props.rs` present (+ `props.proptest-regressions` committed).
+      — `tests/props.rs` (9 tests) all pass.
 - [ ] `specs/secret_share_reconstruct.telos`
 
 ### crates/tpt-crypto  (facade — umbrella variant)

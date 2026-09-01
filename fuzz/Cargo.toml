@@ -1,0 +1,19 @@
+[package]
+name = "tpt-crypto-fuzz"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Fuzzing harness for tpt-crypto attacker-controlled decoders"
+repository.workspace = true
+
+[dependencies]
+tpt-crypto-aead = { path = "../crates/tpt-crypto-aead", default-features = false, features = ["std"] }
+tpt-crypto-kem = { path = "../crates/tpt-crypto-kem", default-features = false, features = ["std"] }
+tpt-crypto-sig = { path = "../crates/tpt-crypto-sig", default-features = false, features = ["std"] }
+tpt-crypto-curve = { path = "../crates/tpt-crypto-curve", default-features = false, features = ["std"] }
+libfuzzer-sys = "0.4"
+
+[package.metadata]
+cargo-fuzz = true

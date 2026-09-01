@@ -6,6 +6,7 @@
 //!   || right_encode(n-1) || FF FF`, then `TurboSHAKE128(FinalNode, 0x06, L)`,
 //!   where each `CV_i = TurboSHAKE128(S_i, 0x0B, 32)`.
 
+#![allow(unused_imports)]
 use crate::traits::Xof;
 
 const RC12: [u64; 12] = [

@@ -185,7 +185,7 @@ impl<P: FieldParams> FieldElement<P> {
 
     /// Decode from Montgomery form to a plain integer (`< p`).
     #[inline]
-    fn to_integer(self) -> [u64; MAX_LIMBS] {
+    pub fn to_integer(self) -> [u64; MAX_LIMBS] {
         let mut one = [0u64; MAX_LIMBS];
         one[0] = 1;
         Self::mont_mul(&self.limbs, &one)
@@ -804,7 +804,21 @@ mod const_audit {
                 }
                 r && !lt
             };
-            let red = if ge { limb_sub6(&t, &m6) } else { t };
+            let mut red = if ge { limb_sub6(&t, &m6) } else { t };
+            let ge2 = {
+                let mut i = 6;
+                let mut r = true;
+                let mut lt = false;
+                while i > 0 {
+                    i -= 1;
+                    if red[i] > m6[i] { r = true; break; }
+                    if red[i] < m6[i] { lt = true; break; }
+                }
+                r && !lt
+            };
+            if ge2 {
+                red = limb_sub6(&red, &m6);
+            }
             acc[0] = red[0];
             acc[1] = red[1];
             acc[2] = red[2];

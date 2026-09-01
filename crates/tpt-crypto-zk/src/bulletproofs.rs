@@ -83,7 +83,7 @@ fn zeros(len: usize) -> Vec<Ed25519Scalar> {
     v
 }
 
-fn inner_product(a: &[Ed25519Scalar], b: &[Ed25519Scalar]) -> Ed25519Scalar {
+fn _inner_product(a: &[Ed25519Scalar], b: &[Ed25519Scalar]) -> Ed25519Scalar {
     let mut out = Ed25519Scalar::zero();
     for i in 0..a.len() {
         out = out.add(&a[i].mul(&b[i]));
@@ -370,7 +370,7 @@ pub fn verify_range(
         .map_err(|_| ZkError::Verification)?;
     let c = transcript.challenge_scalar(b"c");
 
-    let q = pc.g.scalar_mul(&w);
+    let _q = pc.g.scalar_mul(&w);
     let one = Ed25519Scalar::one();
     let a = proof.ipp.a;
     let b = proof.ipp.b;

@@ -58,9 +58,8 @@ declare_params!(
     P384BaseParams,
     6,
     [
-        // p = 2^384 - 2^128 - 2^96 + 2^32 - 1  (NIST P-384), little-endian limbs.
         0x0000_0001_FFFF_FFFF,
-        0xFFFF_FFFF_0000_0000,
+        0xFFFFFFFE_FFFFFFFF,
         0xFFFF_FFFF_FFFF_FFFE,
         0xFFFF_FFFF_FFFF_FFFF,
         0xFFFF_FFFF_FFFF_FFFF,
@@ -127,7 +126,7 @@ declare_params!(
     Ed25519ScalarParams,
     4,
     [
-        0xEDD3_F55C_1A63_1258,
+        0x5812_631A_5CF5_D3ED,
         0x14DE_F9DE_A2F7_9CD6,
         0x0000_0000_0000_0000,
         0x1000_0000_0000_0000,

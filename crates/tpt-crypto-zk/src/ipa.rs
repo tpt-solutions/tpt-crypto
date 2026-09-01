@@ -288,7 +288,7 @@ impl InnerProductProof {
         g: &[Ristretto],
         h: &[Ristretto],
     ) -> Result<(), ZkError> {
-        let (u_sq, u_inv_sq, s) = self.verification_scalars(n, transcript)?;
+        let (u_sq, _u_inv_sq, s) = self.verification_scalars(n, transcript)?;
 
         let mut scalars = alloc::vec::Vec::new();
         let mut points = alloc::vec::Vec::new();

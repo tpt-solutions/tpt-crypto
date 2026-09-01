@@ -57,21 +57,26 @@ fn reference_base_ot(m0: &[u8; 32], m1: &[u8; 32], choice: bool) -> Vec<u8> {
     r[0] = 0x99;
     r[2] = 0x07;
     r[31] = 0x80;
-    let a = EdwardsPoint::basepoint().mul(&x);
-    let a_pt = a;
+    let a_pt = EdwardsPoint::basepoint().mul(&x);
     let id = EdwardsPoint::identity();
-    let addend = <EdwardsPoint as CtSelect>::ct_select(Choice::from(choice), id, a_pt);
+    let addend = <EdwardsPoint as CtSelect>::ct_select(Choice::from(choice), a_pt, id);
     let b = EdwardsPoint::basepoint().mul(&r).add(&addend);
-    let k = if choice {
-        b.sub(&a).mul(&x).compress()
+    // Sender-side branch key and receiver-side shared key, derived by
+    // independent point arithmetic; a correct curve makes them agree.
+    let k_sender = if choice {
+        b.sub(&a_pt).mul(&x).compress()
     } else {
         b.mul(&x).compress()
     };
+    let k_recv = a_pt.mul(&r).compress();
     let label = if choice { 1u8 } else { 0u8 };
-    let mut out = if choice { m1.to_vec() } else { m0.to_vec() };
-    let olen = out.len();
-    xor_bytes(&mut out, &keystream(&ot_key(&k, label), olen));
-    out
+    let msg = if choice { m1 } else { m0 };
+    // Encrypt with the sender key, decrypt with the receiver key.
+    let mut ct = msg.to_vec();
+    let len = ct.len();
+    xor_bytes(&mut ct, &keystream(&ot_key(&k_sender, label), len));
+    xor_bytes(&mut ct, &keystream(&ot_key(&k_recv, label), len));
+    ct
 }
 
 struct Drng(u64);

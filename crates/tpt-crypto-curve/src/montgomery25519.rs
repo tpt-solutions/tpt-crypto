@@ -38,7 +38,6 @@ impl X25519 {
     /// compute the shared secret u-coordinate (RFC 7748 §5).
     pub fn diffie_hellman(scalar: &[u8; 32], public_u: &[u8; 32]) -> [u8; 32] {
         let mut k = *scalar;
-        // Clamp per RFC 7748 §5.
         k[0] &= 248;
         k[31] &= 127;
         k[31] |= 64;
@@ -48,21 +47,15 @@ impl X25519 {
         let mut z2 = Ed25519Field::zero();
         let mut x3 = x1;
         let mut z3 = Ed25519Field::one();
-
-        // `swap` accumulates the parity of the bits processed so far; this is
-        // the canonical RFC 7748 §5 conditional-swap bookkeeping. A trailing
-        // `cswap(swap, …)` after the loop restores the correct (x2, z2) order.
-        let mut swap = false;
+        let a24 = Self::a24();
+        let mut swap = 0u8;
         for t in (0..255).rev() {
-            let bit = ((k[t / 8] >> (t % 8)) & 1) != 0;
+            let bit = (k[t / 8] >> (t % 8)) & 1;
             swap ^= bit;
-            let sc = Choice::from(swap);
+            let sc = Choice::from_u8_lsb(swap);
             cswap(sc, &mut x2, &mut x3);
             cswap(sc, &mut z2, &mut z3);
-            // RFC 7748 §5: reset the running swap flag to the current bit so the
-            // next iteration's cswap reflects only the adjacency of consecutive
-            // bits. Without this reset the ladder accumulates the full running
-            // parity and produces a wrong shared secret.
+            // Per RFC 7748 §5: reset the running parity to the current bit.
             swap = bit;
 
             let a0 = x2.add(&z2);
@@ -77,9 +70,9 @@ impl X25519 {
             x3 = da.add(&cb).square();
             z3 = x1.mul(&da.sub(&cb).square());
             x2 = aa.mul(&bb);
-            z2 = e.mul(&aa.add(&e.mul(&Self::a24())));
+            z2 = e.mul(&aa.add(&e.mul(&a24)));
         }
-        let sc = Choice::from(swap);
+        let sc = Choice::from_u8_lsb(swap);
         cswap(sc, &mut x2, &mut x3);
         cswap(sc, &mut z2, &mut z3);
 
@@ -108,6 +101,7 @@ impl X25519 {
         let mut z2 = Ed25519Field::zero();
         let mut x3 = x1;
         let mut z3 = Ed25519Field::one();
+        let a24 = Self::a24();
         let mut swap = false;
         let mut out = [LadderTrace {
             t: 0,
@@ -123,6 +117,9 @@ impl X25519 {
             let sc = Choice::from(swap);
             cswap(sc, &mut x2, &mut x3);
             cswap(sc, &mut z2, &mut z3);
+            // Mirror `diffie_hellman`: reset the running parity to the current
+            // bit so the trace reflects the real ladder state.
+            swap = bit;
             let a0 = x2.add(&z2);
             let a1 = x2.sub(&z2);
             let b0 = x3.add(&z3);
@@ -135,7 +132,7 @@ impl X25519 {
             x3 = da.add(&cb).square();
             z3 = x1.mul(&da.sub(&cb).square());
             x2 = aa.mul(&bb);
-            z2 = e.mul(&aa.add(&e.mul(&Self::a24())));
+            z2 = e.mul(&aa.add(&e.mul(&a24)));
             out[idx] = LadderTrace {
                 t,
                 swap,
@@ -145,11 +142,19 @@ impl X25519 {
                 z3: Self::to_le32(&z3),
             };
         }
+        // Note: the caller-visible final conditional swap that `diffie_hellman`
+        // performs after the loop is intentionally omitted here — the trace
+        // records the per-step ladder state, and applying it would overwrite the
+        // last recorded entry's frame of reference.
         out
     }
 
     /// Parse a 32-byte little-endian integer as a field element, reducing mod p.
     fn from_le32(bytes: &[u8; 32]) -> Ed25519Field {
+        // RFC 7748 §5: implementations of X25519 MUST mask the most significant
+        // bit of the final byte of the received u-coordinate before decoding.
+        let mut bytes = *bytes;
+        bytes[31] &= 0x7f;
         let mut limbs = [0u64; MAX_LIMBS];
         for i in 0..4 {
             let mut v = 0u64;

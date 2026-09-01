@@ -24,6 +24,7 @@ std = []
 leakage = ["std"]
 
 [lints.rust]
+unsafe_code = "allow"
 unsafe_op_in_unsafe_fn = "deny"
 
 [lints.clippy]
