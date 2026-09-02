@@ -108,7 +108,7 @@ impl WeierstrassParams for P384 {
 type Fe<C> = FieldElement<<C as WeierstrassParams>::Base>;
 
 #[inline]
-fn b_coeff<C: WeierstrassParams>() -> Fe<C> {
+pub(crate) fn b_coeff<C: WeierstrassParams>() -> Fe<C> {
     FieldElement::from_limbs(C::B)
 }
 
@@ -130,6 +130,19 @@ impl<C: WeierstrassParams> ProjectivePoint<C> {
             x: FieldElement::zero(),
             y: FieldElement::one(),
             z: FieldElement::zero(),
+        }
+    }
+
+    /// Construct a projective point directly from affine coordinates `(x, y)`,
+    /// **without** checking that the point lies on the curve.
+    ///
+    /// Used by hash-to-curve, whose map output is on-curve by construction.
+    #[must_use]
+    pub fn from_affine_unchecked(x: Fe<C>, y: Fe<C>) -> Self {
+        Self {
+            x,
+            y,
+            z: FieldElement::one(),
         }
     }
 

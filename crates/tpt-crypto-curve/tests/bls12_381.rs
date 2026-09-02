@@ -43,7 +43,10 @@ fn pairing_non_degenerate() {
 fn pairing_output_in_mu_r() {
     let e = pairing(&G1::generator(), &G2::generator());
     let raised = e.0.pow_vartime(&R_LE);
-    assert!(raised.ct_eq(&Field::one()).into_bool(), "e(G1,G2)^r must be 1");
+    assert!(
+        raised.ct_eq(&Field::one()).into_bool(),
+        "e(G1,G2)^r must be 1"
+    );
 }
 
 #[test]

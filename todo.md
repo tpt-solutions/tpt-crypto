@@ -283,11 +283,23 @@ variant (feature-gated re-exports instead of steps 3–6).
       arguments (`e([3]P,[5]Q) == e([15]P,Q) == e(P,[15]Q)`), additivity,
       `multi_pairing` vs product, `e(P,Q)·e(-P,Q) == 1`. Not constant-time in the
       final-exp exponent (public); no CFRG draft KAT vectors yet.
-- [ ] hash-to-curve (RFC 9380) for Ed25519, P-256, BLS12-381 G1/G2
+- [~] hash-to-curve (RFC 9380) for Ed25519, P-256, BLS12-381 G1/G2
+      — `src/hash_to_curve.rs`: `expand_message_xmd` (SHA-256/384 + the
+      `H2C-OVERSIZE-DST-` rule), `hash_to_field` (fixed-trace Horner OS2IP mod p),
+      the branch-free Simplified SWU map for `a = -3`, and the full RO suites
+      `P256_XMD:SHA-256_SSWU_RO_` / `P384_XMD:SHA-384_SSWU_RO_` (cofactor 1, so
+      `clear_cofactor` is identity). `tests/hash_to_curve.rs` (4 pass) checks the
+      CFRG reference vectors: `expand_message_xmd` short + oversize DST, and the
+      P-256 / P-384 suite `P.x`/`P.y` for `msg ∈ {"", "abc", "abcdef0123456789"}`
+      + on-curve. Ed25519 (Elligator2) and BLS12-381 G1/G2 (11-/3-isogeny) maps
+      still pending.
 - [~] KATs: RFC 8032 (Ed25519), RFC 7748 (X25519), NIST CAVP ECDH (P-256/384),
       draft-irtf-cfrg BLS12-381 vectors, RFC 9380 h2c vectors
       — Ed25519/X25519 done (`tests/kat.rs`); P-256/P-384 ECDH via RFC 5903
-      (`tests/weierstrass.rs`) in lieu of the CAVP `.rsp` set. BLS + h2c pending.
+      (`tests/weierstrass.rs`) in lieu of the CAVP `.rsp` set; RFC 9380 h2c
+      P-256/P-384 RO + `expand_message_xmd` vectors in `tests/hash_to_curve.rs`
+      (provenance in `tests/kat/PROVENANCE.md`). BLS vectors + Ed25519/BLS h2c
+      pending.
 - [~] proptest: `k·(l·P) == (k·l)·P`, `pairing` bilinearity, compress round-trip
       — Weierstrass: `(a+b)·G == a·G + b·G` + SEC1 compress/uncompress round-trip
       covered in `tests/weierstrass.rs`. Pairing bilinearity pending (no BLS).

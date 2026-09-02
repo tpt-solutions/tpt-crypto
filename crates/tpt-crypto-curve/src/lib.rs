@@ -10,6 +10,7 @@
 #[cfg(feature = "alloc")]
 pub mod bls12_381;
 pub mod edwards25519;
+pub mod hash_to_curve;
 pub mod montgomery25519;
 pub mod weierstrass;
 

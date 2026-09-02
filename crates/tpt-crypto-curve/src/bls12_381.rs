@@ -206,11 +206,7 @@ impl G1 {
     /// `self + rhs` (complete, constant-time).
     #[must_use]
     pub fn add(&self, rhs: &Self) -> Self {
-        let (x, y, z) = w_add(
-            (self.x, self.y, self.z),
-            (rhs.x, rhs.y, rhs.z),
-            &g1_b3(),
-        );
+        let (x, y, z) = w_add((self.x, self.y, self.z), (rhs.x, rhs.y, rhs.z), &g1_b3());
         G1 { x, y, z }
     }
 
@@ -307,11 +303,7 @@ impl G2 {
     /// `self + rhs` (complete, constant-time).
     #[must_use]
     pub fn add(&self, rhs: &Self) -> Self {
-        let (x, y, z) = w_add(
-            (self.x, self.y, self.z),
-            (rhs.x, rhs.y, rhs.z),
-            &g2_b3(),
-        );
+        let (x, y, z) = w_add((self.x, self.y, self.z), (rhs.x, rhs.y, rhs.z), &g2_b3());
         G2 { x, y, z }
     }
 
@@ -335,11 +327,7 @@ impl G2 {
         let z2 = self.z.square();
         let lhs = self.y.square().mul(&self.z);
         let b = fp2(Fp::from_u64(4), Fp::from_u64(4));
-        let rhs = self
-            .x
-            .square()
-            .mul(&self.x)
-            .add(&b.mul(&z2).mul(&self.z));
+        let rhs = self.x.square().mul(&self.x).add(&b.mul(&z2).mul(&self.z));
         lhs.ct_eq(&rhs)
     }
 
@@ -381,9 +369,7 @@ fn fp_in_fp12(a: Fp) -> Fp12 {
 /// `ξ⁻¹` where `ξ = u + 1` (the Fp6/Fp12 non-residue).
 #[inline]
 fn xi_inv() -> Fp2 {
-    fp2(Fp::one(), Fp::one())
-        .invert()
-        .unwrap_or_default()
+    fp2(Fp::one(), Fp::one()).invert().unwrap_or_default()
 }
 
 /// The untwisting isomorphism `ψ : E'(Fp²) → E(Fp¹²)`,
@@ -393,15 +379,9 @@ fn untwist(q: &G2) -> (Fp12, Fp12) {
     let (xp, yp) = q.to_affine().expect("untwist of identity");
     let xi = xi_inv();
     // x = x'·ξ⁻¹ · v²   (lives in the v² slot of the lower Fp6)
-    let x = Fp12::new(
-        Fp6::new(Fp2::zero(), Fp2::zero(), xp.mul(&xi)),
-        fp6_zero(),
-    );
+    let x = Fp12::new(Fp6::new(Fp2::zero(), Fp2::zero(), xp.mul(&xi)), fp6_zero());
     // y = y'·ξ⁻¹ · v · w   (v slot of the upper Fp6)
-    let y = Fp12::new(
-        fp6_zero(),
-        Fp6::new(Fp2::zero(), yp.mul(&xi), Fp2::zero()),
-    );
+    let y = Fp12::new(fp6_zero(), Fp6::new(Fp2::zero(), yp.mul(&xi), Fp2::zero()));
     (x, y)
 }
 
@@ -422,12 +402,7 @@ fn double_line(t: &(Fp12, Fp12), xp: &Fp12, yp: &Fp12) -> (Fp12, (Fp12, Fp12)) {
 }
 
 /// Chord line through `t` and `q` evaluated at `P` (numerator only), plus `t+q`.
-fn add_line(
-    t: &(Fp12, Fp12),
-    q: &(Fp12, Fp12),
-    xp: &Fp12,
-    yp: &Fp12,
-) -> (Fp12, (Fp12, Fp12)) {
+fn add_line(t: &(Fp12, Fp12), q: &(Fp12, Fp12), xp: &Fp12, yp: &Fp12) -> (Fp12, (Fp12, Fp12)) {
     let (x1, y1) = *t;
     let (x2, y2) = *q;
     let lam = y2.sub(&y1).mul(&x2.sub(&x1).invert().unwrap_or_default());
