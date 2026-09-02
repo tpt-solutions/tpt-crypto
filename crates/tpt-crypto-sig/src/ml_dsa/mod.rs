@@ -34,8 +34,8 @@ use tpt_crypto_ct::Choice;
 use tpt_crypto_hash::sha3::shake256;
 
 use crate::poly::{
-    decompose_impl, make_hint, polyt0_pack, polyt0_unpack, polyt1_pack, polyt1_unpack,
-    polyeta_pack, polyeta_unpack, polyw1_pack, use_hint, Poly, Q,
+    decompose_impl, make_hint, polyeta_pack, polyeta_unpack, polyt0_pack, polyt0_unpack,
+    polyt1_pack, polyt1_unpack, polyw1_pack, use_hint, Poly, Q,
 };
 use crate::Error;
 
@@ -117,12 +117,26 @@ macro_rules! ml_dsa_params {
             const OMEGA: usize = $omega;
             const LAMBDA: usize = $lambda;
             const PUBLICKEYBYTES: usize = 32 + $k * POLYT1_PACKED;
-            const SECRETKEYBYTES: usize =
-                32 + 32 + 64 + $l * if $eta == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED }
-                    + $k * if $eta == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED }
-                    + $k * POLYT0_PACKED;
+            const SECRETKEYBYTES: usize = 32
+                + 32
+                + 64
+                + $l * if $eta == 2 {
+                    POLYETA2_PACKED
+                } else {
+                    POLYETA4_PACKED
+                }
+                + $k * if $eta == 2 {
+                    POLYETA2_PACKED
+                } else {
+                    POLYETA4_PACKED
+                }
+                + $k * POLYT0_PACKED;
             const SIGNATUREBYTES: usize = 32
-                + $l * if $g1 == (1 << 17) { POLYZ17_PACKED } else { POLYZ19_PACKED }
+                + $l * if $g1 == (1 << 17) {
+                    POLYZ17_PACKED
+                } else {
+                    POLYZ19_PACKED
+                }
                 + $omega
                 + $k;
             type Mat = $mat;
@@ -133,13 +147,49 @@ macro_rules! ml_dsa_params {
 }
 
 ml_dsa_params!(
-    MlDsa44, 4, 4, 2, 1 << 17, (Q - 1) / 88, 39, 78, 80, 128, [Poly; 16], [Poly; 4], [Poly; 4]
+    MlDsa44,
+    4,
+    4,
+    2,
+    1 << 17,
+    (Q - 1) / 88,
+    39,
+    78,
+    80,
+    128,
+    [Poly; 16],
+    [Poly; 4],
+    [Poly; 4]
 );
 ml_dsa_params!(
-    MlDsa65, 6, 5, 4, 1 << 19, (Q - 1) / 32, 49, 196, 120, 192, [Poly; 30], [Poly; 5], [Poly; 6]
+    MlDsa65,
+    6,
+    5,
+    4,
+    1 << 19,
+    (Q - 1) / 32,
+    49,
+    196,
+    120,
+    192,
+    [Poly; 30],
+    [Poly; 5],
+    [Poly; 6]
 );
 ml_dsa_params!(
-    MlDsa87, 8, 7, 2, 1 << 19, (Q - 1) / 32, 60, 120, 196, 256, [Poly; 56], [Poly; 7], [Poly; 8]
+    MlDsa87,
+    8,
+    7,
+    2,
+    1 << 19,
+    (Q - 1) / 32,
+    60,
+    120,
+    196,
+    256,
+    [Poly; 56],
+    [Poly; 7],
+    [Poly; 8]
 );
 
 // ── Key / signature types ─────────────────────────────────────────────────────
@@ -398,7 +448,11 @@ where
         off += 64;
         let s1_slice = s1.as_poly_slice();
         for s1_poly in s1_slice.iter().take(P::L) {
-            let n = if P::ETA == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED };
+            let n = if P::ETA == 2 {
+                POLYETA2_PACKED
+            } else {
+                POLYETA4_PACKED
+            };
             let mut buf = [0u8; POLYETA4_PACKED];
             polyeta_pack(P::ETA, s1_poly, &mut buf);
             sk_bytes[off..off + n].copy_from_slice(&buf[..n]);
@@ -406,7 +460,11 @@ where
         }
         let s2_slice = s2.as_poly_slice();
         for s2_poly in s2_slice.iter().take(P::K) {
-            let n = if P::ETA == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED };
+            let n = if P::ETA == 2 {
+                POLYETA2_PACKED
+            } else {
+                POLYETA4_PACKED
+            };
             let mut buf = [0u8; POLYETA4_PACKED];
             polyeta_pack(P::ETA, s2_poly, &mut buf);
             sk_bytes[off..off + n].copy_from_slice(&buf[..n]);
@@ -477,7 +535,11 @@ where
         let mut off = 64;
         sk_bytes[off..off + 64].copy_from_slice(&tr);
         off += 64;
-        let n1 = if P::ETA == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED };
+        let n1 = if P::ETA == 2 {
+            POLYETA2_PACKED
+        } else {
+            POLYETA4_PACKED
+        };
         off += P::L * n1 + P::K * n1;
         let t0_slice = t0.as_poly_slice();
         for t0_poly in t0_slice.iter().take(P::K) {
@@ -557,7 +619,11 @@ where
         let mut off = 128;
         let s1s = s1.as_poly_slice_mut();
         for s1_poly in s1s.iter_mut().take(P::L) {
-            let n = if P::ETA == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED };
+            let n = if P::ETA == 2 {
+                POLYETA2_PACKED
+            } else {
+                POLYETA4_PACKED
+            };
             let mut buf = [0u8; POLYETA4_PACKED];
             buf[..n].copy_from_slice(&sk.bytes[off..off + n]);
             *s1_poly = polyeta_unpack(P::ETA, &buf[..n]).ok_or(Error::InvalidEncoding)?;
@@ -565,7 +631,11 @@ where
         }
         let s2s = s2.as_poly_slice_mut();
         for s2_poly in s2s.iter_mut().take(P::K) {
-            let n = if P::ETA == 2 { POLYETA2_PACKED } else { POLYETA4_PACKED };
+            let n = if P::ETA == 2 {
+                POLYETA2_PACKED
+            } else {
+                POLYETA4_PACKED
+            };
             let mut buf = [0u8; POLYETA4_PACKED];
             buf[..n].copy_from_slice(&sk.bytes[off..off + n]);
             *s2_poly = polyeta_unpack(P::ETA, &buf[..n]).ok_or(Error::InvalidEncoding)?;
@@ -607,7 +677,11 @@ where
 
         // w = Â · y
         let mut w = <P::VecK as PolyArray>::zeroed();
-        mat_vec_mul(a.as_poly_slice(), yhat.as_poly_slice(), w.as_poly_slice_mut());
+        mat_vec_mul(
+            a.as_poly_slice(),
+            yhat.as_poly_slice(),
+            w.as_poly_slice_mut(),
+        );
 
         // (w₁, w₀) = Decompose(w)
         let mut w1 = <P::VecK as PolyArray>::zeroed();
@@ -759,7 +833,11 @@ where
             let z_slice = z.as_poly_slice();
             let mut off = 32;
             for z_poly in z_slice.iter().take(P::L) {
-                let n = if P::GAMMA1 == (1 << 17) { POLYZ17_PACKED } else { POLYZ19_PACKED };
+                let n = if P::GAMMA1 == (1 << 17) {
+                    POLYZ17_PACKED
+                } else {
+                    POLYZ19_PACKED
+                };
                 let mut buf = [0u8; POLYZ19_PACKED];
                 crate::poly::polyz_pack(P::GAMMA1, z_poly, &mut buf[..n]);
                 sig_bytes[off..off + n].copy_from_slice(&buf[..n]);
@@ -845,10 +923,15 @@ where
         let mut off = 32;
         let zs = z.as_poly_slice_mut();
         for z_poly in zs.iter_mut().take(P::L) {
-            let n = if P::GAMMA1 == (1 << 17) { POLYZ17_PACKED } else { POLYZ19_PACKED };
+            let n = if P::GAMMA1 == (1 << 17) {
+                POLYZ17_PACKED
+            } else {
+                POLYZ19_PACKED
+            };
             let mut buf = [0u8; POLYZ19_PACKED];
             buf[..n].copy_from_slice(&sig.bytes[off..off + n]);
-            *z_poly = crate::poly::polyz_unpack(P::GAMMA1, &buf[..n]).ok_or(Error::InvalidEncoding)?;
+            *z_poly =
+                crate::poly::polyz_unpack(P::GAMMA1, &buf[..n]).ok_or(Error::InvalidEncoding)?;
             off += n;
         }
         let hbuf = &sig.bytes[off..off + P::OMEGA + P::K];
@@ -878,7 +961,11 @@ where
     {
         let mut zhat = z;
         to_ntt(zhat.as_poly_slice_mut());
-        mat_vec_mul(a.as_poly_slice(), zhat.as_poly_slice(), w.as_poly_slice_mut());
+        mat_vec_mul(
+            a.as_poly_slice(),
+            zhat.as_poly_slice(),
+            w.as_poly_slice_mut(),
+        );
     }
 
     // subtract ĉ ∘ (2^d · t̂₁)
@@ -910,7 +997,12 @@ where
             .zip(h_slice.iter())
             .take(P::K)
         {
-            for (j, (w1_c, w_c)) in w1_poly.coeffs.iter_mut().zip(w_poly.coeffs.iter()).enumerate() {
+            for (j, (w1_c, w_c)) in w1_poly
+                .coeffs
+                .iter_mut()
+                .zip(w_poly.coeffs.iter())
+                .enumerate()
+            {
                 let hb = Choice::from_u8_lsb(h_poly.coeffs[j] as u8);
                 *w1_c = use_hint(hb, *w_c, P::GAMMA2);
             }

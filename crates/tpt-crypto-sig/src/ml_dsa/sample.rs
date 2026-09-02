@@ -112,14 +112,23 @@ pub fn poly_uniform_eta(seed: &[u8; 64], nonce: u16, eta: i32) -> Poly {
     let mut ctr = rej_eta(&mut out.coeffs, crate::poly::N, &buf[..buflen], eta);
     while ctr < crate::poly::N {
         xof.squeeze(&mut buf[..SHAKE256_RATE]);
-        ctr += rej_eta(&mut out.coeffs[ctr..], crate::poly::N - ctr, &buf[..SHAKE256_RATE], eta);
+        ctr += rej_eta(
+            &mut out.coeffs[ctr..],
+            crate::poly::N - ctr,
+            &buf[..SHAKE256_RATE],
+            eta,
+        );
     }
     out
 }
 
 /// Sample one `y` polynomial (coefficients in `[−γ₁, γ₁]`).
 pub fn poly_uniform_gamma1(seed: &[u8; 64], nonce: u16, gamma1: i32) -> Poly {
-    let packed = if gamma1 == (1 << 17) { 9 * (crate::poly::N / 4) } else { 5 * (crate::poly::N / 2) };
+    let packed = if gamma1 == (1 << 17) {
+        9 * (crate::poly::N / 4)
+    } else {
+        5 * (crate::poly::N / 2)
+    };
     let nblocks = packed.div_ceil(SHAKE256_RATE);
     let mut xof = Shake256::new();
     xof.update(seed);
@@ -185,7 +194,11 @@ pub fn expand_s<P: MlDsaParams>(rhoprime: &[u8; 64]) -> (P::VecL, P::VecK) {
     }
     let s2m = s2.as_poly_slice_mut();
     for (i, s2m_i) in s2m.iter_mut().enumerate().take(P::K) {
-        s2m_i.clone_from(&poly_uniform_eta(rhoprime, (P::L as u16) + i as u16, P::ETA));
+        s2m_i.clone_from(&poly_uniform_eta(
+            rhoprime,
+            (P::L as u16) + i as u16,
+            P::ETA,
+        ));
     }
     (s1, s2)
 }

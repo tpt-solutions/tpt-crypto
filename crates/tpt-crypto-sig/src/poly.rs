@@ -96,9 +96,7 @@ impl Default for Poly {
 
 impl Poly {
     /// The all-zero polynomial.
-    pub const ZERO: Poly = Poly {
-        coeffs: [0i32; N],
-    };
+    pub const ZERO: Poly = Poly { coeffs: [0i32; N] };
 
     /// Montgomery radix `R = 2³²`.
     const R: i64 = 1i64 << 32;
@@ -402,12 +400,10 @@ pub fn polyeta_unpack(eta: i32, input: &[u8]) -> Option<Poly> {
         for (i, chunk) in input.chunks(3).enumerate().take(N / 8) {
             out.coeffs[8 * i] = i32::from(chunk[0] & 7);
             out.coeffs[8 * i + 1] = i32::from((chunk[0] >> 3) & 7);
-            out.coeffs[8 * i + 2] =
-                i32::from(((chunk[0] >> 6) | (chunk[1] << 2)) & 7);
+            out.coeffs[8 * i + 2] = i32::from(((chunk[0] >> 6) | (chunk[1] << 2)) & 7);
             out.coeffs[8 * i + 3] = i32::from((chunk[1] >> 1) & 7);
             out.coeffs[8 * i + 4] = i32::from((chunk[1] >> 4) & 7);
-            out.coeffs[8 * i + 5] =
-                i32::from(((chunk[1] >> 7) | (chunk[2] << 1)) & 7);
+            out.coeffs[8 * i + 5] = i32::from(((chunk[1] >> 7) | (chunk[2] << 1)) & 7);
             out.coeffs[8 * i + 6] = i32::from((chunk[2] >> 2) & 7);
             out.coeffs[8 * i + 7] = i32::from((chunk[2] >> 5) & 7);
             for coeff in out.coeffs[8 * i..8 * i + 8].iter_mut() {
@@ -489,15 +485,13 @@ pub fn polyt0_unpack(input: &[u8]) -> Option<Poly> {
     }
     let mut out = Poly::ZERO;
     for (i, chunk) in input.chunks(13).enumerate().take(N / 8) {
-        out.coeffs[8 * i] =
-            (u32::from(chunk[0]) | (u32::from(chunk[1]) << 8)) as i32 & 0x1FFF;
+        out.coeffs[8 * i] = (u32::from(chunk[0]) | (u32::from(chunk[1]) << 8)) as i32 & 0x1FFF;
         out.coeffs[8 * i + 1] = ((u32::from(chunk[1]) >> 5)
             | (u32::from(chunk[2]) << 3)
             | (u32::from(chunk[3]) << 11)) as i32
             & 0x1FFF;
-        out.coeffs[8 * i + 2] = ((u32::from(chunk[3]) >> 2)
-            | (u32::from(chunk[4]) << 6)) as i32
-            & 0x1FFF;
+        out.coeffs[8 * i + 2] =
+            ((u32::from(chunk[3]) >> 2) | (u32::from(chunk[4]) << 6)) as i32 & 0x1FFF;
         out.coeffs[8 * i + 3] = ((u32::from(chunk[4]) >> 7)
             | (u32::from(chunk[5]) << 1)
             | (u32::from(chunk[6]) << 9)) as i32
@@ -506,16 +500,14 @@ pub fn polyt0_unpack(input: &[u8]) -> Option<Poly> {
             | (u32::from(chunk[7]) << 4)
             | (u32::from(chunk[8]) << 12)) as i32
             & 0x1FFF;
-        out.coeffs[8 * i + 5] = ((u32::from(chunk[8]) >> 1)
-            | (u32::from(chunk[9]) << 7)) as i32
-            & 0x1FFF;
+        out.coeffs[8 * i + 5] =
+            ((u32::from(chunk[8]) >> 1) | (u32::from(chunk[9]) << 7)) as i32 & 0x1FFF;
         out.coeffs[8 * i + 6] = ((u32::from(chunk[9]) >> 6)
             | (u32::from(chunk[10]) << 2)
             | (u32::from(chunk[11]) << 10)) as i32
             & 0x1FFF;
-        out.coeffs[8 * i + 7] = ((u32::from(chunk[11]) >> 3)
-            | (u32::from(chunk[12]) << 5)) as i32
-            & 0x1FFF;
+        out.coeffs[8 * i + 7] =
+            ((u32::from(chunk[11]) >> 3) | (u32::from(chunk[12]) << 5)) as i32 & 0x1FFF;
         for j in 0..8 {
             out.coeffs[8 * i + j] = (1 << (D - 1)) - out.coeffs[8 * i + j];
         }
@@ -556,7 +548,11 @@ pub fn polyz_pack(gamma1: i32, poly: &Poly, out: &mut [u8]) {
 
 /// Unpack `z` coefficients from `input`, or `None` if the length is wrong.
 pub fn polyz_unpack(gamma1: i32, input: &[u8]) -> Option<Poly> {
-    let packed = if gamma1 == (1 << 17) { 9 * (N / 4) } else { 5 * (N / 2) };
+    let packed = if gamma1 == (1 << 17) {
+        9 * (N / 4)
+    } else {
+        5 * (N / 2)
+    };
     if input.len() != packed {
         return None;
     }
@@ -726,7 +722,10 @@ mod tests {
                 t1.coeffs[0] * (1 << D) + t0.coeffs[0],
                 "power2round identity failed for {r}"
             );
-            assert!(t0.coeffs[0].abs() <= 1 << (D - 1), "t0 out of range for {r}");
+            assert!(
+                t0.coeffs[0].abs() <= 1 << (D - 1),
+                "t0 out of range for {r}"
+            );
         }
     }
 

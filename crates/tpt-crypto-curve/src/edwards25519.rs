@@ -325,6 +325,55 @@ impl EdwardsPoint {
     }
 }
 
+/// RFC 8032 group-order (`L`) scalar helpers, exposed for higher layers that
+/// build on Ed25519 (e.g. batch verification in `tpt-crypto-sig`).
+pub mod scalar {
+    use super::{le32_to_scalar, reduce_wide, scalar_to_le32, Ed25519Scalar};
+
+    /// `L` — the Edwards25519 group order — in 32-byte little-endian form.
+    pub const ORDER_LE: [u8; 32] = [
+        0xED, 0xD3, 0xF5, 0x5C, 0x1A, 0x63, 0x12, 0x58, 0xD6, 0x9C, 0xF7, 0xA2, 0xDE, 0xF9, 0xDE,
+        0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x10,
+    ];
+
+    /// Reduce a 64-byte little-endian value modulo `L`.
+    #[must_use]
+    pub fn reduce_wide_le(d: &[u8; 64]) -> Ed25519Scalar {
+        reduce_wide(d)
+    }
+
+    /// Parse a 32-byte little-endian value modulo `L`.
+    #[must_use]
+    pub fn from_le32(b: &[u8; 32]) -> Ed25519Scalar {
+        le32_to_scalar(b)
+    }
+
+    /// Encode a scalar as a canonical 32-byte little-endian value (`< L`).
+    #[must_use]
+    pub fn to_le32(s: Ed25519Scalar) -> [u8; 32] {
+        scalar_to_le32(s)
+    }
+
+    /// Is `b` a canonical scalar encoding, i.e. `0 <= b < L`?
+    ///
+    /// RFC 8032 §5.1.7 requires rejecting signatures whose `S` component is not
+    /// in `[0, L)`. Compares `b` against [`ORDER_LE`] byte-by-byte, MSB first.
+    #[must_use]
+    pub fn is_canonical_le32(b: &[u8; 32]) -> bool {
+        for i in (0..32).rev() {
+            if b[i] < ORDER_LE[i] {
+                return true;
+            }
+            if b[i] > ORDER_LE[i] {
+                return false;
+            }
+        }
+        // b == L is not canonical.
+        false
+    }
+}
+
 /// Parse a 32-byte little-endian value into an `Ed25519Scalar`, reducing mod L.
 fn le32_to_scalar(bytes: &[u8; 32]) -> Ed25519Scalar {
     let mut limbs = [0u64; MAX_LIMBS];

@@ -40,7 +40,9 @@ impl<const N: usize> ByteArray for [u8; N] {
 /// Implemented for `[Poly; N]`. The NTT matrix and the `s1` / `s2` / `t` vectors
 /// are all stored this way, so they can be allocated on the stack and iterated
 /// without `alloc`.
-pub trait PolyArray: Sized + Clone + AsRef<[crate::poly::Poly]> + AsMut<[crate::poly::Poly]> {
+pub trait PolyArray:
+    Sized + Clone + AsRef<[crate::poly::Poly]> + AsMut<[crate::poly::Poly]>
+{
     /// A zero-filled vector of the right length.
     fn zeroed() -> Self;
 

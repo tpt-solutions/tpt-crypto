@@ -39,7 +39,10 @@ where
         let ctx = &ctx[..ctx_len];
 
         let sig = sign::<P>(&sk, &msg, ctx).expect("sign");
-        assert!(verify::<P>(&pk, &msg, &sig, ctx).is_ok(), "honest verify failed");
+        assert!(
+            verify::<P>(&pk, &msg, &sig, ctx).is_ok(),
+            "honest verify failed"
+        );
 
         // Wrong message.
         let mut bad_msg = msg;
@@ -69,7 +72,10 @@ where
         let mut rnd = [0u8; 32];
         r.try_fill_bytes(&mut rnd).unwrap();
         let hsig = sign_hedged::<P>(&sk, &msg, ctx, &rnd).expect("sign_hedged");
-        assert!(verify::<P>(&pk, &msg, &hsig, ctx).is_ok(), "hedged verify failed");
+        assert!(
+            verify::<P>(&pk, &msg, &hsig, ctx).is_ok(),
+            "hedged verify failed"
+        );
     }
 }
 

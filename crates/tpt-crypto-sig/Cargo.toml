@@ -10,6 +10,8 @@ repository.workspace = true
 tpt-crypto-core = { path = "../tpt-crypto-core", default-features = false }
 tpt-crypto-ct = { path = "../tpt-crypto-ct" }
 tpt-crypto-hash = { path = "../tpt-crypto-hash", default-features = false }
+tpt-crypto-field = { path = "../tpt-crypto-field", default-features = false }
+tpt-crypto-curve = { path = "../tpt-crypto-curve", default-features = false }
 
 [features]
 default = ["std"]
@@ -22,6 +24,7 @@ rand_core = ["tpt-crypto-core/rand_core"]
 [dev-dependencies]
 tpt-crypto-core = { path = "../tpt-crypto-core", default-features = false, features = ["std"] }
 tpt-crypto-hash = { path = "../tpt-crypto-hash", default-features = false, features = ["std"] }
+hex = "0.4"
 
 [[test]]
 name = "ml_dsa_kat"

@@ -31,10 +31,6 @@ pub fn aggregate(_sigs: &[Signature]) -> Signature {
 }
 
 /// Stub: verify `agg` against `pks` and `msg`.
-pub fn verify_aggregate(
-    _pks: &[PublicKey],
-    _msg: &[u8],
-    _agg: &Signature,
-) -> Result<(), Error> {
+pub fn verify_aggregate(_pks: &[PublicKey], _msg: &[u8], _agg: &Signature) -> Result<(), Error> {
     Err(Error::Unsupported)
 }

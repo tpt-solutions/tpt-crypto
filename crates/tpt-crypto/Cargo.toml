@@ -14,8 +14,10 @@ keywords = ["cryptography", "no-std", "constant-time", "post-quantum", "facade"]
 categories = ["cryptography", "no-std"]
 
 [dependencies]
-tpt-crypto-core = { workspace = true, default-features = false, optional = true }
-tpt-crypto-ct = { workspace = true, default-features = false, optional = true }
+# core + ct are the always-present foundation: the `prelude` and `ct` modules
+# re-export them regardless of which primitive features are enabled.
+tpt-crypto-core = { workspace = true, default-features = false }
+tpt-crypto-ct = { workspace = true, default-features = false }
 tpt-crypto-hash = { workspace = true, default-features = false, optional = true }
 tpt-crypto-field = { workspace = true, default-features = false, optional = true }
 tpt-crypto-aead = { workspace = true, default-features = false, optional = true }

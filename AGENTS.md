@@ -15,6 +15,7 @@ cargo xtask no-std           # builds no_std crates for thumbv6m-none-eabi
 cargo xtask leakage          # dudect-style Welch t-test side-channel harness
 cargo xtask kat-check        # verify tests/kat/PROVENANCE.md sha256s
 cargo +nightly miri test -p tpt-crypto-ct
+cargo +nightly fuzz run <target>   # fuzz/ — attacker-controlled decoder targets
 ```
 
 ## Layering (strict — lower never depends on higher)
@@ -49,5 +50,7 @@ tpt-crypto  (facade) on everything
 - `crates/*` — the 11 library crates (10 primitives + facade).
 - `xtask/` — developer tooling (no-std, kat-check, leakage, verify, release-dry-run, sbom).
 - `examples/` — end-to-end usage samples (one per `spec.txt` §4 snippet).
+- `fuzz/` — `cargo-fuzz` libfuzzer targets for attacker-controlled decoders
+  (AEAD decrypt, ML-KEM decaps, signature verify, point decompress).
 - `specs/` — `*.telos` formal contracts, verified by `cargo xtask verify`.
 - `benches/` — criterion benches; `BUDGET.md` records perf targets.

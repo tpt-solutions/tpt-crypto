@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 tpt-crypto-core = { path = "../crates/tpt-crypto-core", default-features = true }
+tpt-crypto = { path = "../crates/tpt-crypto", default-features = false, features = ["pq", "std"] }
 
 [dev-dependencies]
 proptest = "1"

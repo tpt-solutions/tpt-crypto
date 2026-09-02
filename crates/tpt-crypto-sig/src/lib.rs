@@ -16,6 +16,8 @@ extern crate alloc;
 
 pub mod bytes;
 pub mod constant_time;
+pub mod ecdsa;
+pub mod ed25519;
 pub mod ml_dsa;
 pub mod poly;
 pub mod test_rng;

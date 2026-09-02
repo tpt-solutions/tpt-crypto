@@ -6,9 +6,7 @@
 //! ```
 
 pub use tpt_crypto_core::{
-    CryptoRng, Error, Result, SecretBox, Zeroizing,
-    ct_eq, ct_ne, ct_select, ConstantTimeSelect, CtEq,
+    ct_eq, ct_ne, ct_select, ConstantTimeSelect, CryptoRng, CtEq, Error, Result, SecretBox,
+    Zeroizing,
 };
-pub use tpt_crypto_ct::{
-    cmov, cswap, ct_eq_bytes, ct_select_slice, Choice, CtSelect,
-};
+pub use tpt_crypto_ct::{cmov, cswap, ct_eq_bytes, ct_select_slice, Choice, CtSelect};

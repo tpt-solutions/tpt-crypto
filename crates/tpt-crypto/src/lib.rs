@@ -8,13 +8,19 @@
 //!
 //! | Feature | Re-exports |
 //! |---------|-----------|
-//! | `classical` | `hash`, `aead`, `field`, `curve`, `sig` |
-//! | `pq` | `kem`, `sig` |
+//! | `classical` | `hash`, `aead`, `field`, `curve`, `sig`, `ml_dsa` |
+//! | `pq` | `kem`, `ml_kem` (with `alloc`), `sig`, `ml_dsa` |
 //! | `bls` | `bls` (BLS12-381 signatures, stub until `-curve` lands it) |
 //! | `zk` | `bulletproofs` |
 //! | `mpc` | `mpc` |
 //! | `full` | all of the above |
 //! | `std` / `alloc` | propagated to every sub-crate |
+//!
+//! ## `spec.txt` §4 surface
+//!
+//! The [`ml_kem`], [`ml_dsa`], [`bulletproofs`], [`bls`] and [`ct`] modules,
+//! together with [`prelude`], expose the exact names used in the `spec.txt`
+//! §4 target API so downstream code can be written verbatim against it.
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -61,6 +67,20 @@ pub mod sig {
 #[cfg_attr(docsrs, doc(cfg(feature = "pq")))]
 pub mod kem {
     pub use tpt_crypto_kem::*;
+}
+
+#[cfg(all(feature = "pq", feature = "alloc"))]
+#[doc = "ML-KEM (FIPS 203), `spec.txt` §4 surface: `keygen` / `encapsulate` / `decapsulate` + `MlKem512/768/1024`."]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "pq", feature = "alloc"))))]
+pub mod ml_kem {
+    pub use tpt_crypto_kem::ml_kem::*;
+}
+
+#[cfg(any(feature = "classical", feature = "pq"))]
+#[doc = "ML-DSA (FIPS 204), `spec.txt` §4 surface: `keygen` / `sign` / `verify` + `MlDsa44/65/87`."]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "classical", feature = "pq"))))]
+pub mod ml_dsa {
+    pub use tpt_crypto_sig::ml_dsa::*;
 }
 
 #[cfg(feature = "bls")]

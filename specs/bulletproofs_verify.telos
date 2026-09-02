@@ -1,0 +1,53 @@
+spec bulletproofs_verify
+
+description:
+  Bulletproofs range-proof verification. Given a Pedersen commitment `V` (or a
+  list of commitments for an aggregated proof), a bit length `k` (<= 64), and a
+  proof `pi`, `verify_range` returns `true` if and only if `pi` is a valid
+  proof that every committed value `v_j` satisfies `0 <= v_j < 2^k`, under the
+  Fiat-Shamir transcript binding all public inputs.
+
+  Covers `tpt-crypto-zk::bulletproofs` (`verify_range`,
+  `range_proof_from_bytes`), the inner-product argument (`src/ipa.rs`), the
+  Pedersen generators, and the SHAKE256 Fiat-Shamir `Transcript`. Verification
+  is over public data only.
+
+inputs:
+  commitments : &[Point]   // Pedersen commitments V_j = [v_j] G + [gamma_j] H
+  bits        : usize      // range bit length k, 1 <= k <= 64
+  proof       : &[u8]      // serialized proof, attacker-controlled
+
+outputs:
+  result : Result<bool, ZkError>   // Ok(true) iff valid; Ok(false) / Err on failure
+
+assumes:
+  - `G`, `H`, and the generator vectors are the fixed nothing-up-my-sleeve set
+  - the verifier transcript is seeded identically to the prover's
+  - `commitments.len()` is a power of two for an aggregated proof
+
+ensures:
+  // completeness: an honest proof of in-range values always verifies
+  ( for all j. 0 <= v_j < 2^bits )  &&  proof == honest_prove_range(v, gamma, bits)
+      =>  result == Ok(true)
+  // soundness: acceptance implies the committed values are in range (up to the
+  // discrete-log / knowledge-soundness assumption of the argument)
+  result == Ok(true)
+      =>  exists v, gamma. ( for all j. commitments[j] == [v_j] G + [gamma_j] H
+                             && 0 <= v_j < 2^bits )
+  // any tampered proof, wrong commitment, or wrong bit length fails, not panics
+  tampered(proof) || wrong(commitments) || wrong(bits)  =>  result != Ok(true)
+  malformed(proof)                                      =>  result is Ok(false) or Err
+  // determinism: verification is a pure function of its public inputs
+  verify_range(c, k, pi) == verify_range(c, k, pi)
+
+non_leaks:
+  - verification has no secret inputs (values and blindings are the prover's);
+    no constant-time obligation applies to `verify_range`
+  - proof deserialization rejects non-canonical scalars / off-curve points
+    before any group operation; a parse failure is a returned error, never UB
+
+verification:
+  // pending: bulletproofs module not yet building/tested. Targets:
+  // dalek-compatible reference range-proof vectors in tests/kat/, plus
+  // proptest: honest prove_range always verifies; out-of-range value =>
+  // prove fails; single-bit proof mutation => verify fails.

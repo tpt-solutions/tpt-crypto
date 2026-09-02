@@ -905,6 +905,7 @@ name = "tpt-crypto-examples"
 version = "0.1.0"
 dependencies = [
  "proptest",
+ "tpt-crypto",
  "tpt-crypto-core",
 ]
 
@@ -955,8 +956,11 @@ dependencies = [
 name = "tpt-crypto-sig"
 version = "0.1.0"
 dependencies = [
+ "hex",
  "tpt-crypto-core",
  "tpt-crypto-ct",
+ "tpt-crypto-curve",
+ "tpt-crypto-field",
  "tpt-crypto-hash",
 ]
 
