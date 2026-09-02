@@ -8,6 +8,10 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 description = "Secure multi-party computation: additive secret sharing, Beaver triples, and oblivious transfer (Chou-Orlandi base OT, IKNP extension). Constant-time, no_std, pure Rust."
+readme = "README.md"
+documentation = "https://docs.rs/tpt-crypto-mpc"
+keywords = ["crypto", "mpc", "secret-sharing", "oblivious-transfer", "no-std"]
+categories = ["cryptography", "no-std"]
 
 [dependencies]
 tpt-crypto-core = { workspace = true }

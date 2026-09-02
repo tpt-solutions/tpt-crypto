@@ -44,6 +44,14 @@ tpt-crypto  (facade) on everything
 - New crates: scaffold under `crates/<name>/`, register in
   `../tpt-rust-map/registry.toml` with `status = "git"`, and never add a
   dependency without a license note.
+- Every crate ships its own `README.md` (mirrored as `readme` in `Cargo.toml`)
+  and `CHANGELOG.md` (`## 0.1.0 — unreleased`), plus crates.io metadata:
+  `description`, `categories` (valid crates.io slugs, e.g. `cryptography`,
+  `no-std::no-alloc`), and `keywords` (≤5, lowercase, ≤20 chars).
+- The facade (`tpt-crypto`) is feature-gated: `classical`, `pq`, `bls`, `zk`,
+  `mpc`, `full`, plus `std` / `alloc` propagated to every sub-crate. The
+  `ml_kem` / `ml_dsa` / `bulletproofs` / `bls` / `ct` / `prelude` modules expose
+  the `spec.txt` §4 names verbatim.
 
 ## Workspace layout
 

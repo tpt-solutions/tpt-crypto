@@ -263,8 +263,26 @@ variant (feature-gated re-exports instead of steps 3–6).
       RFC 5903 §8.1/§8.2 ECDH vectors (public key + shared secret) for both
       curves, scalar homomorphism, encode round-trips — all green. Subgroup
       check is trivial (cofactor 1); `is_on_curve` + non-identity suffices.
-- [ ] BLS12-381: G1/G2 (subgroup checks via endomorphism), Miller loop,
+- [x] BLS12-381: G1/G2 (subgroup checks via endomorphism), Miller loop,
       final exponentiation → GT; `pairing` / `multi_pairing`
+      — `src/bls12_381.rs` (gated on `alloc`). `E/Fp: y²=x³+4` (`G1`) and the
+      sextic D-twist `E'/Fp²: y²=x³+4(u+1)` (`G2`) in projective coords with the
+      RCB a=0 complete/unified addition (Alg 1), fixed-length ct double-and-add.
+      Optimal-ate `pairing`: Miller loop done entirely in `Fp12` on the untwisted
+      `G2` point `ψ(Q) = (x'·w⁻², y'·w⁻³)` (denominator elimination for the
+      degree-6 twist → numerator lines only), seed `x = -0xd201000000010000`
+      (conjugate at the end). Final exp is one `f^((p¹²-1)/r)` — the exponent is
+      computed by the new `tpt_crypto_field::bls12381_final_exp_exponent()` (added
+      `Big::divmod` to `-field/src/big.rs`). Also rewrote the `Fp2`/`Fp6`/`Fp12`
+      `invert` in `-field/src/extension.rs` from the slow Fermat path to the
+      tower norm formulas (+ `Fp2::mul_by_nonresidue`/`conjugate`,
+      `Fp12::conjugate`). Subgroup checks are the definitional `[r]P == O`
+      (endomorphism speedup left as a follow-up). Tests
+      (`tests/bls12_381.rs`, 7 pass): generators on-curve + torsion-free,
+      `[r]G == O`, non-degeneracy, `e(G1,G2)^r == 1`, bilinearity across both
+      arguments (`e([3]P,[5]Q) == e([15]P,Q) == e(P,[15]Q)`), additivity,
+      `multi_pairing` vs product, `e(P,Q)·e(-P,Q) == 1`. Not constant-time in the
+      final-exp exponent (public); no CFRG draft KAT vectors yet.
 - [ ] hash-to-curve (RFC 9380) for Ed25519, P-256, BLS12-381 G1/G2
 - [~] KATs: RFC 8032 (Ed25519), RFC 7748 (X25519), NIST CAVP ECDH (P-256/384),
       draft-irtf-cfrg BLS12-381 vectors, RFC 9380 h2c vectors

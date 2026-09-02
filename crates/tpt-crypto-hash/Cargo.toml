@@ -8,7 +8,9 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 description = "Constant-time hashes: SHA-2, SHA-3/SHAKE, BLAKE2b/BLAKE3, KangarooTwelve, HMAC/HKDF, HMAC-DRBG. no_std."
-keywords = ["crypto", "hash", "sha2", "sha3", "blake", "no-std"]
+readme = "README.md"
+documentation = "https://docs.rs/tpt-crypto-hash"
+keywords = ["crypto", "hash", "sha2", "sha3", "no-std"]
 categories = ["cryptography", "no-std"]
 
 [dependencies]

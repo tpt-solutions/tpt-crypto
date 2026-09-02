@@ -316,6 +316,56 @@ pub(crate) fn tower_info(k: u32) -> TowerInfo {
     }
 }
 
+impl Big {
+    /// Binary long division: returns `(quotient, remainder)` for `self / m`.
+    fn divmod(&self, m: &Big) -> (Big, Big) {
+        assert!(!m.is_zero(), "division by zero");
+        let n = bit_length(&self.0);
+        if n == 0 {
+            return (Big(vec![]), Big(vec![]));
+        }
+        let mut q = vec![0u64; (n as usize / 64) + 1];
+        let mut r: Vec<u64> = vec![];
+        let mut i = n;
+        while i > 0 {
+            i -= 1;
+            r = shl_bits(&r, 1);
+            let bit = (self.0[i as usize / 64] >> (i % 64)) & 1;
+            if bit == 1 {
+                if r.is_empty() {
+                    r.push(1);
+                } else {
+                    r[0] |= 1;
+                }
+            }
+            if big_ge(&r, &m.0) {
+                r = sub_big(&r, &m.0);
+                q[i as usize / 64] |= 1u64 << (i % 64);
+            }
+        }
+        trim(&mut q);
+        trim(&mut r);
+        (Big(q), Big(r))
+    }
+}
+
+/// The BLS12-381 final-exponentiation exponent `(p^12 - 1) / r`, little-endian
+/// `u64` words. Used by the pairing in `tpt-crypto-curve`.
+#[must_use]
+pub fn bls12381_final_exp_exponent() -> Vec<u64> {
+    use crate::params::{Bls12381FpParams, Bls12381FrParams};
+    let p = Big::from_limbs(&Bls12381FpParams::MODULUS);
+    let mut q = Big::from_u64(1);
+    for _ in 0..12 {
+        q = q.mul(&p);
+    }
+    let qm1 = q.dec();
+    let r = Big::from_limbs(&Bls12381FrParams::MODULUS);
+    let (quot, rem) = qm1.divmod(&r);
+    debug_assert!(rem.is_zero(), "r must divide p^12 - 1");
+    quot.to_vec()
+}
+
 /// Smallest quadratic non-residue `z >= 2` in a tower field, via Euler's criterion.
 pub(crate) fn find_nonresidue_field<F: crate::field::Field + crate::ct::CtEq>(half: &[u64]) -> F {
     let minus_one = F::one().neg();

@@ -34,6 +34,7 @@ pub mod params;
 
 mod big;
 
+pub use big::bls12381_final_exp_exponent;
 pub use consts::MAX_LIMBS;
 pub use ct::{Choice, CtEq, CtOption};
 pub use extension::{Fp12, Fp2, Fp6};

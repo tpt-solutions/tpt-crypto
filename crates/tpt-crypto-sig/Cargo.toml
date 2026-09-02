@@ -1,10 +1,17 @@
 [package]
 name = "tpt-crypto-sig"
 version = "0.1.0"
-edition = "2021"
-license = "MIT OR Apache-2.0"
-description = "ML-DSA (FIPS 204) and SLH-DSA (FIPS 205) signature schemes for the tpt-crypto substrate"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
 repository.workspace = true
+description = "Constant-time signatures: ML-DSA (FIPS 204), SLH-DSA (FIPS 205), Ed25519 (RFC 8032), ECDSA P-256/P-384. no_std, pure Rust."
+readme = "README.md"
+documentation = "https://docs.rs/tpt-crypto-sig"
+keywords = ["crypto", "signature", "ml-dsa", "ecdsa", "no-std"]
+categories = ["cryptography", "no-std"]
 
 [dependencies]
 tpt-crypto-core = { path = "../tpt-crypto-core", default-features = false }
@@ -45,3 +52,10 @@ required-features = ["std"]
 
 [lib]
 path = "src/lib.rs"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

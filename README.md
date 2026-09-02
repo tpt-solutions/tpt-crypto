@@ -38,13 +38,29 @@ document and localize every `unsafe` block with a `// SAFETY:` comment.
 | `tpt-crypto-ct` | Constant-time arithmetic: `Choice`, `ct_eq`/`ct_select`, masked ops, `ct_lookup`. |
 | `tpt-crypto-hash` | SHA-2, SHA-3/SHAKE, BLAKE2b/BLAKE3, K12, HMAC, HKDF, `HmacDrbg`. |
 | `tpt-crypto-field` | Prime field arithmetic over `tpt-math-exact` / `tpt-math-linalg-fixed`. |
-| `tpt-crypto-curve` | Ed25519, X25519, P-256/384, BLS12-381 + pairing. |
+| `tpt-crypto-curve` | Ed25519, X25519, P-256/384 (complete). BLS12-381 + pairing and RFC 9380 hash-to-curve in progress. |
 | `tpt-crypto-aead` | AES-GCM, ChaCha20-Poly1305, AES-GCM-SIV, `CtrDrbg`. |
 | `tpt-crypto-kem` | ML-KEM (FIPS 203), FrodoKEM, Classic McEliece. |
-| `tpt-crypto-sig` | ML-DSA (FIPS 204), SLH-DSA, Ed25519, ECDSA, BLS12-381. |
+| `tpt-crypto-sig` | ML-DSA (FIPS 204), SLH-DSA, Ed25519, ECDSA (P-256/384); BLS12-381 pending pairing. |
 | `tpt-crypto-zk` | Bulletproofs, minimal PLONK verifier, Pedersen commitments. |
 | `tpt-crypto-mpc` | Additive secret sharing, Beaver triples, OT primitives. |
 | `tpt-crypto` | Facade re-exporting the substrate behind feature gates. |
+
+### Facade features
+
+Pick a subset or take everything with `full`:
+
+| Feature | Pulls in |
+| --- | --- |
+| `classical` | `hash`, `aead`, `field`, `curve`, `sig` (Ed25519 / ECDSA / ML-DSA) |
+| `pq` | `kem` + `ml_kem` (needs `alloc`), `sig` + `ml_dsa` |
+| `bls` | BLS12-381 signatures (stub until `-curve` lands pairing) |
+| `zk` | Bulletproofs, Pedersen commitments |
+| `mpc` | secret sharing, Beaver triples, OT |
+| `full` | all of the above |
+
+The `ml_kem`, `ml_dsa`, `bulletproofs`, `bls`, `ct` and `prelude` modules expose
+the exact names from `spec.txt` §4 so downstream code compiles verbatim against it.
 
 See [`spec.txt`](./spec.txt) for the full design and target API.
 
@@ -69,6 +85,7 @@ cargo xtask   no-std    # builds no_std crates for thumbv6m-none-eabi
 cargo xtask   leakage   # dudect-style Welch t-test side-channel harness
 cargo xtask   kat-check # verify tests/kat/PROVENANCE.md sha256s
 cargo +nightly miri test -p tpt-crypto-ct
+cargo +nightly fuzz run <target>   # fuzz/ — attacker-controlled decoder targets
 ```
 
 ## License

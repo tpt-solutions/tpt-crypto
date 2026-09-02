@@ -2,11 +2,16 @@
 name = "tpt-crypto-field"
 version = "0.1.0"
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 description = "Constant-time prime-field and extension-tower arithmetic (pure Rust, no_std)."
+readme = "README.md"
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
+documentation = "https://docs.rs/tpt-crypto-field"
+keywords = ["crypto", "finite-field", "montgomery", "bls12-381", "no-std"]
+categories = ["cryptography", "no-std"]
 
 [dependencies]
 tpt-crypto-ct = { workspace = true, default-features = false }

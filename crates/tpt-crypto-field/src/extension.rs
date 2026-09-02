@@ -45,6 +45,21 @@ impl Fp2 {
     pub fn c1(&self) -> Fp {
         self.c1
     }
+
+    /// Multiply by the cubic non-residue `ξ = u + 1`:
+    /// `(c0 + c1 u)(1 + u) = (c0 - c1) + (c0 + c1) u`.
+    #[inline]
+    #[must_use]
+    pub fn mul_by_nonresidue(&self) -> Fp2 {
+        Fp2::new(self.c0.sub(&self.c1), self.c0.add(&self.c1))
+    }
+
+    /// Complex conjugate `c0 - c1 u` (the non-trivial `Fp`-automorphism of `Fp2`).
+    #[inline]
+    #[must_use]
+    pub fn conjugate(&self) -> Fp2 {
+        Fp2::new(self.c0, self.c1.neg())
+    }
 }
 
 impl CtEq for Fp2 {
@@ -101,9 +116,14 @@ impl Field for Fp2 {
     }
     #[inline]
     fn invert(&self) -> CtOption<Self> {
-        let info = tower_info(2);
-        let r = self.pow_vartime(&info.q_minus_2);
-        CtOption::new(r, self.is_zero().invert())
+        // 1 / (c0 + c1 u) = (c0 - c1 u) / (c0^2 + c1^2).
+        let norm = self.c0.square().add(&self.c1.square());
+        let ninv = norm.invert();
+        let r = Fp2::new(
+            self.c0.mul(&ninv.unwrap_or_default()),
+            self.c1.neg().mul(&ninv.unwrap_or_default()),
+        );
+        CtOption::new(r, ninv.is_some())
     }
     #[inline]
     fn pow_vartime(&self, exp: &[u64]) -> Self {
@@ -229,9 +249,20 @@ impl Field for Fp6 {
     }
     #[inline]
     fn invert(&self) -> CtOption<Self> {
-        let info = tower_info(6);
-        let r = self.pow_vartime(&info.q_minus_2);
-        CtOption::new(r, self.is_zero().invert())
+        // Cubic-extension inversion (Guide to Pairing-Based Crypto, Alg. 17),
+        // `v^3 = ξ`.
+        let (c0, c1, c2) = (self.c0, self.c1, self.c2);
+        let a = c0.square().sub(&c1.mul(&c2).mul_by_nonresidue());
+        let b = c2.square().mul_by_nonresidue().sub(&c0.mul(&c1));
+        let c = c1.square().sub(&c0.mul(&c2));
+        let f = c0
+            .mul(&a)
+            .add(&c2.mul(&b).mul_by_nonresidue())
+            .add(&c1.mul(&c).mul_by_nonresidue());
+        let finv = f.invert();
+        let fi = finv.unwrap_or_default();
+        let r = Fp6::new(a.mul(&fi), b.mul(&fi), c.mul(&fi));
+        CtOption::new(r, finv.is_some())
     }
     #[inline]
     fn pow_vartime(&self, exp: &[u64]) -> Self {
@@ -283,6 +314,13 @@ impl Fp12 {
     #[inline]
     fn v() -> Fp6 {
         Fp6::new(Fp2::zero(), Fp2::one(), Fp2::zero())
+    }
+
+    /// The `p⁶`-power Frobenius `c0 + c1·w ↦ c0 − c1·w` (conjugation over `Fp6`).
+    #[inline]
+    #[must_use]
+    pub fn conjugate(&self) -> Fp12 {
+        Fp12::new(self.c0, self.c1.neg())
     }
 }
 
@@ -342,9 +380,12 @@ impl Field for Fp12 {
     }
     #[inline]
     fn invert(&self) -> CtOption<Self> {
-        let info = tower_info(12);
-        let r = self.pow_vartime(&info.q_minus_2);
-        CtOption::new(r, self.is_zero().invert())
+        // 1 / (c0 + c1 w) = (c0 - c1 w) / (c0^2 - c1^2 v),  w^2 = v.
+        let norm = self.c0.square().sub(&self.c1.square().mul(&Self::v()));
+        let ninv = norm.invert();
+        let ni = ninv.unwrap_or_default();
+        let r = Fp12::new(self.c0.mul(&ni), self.c1.neg().mul(&ni));
+        CtOption::new(r, ninv.is_some())
     }
     #[inline]
     fn pow_vartime(&self, exp: &[u64]) -> Self {

@@ -7,10 +7,14 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+#[cfg(feature = "alloc")]
+pub mod bls12_381;
 pub mod edwards25519;
 pub mod montgomery25519;
 pub mod weierstrass;
 
+#[cfg(feature = "alloc")]
+pub use bls12_381::{multi_pairing, pairing, Gt, G1, G2};
 pub use edwards25519::EdwardsPoint;
 pub use montgomery25519::X25519;
 pub use weierstrass::{P256Point, P384Point, ProjectivePoint, WeierstrassParams, P256, P384};
