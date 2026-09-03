@@ -227,6 +227,13 @@ variant (feature-gated re-exports instead of steps 3–6).
       correct (verified: `Ed25519ScalarParams::ONE_MONT == 2^256 mod L`).
 - [x] `specs/field_mul.telos` (`result == a*b mod P ∀ a,b<P`),
       `specs/field_reduce.telos`
+- [ ] BUG: `Fp2/Fp6/Fp12::sqrt` (`extension.rs`) infinite-loops —
+      `find_nonresidue_field::<F>` (`big.rs`) only tries `F::from_u64(k)`
+      candidates, but every base-field element is a QR in these towers, so the
+      non-residue search never terminates. Not currently exercised except by a
+      would-be tower `sqrt` caller (the `-curve` h2c now carries its own Fp2
+      sqrt). Fix: seed the search with a genuine tower non-residue
+      (e.g. `ξ = u + 1` for Fp2) or add `u`-bearing candidates.
 
 ### crates/tpt-crypto-curve
 - [x] Scaffold `crates/tpt-crypto-curve/` — `Cargo.toml` (deps: `-field`, `-ct`,
@@ -308,9 +315,10 @@ variant (feature-gated re-exports instead of steps 3–6).
       draft-irtf-cfrg BLS12-381 vectors, RFC 9380 h2c vectors
       — Ed25519/X25519 done (`tests/kat.rs`); P-256/P-384 ECDH via RFC 5903
       (`tests/weierstrass.rs`) in lieu of the CAVP `.rsp` set; RFC 9380 h2c
-      P-256/P-384 RO + `expand_message_xmd` vectors in `tests/hash_to_curve.rs`
-      (provenance in `tests/kat/PROVENANCE.md`). BLS vectors + Ed25519/BLS h2c
-      pending.
+      RO vectors for all five suites (P-256, P-384, edwards25519, BLS12-381
+      G1 + G2) plus `expand_message_xmd` (SHA-256/512) in
+      `tests/hash_to_curve.rs` (provenance in `tests/kat/PROVENANCE.md`).
+      draft-irtf-cfrg BLS12-381 *pairing/signature* vectors still pending.
 - [~] proptest: `k·(l·P) == (k·l)·P`, `pairing` bilinearity, compress round-trip
       — Weierstrass: `(a+b)·G == a·G + b·G` + SEC1 compress/uncompress round-trip
       covered in `tests/weierstrass.rs`. Pairing bilinearity pending (no BLS).
