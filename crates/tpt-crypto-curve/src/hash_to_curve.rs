@@ -7,21 +7,25 @@
 //!
 //! * `P256_XMD:SHA-256_SSWU_RO_`
 //! * `P384_XMD:SHA-384_SSWU_RO_`
+//! * `edwards25519_XMD:SHA-512_ELL2_RO_` ([`hash_to_curve_edwards25519`])
 //!
-//! Both curves have cofactor 1, so `clear_cofactor` is the identity map and the
-//! two mapped points are simply added.
+//! P-256 / P-384 have cofactor 1, so `clear_cofactor` is the identity map;
+//! edwards25519 clears its cofactor with `[8]`.
 //!
-//! The SSWU map is branch-free on the field element `u` (all conditional steps
-//! go through [`Field::ct_select`]); the message expander and `hash_to_field`
-//! are fixed-trace. Edwards25519 (Elligator2) and BLS12-381 G1/G2 (isogeny
-//! maps) are not yet covered here.
+//! The SSWU / Elligator 2 maps are branch-free on the field element `u` (all
+//! conditional steps go through [`Field::ct_select`]); the message expander and
+//! `hash_to_field` are fixed-trace. BLS12-381 G1/G2 (isogeny maps) are not yet
+//! covered here.
 
-use tpt_crypto_field::{Choice, Field, FieldElement, FieldParams, MAX_LIMBS};
+use tpt_crypto_field::{
+    Choice, CtEq, Ed25519Field, Ed25519FieldParams, Field, FieldElement, FieldParams, MAX_LIMBS,
+};
 use tpt_crypto_hash::{
-    sha2::{Sha256, Sha384},
+    sha2::{Sha256, Sha384, Sha512},
     Hasher,
 };
 
+use crate::edwards25519::EdwardsPoint;
 use crate::weierstrass::{b_coeff, ProjectivePoint, WeierstrassParams, P256, P384};
 
 type Fe<C> = FieldElement<<C as WeierstrassParams>::Base>;
@@ -195,4 +199,91 @@ pub fn hash_to_curve<C: Sswu>(msg: &[u8], dst: &[u8]) -> ProjectivePoint<C> {
     let (u0, u1) = hash_to_field_2::<C>(msg, dst);
     // clear_cofactor is the identity for cofactor 1.
     map_to_curve::<C>(&u0).add(&map_to_curve::<C>(&u1))
+}
+
+// --- edwards25519 (Elligator 2) -----------------------------------------
+
+/// Elligator 2 map to curve25519 (`y² = x³ + 486662·x² + x`, `Z = 2`),
+/// straight-line / branch-free form (RFC 9380 §6.7.1). Returns the Montgomery
+/// affine `(s, t)`.
+fn map_to_curve_ell2_25519(u: &Ed25519Field) -> (Ed25519Field, Ed25519Field) {
+    let j = Ed25519Field::from_u64(486_662);
+    let one = Ed25519Field::one();
+    let z = Ed25519Field::from_u64(2);
+
+    let tv1 = z.mul(&u.square()); // Z·u²
+    let e1 = tv1.ct_eq(&one.neg());
+    let tv1 = <Ed25519Field as Field>::ct_select(&tv1, &Ed25519Field::zero(), e1);
+
+    let x1 = j.neg().mul(&inv0(&tv1.add(&one))); // -J / (1 + Z·u²)
+                                                 // gx1 = x1³ + J·x1² + x1  (K = 1)
+    let gx1 = x1.add(&j).mul(&x1).add(&one).mul(&x1);
+    let x2 = x1.neg().sub(&j);
+    let gx2 = tv1.mul(&gx1);
+
+    let s1 = gx1.sqrt();
+    let e2 = s1.is_some();
+    let x = <Ed25519Field as Field>::ct_select(&x2, &x1, e2);
+    let y1 = s1.unwrap_or(Ed25519Field::zero());
+    let y2 = gx2.sqrt().unwrap_or(Ed25519Field::zero());
+    let y0 = <Ed25519Field as Field>::ct_select(&y2, &y1, e2);
+
+    // y = CMOV(y0, -y0, e2 XOR (sgn0(y0) == 1))
+    let e3 = sgn0(&y0) == 1;
+    let flip = Choice::from_bool(e2.into_bool() ^ e3);
+    let y = <Ed25519Field as Field>::ct_select(&y0, &y0.neg(), flip);
+    (x, y)
+}
+
+/// `sqrt(-486664)` with `sgn0 == 0` — the birational-map constant for
+/// curve25519 → edwards25519 (RFC 9380).
+fn sqrt_minus_486664() -> Ed25519Field {
+    let r = Ed25519Field::from_u64(486_664)
+        .neg()
+        .sqrt()
+        .unwrap_or(Ed25519Field::zero());
+    let odd = Choice::from_u8(sgn0(&r));
+    <Ed25519Field as Field>::ct_select(&r, &r.neg(), odd)
+}
+
+/// Birational map curve25519 → edwards25519 (RFC 9380 `m2e_25519`):
+/// `v = sqrt(-486664)·x / y`, `w = (x - 1) / (x + 1)`, with the exceptional
+/// Montgomery points folded in branch-free. Input `(x, y)` Montgomery affine,
+/// output `(v, w)` = twisted-Edwards `(x, y)`.
+fn ell2_curve25519_to_edwards(x: &Ed25519Field, y: &Ed25519Field) -> (Ed25519Field, Ed25519Field) {
+    let one = Ed25519Field::one();
+    let sel = <Ed25519Field as Field>::ct_select;
+
+    let v = sqrt_minus_486664().mul(x).mul(&inv0(y)); // 0 when y == 0
+    let w = x.sub(&one).mul(&inv0(&x.add(&one)));
+
+    let y_zero = y.is_zero();
+    let x_neg1 = x.ct_eq(&one.neg());
+    let exc = y_zero.or(x_neg1); // → (0, 1)
+    let at_2t = x.is_zero().and(y_zero); // (0, 0) → (0, -1)
+
+    let v = sel(&v, &Ed25519Field::zero(), exc);
+    let w = sel(&w, &one, exc);
+    let w = sel(&w, &one.neg(), at_2t);
+    (v, w)
+}
+
+fn map_to_edwards25519(u: &Ed25519Field) -> EdwardsPoint {
+    let (s, t) = map_to_curve_ell2_25519(u);
+    let (v, w) = ell2_curve25519_to_edwards(&s, &t);
+    EdwardsPoint::from_affine_unchecked(v, w)
+}
+
+/// `hash_to_curve` for the `edwards25519_XMD:SHA-512_ELL2_RO_` suite (RFC 9380).
+///
+/// `dst` is the full domain-separation tag, e.g.
+/// `b"QUUX-V01-CS02-with-edwards25519_XMD:SHA-512_ELL2_RO_"`.
+#[must_use]
+pub fn hash_to_curve_edwards25519(msg: &[u8], dst: &[u8]) -> EdwardsPoint {
+    let mut uni = [0u8; 96];
+    expand_message_xmd::<64, Sha512>(msg, dst, &mut uni, 128);
+    let u0 = os2ip_mod::<Ed25519FieldParams>(&uni[..48]);
+    let u1 = os2ip_mod::<Ed25519FieldParams>(&uni[48..]);
+    let r = map_to_edwards25519(&u0).add(&map_to_edwards25519(&u1));
+    r.mul_by_cofactor() // clear_cofactor = [8]
 }

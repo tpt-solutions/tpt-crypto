@@ -1,9 +1,71 @@
 //! RFC 9380 hash-to-curve KATs (vectors from the CFRG `draft-irtf-cfrg-hash-to-curve`
 //! reference `poc/vectors/` JSON — see `tests/kat/PROVENANCE.md`).
 
-use tpt_crypto_curve::hash_to_curve::{expand_message_xmd, hash_to_curve, Sswu};
+use tpt_crypto_curve::hash_to_curve::{
+    expand_message_xmd, hash_to_curve, hash_to_curve_edwards25519, Sswu,
+};
 use tpt_crypto_curve::weierstrass::{ProjectivePoint, WeierstrassParams, P256, P384};
-use tpt_crypto_hash::sha2::Sha256;
+use tpt_crypto_hash::sha2::{Sha256, Sha512};
+
+#[test]
+fn expand_message_xmd_sha512_short_dst() {
+    let dst = b"QUUX-V01-CS02-with-expander-SHA512-256";
+    let mut out = [0u8; 0x20];
+    expand_message_xmd::<64, Sha512>(b"", dst, &mut out, 128);
+    assert_eq!(
+        hex::encode(out),
+        "6b9a7312411d92f921c6f68ca0b6380730a1a4d982c507211a90964c394179ba"
+    );
+    let mut out = [0u8; 0x20];
+    expand_message_xmd::<64, Sha512>(b"abcdef0123456789", dst, &mut out, 128);
+    assert_eq!(
+        hex::encode(out),
+        "087e45a86e2939ee8b91100af1583c4938e0f5fc6c9db4b107b83346bc967f58"
+    );
+}
+
+fn hex32(s: &str) -> [u8; 32] {
+    let v = hex::decode(s).unwrap();
+    let mut out = [0u8; 32];
+    out[32 - v.len()..].copy_from_slice(&v);
+    out
+}
+
+#[test]
+fn edwards25519_xmd_sha512_ell2_ro() {
+    let dst = b"QUUX-V01-CS02-with-edwards25519_XMD:SHA-512_ELL2_RO_";
+    // (msg, P.x, P.y) from the CFRG reference vectors.
+    let cases: [(&[u8], &str, &str); 3] = [
+        (
+            b"",
+            "3c3da6925a3c3c268448dcabb47ccde5439559d9599646a8260e47b1e4822fc6",
+            "09a6c8561a0b22bef63124c588ce4c62ea83a3c899763af26d795302e115dc21",
+        ),
+        (
+            b"abc",
+            "608040b42285cc0d72cbb3985c6b04c935370c7361f4b7fbdb1ae7f8c1a8ecad",
+            "1a8395b88338f22e435bbd301183e7f20a5f9de643f11882fb237f88268a5531",
+        ),
+        (
+            b"abcdef0123456789",
+            "6d7fabf47a2dc03fe7d47f7dddd21082c5fb8f86743cd020f3fb147d57161472",
+            "53060a3d140e7fbcda641ed3cf42c88a75411e648a1add71217f70ea8ec561a6",
+        ),
+    ];
+    for (msg, xh, yh) in cases {
+        let p = hash_to_curve_edwards25519(msg, dst);
+        let x = hex32(xh);
+        let mut want = hex32(yh);
+        want.reverse(); // big-endian y -> little-endian encoding
+        want[31] |= (x[31] & 1) << 7; // sign of x
+        assert_eq!(
+            hex::encode(p.compress()),
+            hex::encode(want),
+            "mismatch for {:?}",
+            core::str::from_utf8(msg)
+        );
+    }
+}
 
 fn expand256(msg: &[u8], dst: &[u8], n: usize) -> Vec<u8> {
     let mut out = vec![0u8; n];

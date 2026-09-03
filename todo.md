@@ -284,15 +284,18 @@ variant (feature-gated re-exports instead of steps 3–6).
       `multi_pairing` vs product, `e(P,Q)·e(-P,Q) == 1`. Not constant-time in the
       final-exp exponent (public); no CFRG draft KAT vectors yet.
 - [~] hash-to-curve (RFC 9380) for Ed25519, P-256, BLS12-381 G1/G2
-      — `src/hash_to_curve.rs`: `expand_message_xmd` (SHA-256/384 + the
+      — `src/hash_to_curve.rs`: `expand_message_xmd` (SHA-256/384/512 + the
       `H2C-OVERSIZE-DST-` rule), `hash_to_field` (fixed-trace Horner OS2IP mod p),
-      the branch-free Simplified SWU map for `a = -3`, and the full RO suites
-      `P256_XMD:SHA-256_SSWU_RO_` / `P384_XMD:SHA-384_SSWU_RO_` (cofactor 1, so
-      `clear_cofactor` is identity). `tests/hash_to_curve.rs` (4 pass) checks the
-      CFRG reference vectors: `expand_message_xmd` short + oversize DST, and the
-      P-256 / P-384 suite `P.x`/`P.y` for `msg ∈ {"", "abc", "abcdef0123456789"}`
-      + on-curve. Ed25519 (Elligator2) and BLS12-381 G1/G2 (11-/3-isogeny) maps
-      still pending.
+      the branch-free Simplified SWU map for `a = -3`, the branch-free Elligator 2
+      map for curve25519 + the `sqrt(-486664)` birational map to edwards25519,
+      and the full RO suites `P256_XMD:SHA-256_SSWU_RO_`,
+      `P384_XMD:SHA-384_SSWU_RO_` (cofactor 1) and
+      `edwards25519_XMD:SHA-512_ELL2_RO_` (`clear_cofactor = [8]`).
+      `tests/hash_to_curve.rs` (6 pass) checks the CFRG reference vectors:
+      `expand_message_xmd` (SHA-256 short + oversize DST, SHA-512), and the
+      P-256 / P-384 / edwards25519 suite outputs for
+      `msg ∈ {"", "abc", "abcdef0123456789"}`. BLS12-381 G1/G2 (11-/3-isogeny)
+      maps still pending.
 - [~] KATs: RFC 8032 (Ed25519), RFC 7748 (X25519), NIST CAVP ECDH (P-256/384),
       draft-irtf-cfrg BLS12-381 vectors, RFC 9380 h2c vectors
       — Ed25519/X25519 done (`tests/kat.rs`); P-256/P-384 ECDH via RFC 5903

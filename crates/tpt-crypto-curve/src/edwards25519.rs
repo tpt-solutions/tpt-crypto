@@ -40,6 +40,19 @@ impl EdwardsPoint {
         }
     }
 
+    /// Build an extended-coordinate point directly from affine `(x, y)`
+    /// **without** checking that it lies on the curve.
+    ///
+    /// Used by hash-to-curve, whose map output is on-curve by construction.
+    pub fn from_affine_unchecked(x: Ed25519Field, y: Ed25519Field) -> Self {
+        EdwardsPoint {
+            x,
+            y,
+            z: Ed25519Field::one(),
+            t: x.mul(&y),
+        }
+    }
+
     /// Ed25519 base point (RFC 8032 §5.1).
     pub fn basepoint() -> Self {
         let y = Ed25519Field::from_u64(4).mul(&Ed25519Field::from_u64(5).invert().unwrap());

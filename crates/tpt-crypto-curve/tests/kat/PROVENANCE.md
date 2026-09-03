@@ -14,10 +14,14 @@ source material for RFC 9380 Appendices J and K):
   `QUUX-V01-CS02-with-P256_XMD:SHA-256_SSWU_RO_`.
 - `poc/vectors/P384_XMD:SHA-384_SSWU_RO_.json` — suite
   `QUUX-V01-CS02-with-P384_XMD:SHA-384_SSWU_RO_`.
+- `poc/vectors/expand_message_xmd_SHA512_38.json` — `expand_message_xmd`
+  (SHA-512), short DST `QUUX-V01-CS02-with-expander-SHA512-256`.
+- `poc/vectors/edwards25519_XMD:SHA-512_ELL2_RO_.json` — suite
+  `QUUX-V01-CS02-with-edwards25519_XMD:SHA-512_ELL2_RO_`.
 
 Repository: https://github.com/cfrg/draft-irtf-cfrg-hash-to-curve
 (`poc/vectors/`), which matches the published RFC 9380 test vectors.
 License: CC0 / public-domain test data.
 
-Edwards25519 (Elligator2) and BLS12-381 G1/G2 (isogeny) suites are not yet
-implemented; their vectors are not transcribed here.
+BLS12-381 G1/G2 (isogeny) suites are not yet implemented; their vectors are
+not transcribed here.
