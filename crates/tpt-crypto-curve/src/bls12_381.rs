@@ -197,6 +197,22 @@ impl G1 {
         }
     }
 
+    /// Build a projective point directly from affine `(x, y)` **without**
+    /// checking that it lies on the curve or in the subgroup. Used by
+    /// hash-to-curve, whose isogeny output is on `E` by construction.
+    #[must_use]
+    pub fn from_affine_unchecked(x: Fp, y: Fp) -> Self {
+        G1 { x, y, z: Fp::one() }
+    }
+
+    /// Clear the `G1` cofactor: `[h_eff]·P` with `h_eff = 0xd201000000010001`
+    /// (RFC 9380 §8.8.1 — `(1 - z)` maps `E(Fp)` into the prime-order subgroup).
+    #[must_use]
+    pub fn clear_cofactor(&self) -> Self {
+        const H_EFF: [u8; 8] = [0xd2, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01];
+        self.mul(&H_EFF)
+    }
+
     /// Whether this is the identity.
     #[must_use]
     pub fn is_identity(&self) -> Choice {

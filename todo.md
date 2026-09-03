@@ -286,16 +286,20 @@ variant (feature-gated re-exports instead of steps 3–6).
 - [~] hash-to-curve (RFC 9380) for Ed25519, P-256, BLS12-381 G1/G2
       — `src/hash_to_curve.rs`: `expand_message_xmd` (SHA-256/384/512 + the
       `H2C-OVERSIZE-DST-` rule), `hash_to_field` (fixed-trace Horner OS2IP mod p),
-      the branch-free Simplified SWU map for `a = -3`, the branch-free Elligator 2
-      map for curve25519 + the `sqrt(-486664)` birational map to edwards25519,
-      and the full RO suites `P256_XMD:SHA-256_SSWU_RO_`,
-      `P384_XMD:SHA-384_SSWU_RO_` (cofactor 1) and
-      `edwards25519_XMD:SHA-512_ELL2_RO_` (`clear_cofactor = [8]`).
-      `tests/hash_to_curve.rs` (6 pass) checks the CFRG reference vectors:
-      `expand_message_xmd` (SHA-256 short + oversize DST, SHA-512), and the
-      P-256 / P-384 / edwards25519 suite outputs for
-      `msg ∈ {"", "abc", "abcdef0123456789"}`. BLS12-381 G1/G2 (11-/3-isogeny)
-      maps still pending.
+      the branch-free generic Simplified SWU map (`(-b/a)(1+tv1)` form, any
+      `a ≠ 0`), the branch-free Elligator 2 map for curve25519 + the
+      `sqrt(-486664)` birational map to edwards25519, the 11-isogeny `E' → E`
+      for BLS12-381 G1, and the full RO suites
+      `P256_XMD:SHA-256_SSWU_RO_` / `P384_XMD:SHA-384_SSWU_RO_` (cofactor 1),
+      `edwards25519_XMD:SHA-512_ELL2_RO_` (`[8]`), and
+      `BLS12381G1_XMD:SHA-256_SSWU_RO_` (`[0xd201000000010001]`, `alloc`).
+      `tests/hash_to_curve.rs` (7 pass) checks the CFRG reference vectors:
+      `expand_message_xmd` (SHA-256 short + oversize DST, SHA-512) and the
+      P-256 / P-384 / edwards25519 / BLS12-381-G1 suite outputs for
+      `msg ∈ {"", "abc", "abcdef0123456789"}` (G1 also on-curve + torsion-free).
+      **Still pending: BLS12-381 G2** (3-isogeny over Fp2 + ψ-based cofactor
+      clear — needs the untwist-Frobenius-twist endomorphism added to
+      `bls12_381.rs`).
 - [~] KATs: RFC 8032 (Ed25519), RFC 7748 (X25519), NIST CAVP ECDH (P-256/384),
       draft-irtf-cfrg BLS12-381 vectors, RFC 9380 h2c vectors
       — Ed25519/X25519 done (`tests/kat.rs`); P-256/P-384 ECDH via RFC 5903
