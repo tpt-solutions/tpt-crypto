@@ -60,6 +60,43 @@ fn bls12381_g1_xmd_sha256_sswu_ro() {
     }
 }
 
+#[test]
+fn bls12381_g2_xmd_sha256_sswu_ro() {
+    use tpt_crypto_curve::hash_to_curve::hash_to_curve_bls12381_g2;
+    let dst = b"QUUX-V01-CS02-with-BLS12381G2_XMD:SHA-256_SSWU_RO_";
+    // (msg, x = x0,x1 ; y = y0,y1) from the CFRG reference vectors.
+    let cases: [(&[u8], [&str; 4]); 2] = [
+        (
+            b"",
+            [
+                "0141ebfbdca40eb85b87142e130ab689c673cf60f1a3e98d69335266f30d9b8d4ac44c1038e9dcdd5393faf5c41fb78a",
+                "05cb8437535e20ecffaef7752baddf98034139c38452458baeefab379ba13dff5bf5dd71b72418717047f5b0f37da03d",
+                "0503921d7f6a12805e72940b963c0cf3471c7b2a524950ca195d11062ee75ec076daf2d4bc358c4b190c0c98064fdd92",
+                "12424ac32561493f3fe3c260708a12b7c620e7be00099a974e259ddc7d1f6395c3c811cdd19f1e8dbf3e9ecfdcbab8d6",
+            ],
+        ),
+        (
+            b"abc",
+            [
+                "02c2d18e033b960562aae3cab37a27ce00d80ccd5ba4b7fe0e7a210245129dbec7780ccc7954725f4168aff2787776e6",
+                "139cddbccdc5e91b9623efd38c49f81a6f83f175e80b06fc374de9eb4b41dfe4ca3a230ed250fbe3a2acf73a41177fd8",
+                "1787327b68159716a37440985269cf584bcb1e621d3a7202be6ea05c4cfe244aeb197642555a0645fb87bf7466b2ba48",
+                "00aa65dae3c8d732d10ecd2c50f8a1baf3001578f71c694e03866e9f3d49ac1e1ce70dd94a733534f106d4cec0eddd16",
+            ],
+        ),
+    ];
+    for (msg, c) in cases {
+        let p = hash_to_curve_bls12381_g2(msg, dst);
+        assert!(p.is_on_curve().into_bool(), "off curve");
+        assert!(p.is_torsion_free().into_bool(), "not in G2");
+        let (x, y) = p.to_affine().expect("identity");
+        assert_eq!(hex::encode(x.c0().to_bytes()), format!("{:0>96}", c[0]));
+        assert_eq!(hex::encode(x.c1().to_bytes()), format!("{:0>96}", c[1]));
+        assert_eq!(hex::encode(y.c0().to_bytes()), format!("{:0>96}", c[2]));
+        assert_eq!(hex::encode(y.c1().to_bytes()), format!("{:0>96}", c[3]));
+    }
+}
+
 fn hex32(s: &str) -> [u8; 32] {
     let v = hex::decode(s).unwrap();
     let mut out = [0u8; 32];

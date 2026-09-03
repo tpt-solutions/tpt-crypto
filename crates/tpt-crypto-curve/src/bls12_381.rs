@@ -358,6 +358,92 @@ impl G2 {
     pub fn to_affine(&self) -> Option<(Fp2, Fp2)> {
         w_to_affine(&(self.x, self.y, self.z))
     }
+
+    /// Build a projective point directly from affine `(x, y)` **without**
+    /// checking that it lies on the curve or in the subgroup. Used by
+    /// hash-to-curve.
+    #[must_use]
+    pub fn from_affine_unchecked(x: Fp2, y: Fp2) -> Self {
+        G2 {
+            x,
+            y,
+            z: Fp2::one(),
+        }
+    }
+
+    /// Clear the `G2` cofactor (RFC 9380 §8.8.2 / Budroni–Pintore):
+    /// `[x²−x−1]P + [x−1]·ψ(P) + ψ²([2]P)` with the BLS seed `x` and the
+    /// untwist-Frobenius-twist endomorphism `ψ`.
+    #[must_use]
+    pub fn clear_cofactor(&self) -> Self {
+        // BLS_X is the magnitude |x|; the seed x itself is negative, so
+        // `[x]Q == -[|x|]Q`.
+        let xabs: [u8; 8] = BLS_X.to_be_bytes();
+        let x_mul = |q: &G2| q.mul(&xabs).neg();
+
+        let t1 = x_mul(self); // [x]P
+        let t2 = g2_psi(self); // ψ(P)
+        let mut t3 = g2_psi2(&self.add(self)); // ψ²([2]P)
+        t3 = t3.add(&t2.neg()); // ψ²(2P) − ψ(P)
+        let t2b = x_mul(&t1.add(&t2)); // [x]([x]P + ψ(P)) = [x²]P + [x]ψ(P)
+        t3 = t3.add(&t2b); // + [x²]P + [x]ψ(P)
+        t3 = t3.add(&t1.neg()); // − [x]P
+        t3.add(&self.neg()) // − P
+    }
+}
+
+/// `1 / ξ` with `ξ = u + 1` — the Frobenius base for `ψ` (RFC 9380 §8.8.2).
+#[inline]
+fn psi_base() -> Fp2 {
+    fp2(Fp::one(), Fp::one()).invert().unwrap_or_default()
+}
+
+/// `ψ`: `(x, y) ↦ (x^p · PSI_X, y^p · PSI_Y)` where `x^p` on `Fp²` is
+/// conjugation, `PSI_X = base^((p−1)/3)`, `PSI_Y = base^((p−1)/2)`.
+fn g2_psi(q: &G2) -> G2 {
+    // (p - 1) / 3 and (p - 1) / 2, little-endian u64 words.
+    const P_M1_D3: [u64; 6] = [
+        0x9354_ffff_ffff_e38e,
+        0x0a39_5554_e5c6_aaaa,
+        0xcd10_4635_a790_520c,
+        0xcc27_c3d6_fbd7_063f,
+        0x1909_37e7_6bc3_e447,
+        0x08ab_05f8_bdd5_4cde,
+    ];
+    const P_M1_D2: [u64; 6] = [
+        0xdcff_7fff_ffff_d555,
+        0x0f55_ffff_58a9_ffff,
+        0xb398_6950_7b58_7b12,
+        0xb23b_a5c2_79c2_895f,
+        0x258d_d3db_21a5_d66b,
+        0x0d00_88f5_1cbf_f34d,
+    ];
+    let base = psi_base();
+    let psi_x = base.pow_vartime(&P_M1_D3);
+    let psi_y = base.pow_vartime(&P_M1_D2);
+    let (x, y) = q.to_affine().expect("psi of identity");
+    G2::from_affine_unchecked(x.conjugate().mul(&psi_x), y.conjugate().mul(&psi_y))
+}
+
+/// `ψ²`: `(x, y) ↦ (x · PSI2_X, −y)` with `PSI2_X = base^((p²−1)/3)`.
+fn g2_psi2(q: &G2) -> G2 {
+    const P2_M1_D3: [u64; 12] = [
+        0xb78e_0000_097b_2f68,
+        0xd44f_23b4_7cbd_64e3,
+        0x5cb9_6681_20b0_69a9,
+        0xccea_85f9_bf7b_3d16,
+        0x0dba_2c8d_7adb_356d,
+        0x09cd_75de_d75d_7429,
+        0xfc65_c311_0328_4fab,
+        0xc58c_b9a9_b249_ee24,
+        0xccf7_34c3_118a_2e9a,
+        0xa0f4_304c_5a25_6ce6,
+        0xc3f0_d2f8_e0ba_61f8,
+        0x00e1_67e1_92eb_ca97,
+    ];
+    let psi2_x = psi_base().pow_vartime(&P2_M1_D3);
+    let (x, y) = q.to_affine().expect("psi2 of identity");
+    G2::from_affine_unchecked(x.mul(&psi2_x), y.neg())
 }
 
 impl CtEq for G2 {

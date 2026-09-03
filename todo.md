@@ -283,23 +283,27 @@ variant (feature-gated re-exports instead of steps 3–6).
       arguments (`e([3]P,[5]Q) == e([15]P,Q) == e(P,[15]Q)`), additivity,
       `multi_pairing` vs product, `e(P,Q)·e(-P,Q) == 1`. Not constant-time in the
       final-exp exponent (public); no CFRG draft KAT vectors yet.
-- [~] hash-to-curve (RFC 9380) for Ed25519, P-256, BLS12-381 G1/G2
+- [x] hash-to-curve (RFC 9380) for Ed25519, P-256, P-384, BLS12-381 G1/G2
       — `src/hash_to_curve.rs`: `expand_message_xmd` (SHA-256/384/512 + the
       `H2C-OVERSIZE-DST-` rule), `hash_to_field` (fixed-trace Horner OS2IP mod p),
-      the branch-free generic Simplified SWU map (`(-b/a)(1+tv1)` form, any
-      `a ≠ 0`), the branch-free Elligator 2 map for curve25519 + the
-      `sqrt(-486664)` birational map to edwards25519, the 11-isogeny `E' → E`
-      for BLS12-381 G1, and the full RO suites
-      `P256_XMD:SHA-256_SSWU_RO_` / `P384_XMD:SHA-384_SSWU_RO_` (cofactor 1),
-      `edwards25519_XMD:SHA-512_ELL2_RO_` (`[8]`), and
-      `BLS12381G1_XMD:SHA-256_SSWU_RO_` (`[0xd201000000010001]`, `alloc`).
-      `tests/hash_to_curve.rs` (7 pass) checks the CFRG reference vectors:
-      `expand_message_xmd` (SHA-256 short + oversize DST, SHA-512) and the
-      P-256 / P-384 / edwards25519 / BLS12-381-G1 suite outputs for
-      `msg ∈ {"", "abc", "abcdef0123456789"}` (G1 also on-curve + torsion-free).
-      **Still pending: BLS12-381 G2** (3-isogeny over Fp2 + ψ-based cofactor
-      clear — needs the untwist-Frobenius-twist endomorphism added to
-      `bls12_381.rs`).
+      a generic branch-free Simplified SWU (`(-b/a)(1+tv1)` form, any `a ≠ 0`,
+      over `Fp` or `Fp²` — takes `sgn0` + `sqrt` fn-ptrs), the branch-free
+      Elligator 2 map for curve25519 + the `sqrt(-486664)` birational map to
+      edwards25519, the 11-isogeny (G1) and 3-isogeny over Fp2 (G2), a dedicated
+      Fp2 `sqrt` (eprint 2012/685 Alg 9; the field crate's tower `sqrt` hangs —
+      `find_nonresidue_field::<Fp2>` only tries base-field candidates, all of
+      which are QRs in Fp2), plus `G1`/`G2::from_affine_unchecked`,
+      `G1::clear_cofactor` (`[0xd201000000010001]`) and `G2::clear_cofactor`
+      (ψ / ψ² Budroni–Pintore, `g2_psi`/`g2_psi2` new in `bls12_381.rs`).
+      Suites: `P256_XMD:SHA-256_SSWU_RO_`, `P384_XMD:SHA-384_SSWU_RO_`,
+      `edwards25519_XMD:SHA-512_ELL2_RO_`, `BLS12381G1_XMD:SHA-256_SSWU_RO_`,
+      `BLS12381G2_XMD:SHA-256_SSWU_RO_` (last two `alloc`).
+      `tests/hash_to_curve.rs` (8 pass) checks the CFRG reference vectors:
+      `expand_message_xmd` (SHA-256 short + oversize DST, SHA-512) and every
+      suite's `P` for `msg ∈ {"", "abc", "abcdef0123456789"}`; G1/G2 also
+      on-curve + torsion-free.
+      NOTE: the field crate's `Fp2/Fp6/Fp12::sqrt` infinite-loops — separate bug,
+      not on the h2c path any more.
 - [~] KATs: RFC 8032 (Ed25519), RFC 7748 (X25519), NIST CAVP ECDH (P-256/384),
       draft-irtf-cfrg BLS12-381 vectors, RFC 9380 h2c vectors
       — Ed25519/X25519 done (`tests/kat.rs`); P-256/P-384 ECDH via RFC 5903

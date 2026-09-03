@@ -1,24 +1,26 @@
-//! RFC 9380 hash-to-curve for the NIST prime curves.
+//! RFC 9380 hash-to-curve.
 //!
-//! Implements the `expand_message_xmd` message expander (SHA-256 / SHA-384,
-//! including the oversize-DST rule), `hash_to_field`, the constant-time
-//! Simplified SWU map for `a = -3` short-Weierstrass curves, and the full
-//! `hash_to_curve` (random-oracle) suites:
+//! Implements the `expand_message_xmd` message expander (SHA-256 / SHA-384 /
+//! SHA-512, including the oversize-DST rule), `hash_to_field`, a generic
+//! branch-free Simplified SWU map (any `a ≠ 0`, over `Fp` or `Fp²`), the
+//! Elligator 2 map for curve25519, and the full `hash_to_curve`
+//! (random-oracle) suites:
 //!
 //! * `P256_XMD:SHA-256_SSWU_RO_`
 //! * `P384_XMD:SHA-384_SSWU_RO_`
 //! * `edwards25519_XMD:SHA-512_ELL2_RO_` ([`hash_to_curve_edwards25519`])
 //! * `BLS12381G1_XMD:SHA-256_SSWU_RO_` ([`hash_to_curve_bls12381_g1`], `alloc`)
+//! * `BLS12381G2_XMD:SHA-256_SSWU_RO_` ([`hash_to_curve_bls12381_g2`], `alloc`)
 //!
-//! P-256 / P-384 have cofactor 1, so `clear_cofactor` is the identity map;
-//! edwards25519 clears its cofactor with `[8]`; BLS12-381 G1 with
-//! `[0xd201000000010001]`. G1 maps through the isogenous curve `E'` (generic
-//! SSWU, `Z = 11`) and the 11-isogeny `E' → E`.
+//! P-256 / P-384 have cofactor 1 (`clear_cofactor` is the identity);
+//! edwards25519 clears with `[8]`; BLS12-381 G1 with `[0xd201000000010001]`;
+//! G2 with the ψ-based Budroni–Pintore map. G1 goes through the isogenous
+//! curve `E'` (`Z = 11`) + the 11-isogeny; G2 through `E'/Fp²`
+//! (`Z = -(2 + u)`) + the 3-isogeny.
 //!
 //! The SSWU / Elligator 2 maps are branch-free on the field element `u` (all
 //! conditional steps go through [`Field::ct_select`]); the message expander and
-//! `hash_to_field` are fixed-trace. BLS12-381 G2 (3-isogeny over Fp2 +
-//! ψ-based cofactor clearing) is not yet covered here.
+//! `hash_to_field` are fixed-trace.
 
 use tpt_crypto_field::{
     Choice, CtEq, Ed25519Field, Ed25519FieldParams, Field, FieldElement, FieldParams, MAX_LIMBS,
@@ -161,10 +163,27 @@ fn sgn0<P: FieldParams>(x: &FieldElement<P>) -> u8 {
     x.to_bytes()[FE_BYTES - 1] & 1
 }
 
+/// `(sqrt(v), is_square(v))` for a prime field via the trait `sqrt`.
+fn fe_sqrt<P: FieldParams>(v: &FieldElement<P>) -> (FieldElement<P>, bool) {
+    let r = v.sqrt();
+    (
+        r.unwrap_or(FieldElement::<P>::zero()),
+        r.is_some().into_bool(),
+    )
+}
+
 /// Branch-free Simplified SWU for any Weierstrass curve `y² = x³ + a·x + b`
 /// with `a ≠ 0` (the generic `(-b/a)(1 + tv1)` form). `z` is the map parameter,
-/// `sgn0` the field's sign function. Returns affine `(x, y)`.
-fn sswu_affine<F: Field>(u: &F, a: &F, b: &F, z: &F, sgn0: fn(&F) -> u8) -> (F, F) {
+/// `sgn0` the field's sign function, `sqrt` returns `(root, is_square)`.
+/// Returns affine `(x, y)`.
+fn sswu_affine<F: Field>(
+    u: &F,
+    a: &F,
+    b: &F,
+    z: &F,
+    sgn0: fn(&F) -> u8,
+    sqrt: fn(&F) -> (F, bool),
+) -> (F, F) {
     let one = F::one();
     let u2 = u.square();
     let zu2 = z.mul(&u2);
@@ -180,10 +199,9 @@ fn sswu_affine<F: Field>(u: &F, a: &F, b: &F, z: &F, sgn0: fn(&F) -> u8) -> (F, 
     let x2 = zu2.mul(&x1);
     let gx2 = x2.square().mul(&x2).add(&a.mul(&x2)).add(b);
 
-    let s1 = gx1.sqrt();
-    let use1 = s1.is_some();
-    let y1 = s1.unwrap_or(F::zero());
-    let y2 = gx2.sqrt().unwrap_or(F::zero());
+    let (y1, ok1) = sqrt(&gx1);
+    let (y2, _) = sqrt(&gx2);
+    let use1 = Choice::from_u8(u8::from(ok1));
 
     let x = F::ct_select(&x2, &x1, use1);
     let y0 = F::ct_select(&y2, &y1, use1);
@@ -197,7 +215,7 @@ fn map_to_curve<C: Sswu>(u: &Fe<C>) -> ProjectivePoint<C> {
     let a = Fe::<C>::from_u64(3).neg();
     let b = b_coeff::<C>();
     let z = Fe::<C>::from_u64(C::Z_NEG).neg();
-    let (x, y) = sswu_affine(u, &a, &b, &z, sgn0::<C::Base>);
+    let (x, y) = sswu_affine(u, &a, &b, &z, sgn0::<C::Base>, fe_sqrt::<C::Base>);
     ProjectivePoint::from_affine_unchecked(x, y)
 }
 
@@ -301,14 +319,15 @@ pub fn hash_to_curve_edwards25519(msg: &[u8], dst: &[u8]) -> EdwardsPoint {
     r.mul_by_cofactor() // clear_cofactor = [8]
 }
 
-// --- BLS12-381 G1 (SSWU + 11-isogeny) ----------------------------------
+// --- BLS12-381 G1 / G2 (SSWU + isogeny) -------------------------------
 
-/// `hash_to_curve` for `BLS12381G1_XMD:SHA-256_SSWU_RO_` (RFC 9380 §8.8.1).
+/// `hash_to_curve` for `BLS12381G1_XMD:SHA-256_SSWU_RO_` (RFC 9380 §8.8.1)
+/// and `BLS12381G2_XMD:SHA-256_SSWU_RO_` (§8.8.2).
 #[cfg(feature = "alloc")]
-mod bls_g1 {
-    use super::{expand_message_xmd, inv0, os2ip_mod, sgn0, sswu_affine};
-    use crate::bls12_381::G1;
-    use tpt_crypto_field::{Bls12381Fp as Fp, Bls12381FpParams};
+mod bls {
+    use super::{expand_message_xmd, fe_sqrt, inv0, inv0f, os2ip_mod, sgn0, sswu_affine};
+    use crate::bls12_381::{G1, G2};
+    use tpt_crypto_field::{Bls12381Fp as Fp, Bls12381FpParams, CtEq, Field, Fp2};
     use tpt_crypto_hash::sha2::Sha256;
 
     // Isogenous-curve parameters E': y² = x³ + A'x + B'  (RFC 9380 §8.8.1), Z = 11.
@@ -318,6 +337,7 @@ mod bls_g1 {
         "12e2908d11688030018b12e8753eee3b2016c1f0f24f4070a0b9c14fcef35ef55a23215a316ceaa5d1cc48e98e172be0";
 
     include!("iso11_g1.rs");
+    include!("iso3_g2.rs");
 
     const fn hx(c: u8) -> u8 {
         match c {
@@ -358,9 +378,54 @@ mod bls_g1 {
     }
 
     fn map_to_g1(u: &Fp, a: &Fp, b: &Fp, z: &Fp) -> G1 {
-        let (xp, yp) = sswu_affine(u, a, b, z, sgn0::<Bls12381FpParams>);
+        let (xp, yp) = sswu_affine(
+            u,
+            a,
+            b,
+            z,
+            sgn0::<Bls12381FpParams>,
+            fe_sqrt::<Bls12381FpParams>,
+        );
         let (x, y) = iso11(&xp, &yp);
         G1::from_affine_unchecked(x, y)
+    }
+
+    // (p − 3) / 4 and (p − 1) / 2 for the BLS12-381 base prime, LE u64 words.
+    const P_M3_D4: [u64; 6] = [
+        0xee7f_bfff_ffff_eaaa,
+        0x07aa_ffff_ac54_ffff,
+        0xd9cc_34a8_3dac_3d89,
+        0xd91d_d2e1_3ce1_44af,
+        0x92c6_e9ed_90d2_eb35,
+        0x0680_447a_8e5f_f9a6,
+    ];
+    const P_M1_D2: [u64; 6] = [
+        0xdcff_7fff_ffff_d555,
+        0x0f55_ffff_58a9_ffff,
+        0xb398_6950_7b58_7b12,
+        0xb23b_a5c2_79c2_895f,
+        0x258d_d3db_21a5_d66b,
+        0x0d00_88f5_1cbf_f34d,
+    ];
+
+    /// Fp2 square root (Adj–Rodríguez, eprint 2012/685 Alg. 9; base prime
+    /// `p ≡ 3 (mod 4)`). Returns `(root, is_square)`.
+    fn fp2_sqrt(a: &Fp2) -> (Fp2, bool) {
+        let neg_one = Fp2::one().neg();
+        let a1 = a.pow_vartime(&P_M3_D4);
+        let alpha = a1.square().mul(a);
+        let a1a = a1.mul(a);
+        let a0 = alpha.conjugate().mul(&alpha);
+        if a0.ct_eq(&neg_one).into_bool() {
+            return (Fp2::zero(), false);
+        }
+        let x0 = if alpha.ct_eq(&neg_one).into_bool() {
+            a1a.mul(&Fp2::new(Fp::zero(), Fp::one())) // · u
+        } else {
+            alpha.add(&Fp2::one()).pow_vartime(&P_M1_D2).mul(&a1a)
+        };
+        let ok = x0.square().ct_eq(a).into_bool();
+        (x0, ok)
     }
 
     /// `hash_to_curve` (random oracle) into `G1`.
@@ -377,7 +442,62 @@ mod bls_g1 {
             .add(&map_to_g1(&u1, &a, &b, &z))
             .clear_cofactor()
     }
+
+    // --- G2 (SSWU over Fp2 + 3-isogeny) -------------------------------
+
+    fn fp2_hex(c0: &str, c1: &str) -> Fp2 {
+        Fp2::new(fp_be_hex(c0), fp_be_hex(c1))
+    }
+
+    fn sgn0_fp2(x: &Fp2) -> u8 {
+        let s0 = sgn0::<Bls12381FpParams>(&x.c0);
+        let s1 = sgn0::<Bls12381FpParams>(&x.c1);
+        let z0 = u8::from(x.c0.is_zero().into_bool());
+        s0 | (z0 & s1)
+    }
+
+    fn poly2(coeffs: &[(&str, &str)], x: &Fp2) -> Fp2 {
+        let mut acc = Fp2::zero();
+        for (a, b) in coeffs.iter().rev() {
+            acc = acc.mul(x).add(&fp2_hex(a, b));
+        }
+        acc
+    }
+
+    /// 3-isogeny E' → E on affine `(x', y')` over Fp2.
+    fn iso3(xp: &Fp2, yp: &Fp2) -> (Fp2, Fp2) {
+        let x = poly2(&ISO3_XNUM, xp).mul(&inv0f(&poly2(&ISO3_XDEN, xp)));
+        let y = yp
+            .mul(&poly2(&ISO3_YNUM, xp))
+            .mul(&inv0f(&poly2(&ISO3_YDEN, xp)));
+        (x, y)
+    }
+
+    fn map_to_g2(u: &Fp2, a: &Fp2, b: &Fp2, z: &Fp2) -> G2 {
+        let (xp, yp) = sswu_affine(u, a, b, z, sgn0_fp2, fp2_sqrt);
+        let (x, y) = iso3(&xp, &yp);
+        G2::from_affine_unchecked(x, y)
+    }
+
+    /// `hash_to_curve` (random oracle) into `G2`.
+    #[must_use]
+    pub fn hash_to_curve_bls12381_g2(msg: &[u8], dst: &[u8]) -> G2 {
+        // E': A' = 240·u, B' = 1012·(1 + u), Z = -(2 + u).
+        let a = Fp2::new(Fp::zero(), Fp::from_u64(240));
+        let b = Fp2::new(Fp::from_u64(1012), Fp::from_u64(1012));
+        let z = Fp2::new(Fp::from_u64(2), Fp::from_u64(1)).neg();
+
+        let mut uni = [0u8; 256];
+        expand_message_xmd::<32, Sha256>(msg, dst, &mut uni, 64);
+        let e = |i: usize| os2ip_mod::<Bls12381FpParams>(&uni[i * 64..(i + 1) * 64]);
+        let u0 = Fp2::new(e(0), e(1));
+        let u1 = Fp2::new(e(2), e(3));
+
+        map_to_g2(&u0, &a, &b, &z)
+            .add(&map_to_g2(&u1, &a, &b, &z))
+            .clear_cofactor()
+    }
 }
 
 #[cfg(feature = "alloc")]
-pub use bls_g1::hash_to_curve_bls12381_g1;
+pub use bls::{hash_to_curve_bls12381_g1, hash_to_curve_bls12381_g2};
