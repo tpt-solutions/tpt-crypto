@@ -44,7 +44,7 @@ pub mod beaver;
 pub mod iknp;
 pub mod ot;
 
-pub use beaver::{BeaverTriple, multiply};
+pub use beaver::{multiply, BeaverTriple};
 pub use field_share::{reconstruct, share_secret, share_secret_2, FieldCodec, SampleField, Share};
 pub use iknp::extend_1of2;
 pub use ot::{transfer_1ofn, transfer_base_ot_1of2};

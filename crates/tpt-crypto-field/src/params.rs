@@ -176,4 +176,3 @@ mod tests {
         assert_eq!(Bls12381FrParams::S, 32);
     }
 }
-

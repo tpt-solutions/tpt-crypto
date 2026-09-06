@@ -10,7 +10,7 @@
 //! `q = p^k` (computed in [`crate::big`]) via Fermat's little theorem and a generic
 //! Tonelli–Shanks, keeping this module free of bespoke per-tower formulas.
 
-use crate::big::{find_nonresidue_field, tower_info};
+use crate::big::tower_info;
 use crate::ct::{Choice, CtEq, CtOption};
 use crate::field::Field;
 use crate::params::Bls12381Fp as Fp;
@@ -83,6 +83,13 @@ impl Field for Fp2 {
         Fp2::new(Fp::from_u64(v), Fp::zero())
     }
     #[inline]
+    fn enumerate(n: u64) -> Self {
+        // Sweep both coordinates, keeping `c1` non-zero so the candidate lies
+        // outside `Fp` (where every element is a QR). Roughly half of these are
+        // quadratic non-residues, so the search terminates in a few steps.
+        Fp2::new(Fp::from_u64(n), Fp::from_u64(n | 1))
+    }
+    #[inline]
     fn ct_select(a: &Self, b: &Self, c: Choice) -> Self {
         Fp2::new(
             Fp::ct_select(&a.c0, &b.c0, c),
@@ -149,7 +156,11 @@ impl Field for Fp2 {
     #[inline]
     fn sqrt(&self) -> CtOption<Self> {
         let info = tower_info(2);
-        let z = find_nonresidue_field::<Self>(&info.half);
+        // `ξ = 1 + u` is the standard BLS12-381 quadratic (and cubic) non-residue
+        // in `Fp2`; using it directly avoids a full `(p²−1)/2` exponentiation per
+        // trial in a generic non-residue search. `tonelli_shanks_field` still
+        // verifies `result² == self`, so a wrong `z` can only yield `None`.
+        let z = Fp2::new(Fp::one(), Fp::one());
         tonelli_shanks_field(self, info.s, &info.t_exp, &info.tp1_over_2, &z)
     }
 }
@@ -202,6 +213,16 @@ impl Field for Fp6 {
     #[inline]
     fn from_u64(v: u64) -> Self {
         Fp6::new(Fp2::from_u64(v), Fp2::zero(), Fp2::zero())
+    }
+    #[inline]
+    fn enumerate(n: u64) -> Self {
+        // Keep the `v` coordinate non-zero so the candidate lies outside the
+        // `Fp2` sub-field.
+        Fp6::new(
+            Fp2::from_u64(n),
+            <Fp2 as Field>::enumerate(n | 1),
+            Fp2::zero(),
+        )
     }
     #[inline]
     fn ct_select(a: &Self, b: &Self, c: Choice) -> Self {
@@ -288,7 +309,9 @@ impl Field for Fp6 {
     #[inline]
     fn sqrt(&self) -> CtOption<Self> {
         let info = tower_info(6);
-        let z = find_nonresidue_field::<Self>(&info.half);
+        // `v` is a quadratic non-residue in `Fp6` by construction: `Fp12` is the
+        // field `Fp6[w]/(w²−v)`, so `v` has no square root in `Fp6`.
+        let z = Fp6::new(Fp2::zero(), Fp2::one(), Fp2::zero());
         tonelli_shanks_field(self, info.s, &info.t_exp, &info.tp1_over_2, &z)
     }
 }
@@ -343,6 +366,11 @@ impl Field for Fp12 {
     #[inline]
     fn from_u64(v: u64) -> Self {
         Fp12::new(Fp6::from_u64(v), Fp6::zero())
+    }
+    #[inline]
+    fn enumerate(n: u64) -> Self {
+        // Keep the `w` coordinate non-zero so the candidate lies outside `Fp6`.
+        Fp12::new(Fp6::from_u64(n), <Fp6 as Field>::enumerate(n | 1))
     }
     #[inline]
     fn ct_select(a: &Self, b: &Self, c: Choice) -> Self {
@@ -411,7 +439,12 @@ impl Field for Fp12 {
     #[inline]
     fn sqrt(&self) -> CtOption<Self> {
         let info = tower_info(12);
-        let z = find_nonresidue_field::<Self>(&info.half);
+        // `w` is a quadratic non-residue in `Fp12`. Proof: `x = a + b·w` squares
+        // to `(a² + b²·v) + 2ab·w`, so `x² = w` forces `2ab = 1` (hence `a,b ≠ 0`)
+        // and `a² = −b²·v`, i.e. `(a/b)² = −v`. But `−1` is a square in `Fp6`
+        // (`|Fp6*| = p⁶−1 ≡ 0 mod 4`) while `v` is not, so `−v` is a non-square in
+        // `Fp6` and no such `a/b` exists.
+        let z = Fp12::new(Fp6::zero(), Fp6::one());
         tonelli_shanks_field(self, info.s, &info.t_exp, &info.tp1_over_2, &z)
     }
 }

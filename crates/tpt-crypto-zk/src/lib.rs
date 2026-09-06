@@ -36,7 +36,10 @@ pub mod bulletproofs;
 pub mod ipa;
 pub mod plonk;
 
-pub use crate::bulletproofs::{prove_range, range_proof_from_bytes, range_proof_to_bytes, verify_range, SeedExpander, RangeProof};
+pub use crate::bulletproofs::{
+    prove_range, range_proof_from_bytes, range_proof_to_bytes, verify_range, RangeProof,
+    SeedExpander,
+};
 pub use crate::error::ZkError;
 pub use crate::generators::BulletproofGens;
 pub use crate::group::Ristretto;

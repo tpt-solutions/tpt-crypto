@@ -7,8 +7,8 @@
 //!   (public randomness only — never the secret key).
 
 use crate::poly::{Poly, N, Q};
-use tpt_crypto_hash::Xof;
 use tpt_crypto_hash::sha3::{Shake128, Shake256};
+use tpt_crypto_hash::Xof;
 
 /// Sample a polynomial uniformly in `R_q` (canonical form) from the XOF
 /// `SHAKE128(rho ‖ i ‖ j)`.

@@ -55,4 +55,4 @@ pub mod frodo;
 #[cfg(feature = "mceliece")]
 pub mod mceliece;
 
-pub use params::{MlKem512, MlKem768, MlKem1024};
+pub use params::{MlKem1024, MlKem512, MlKem768};

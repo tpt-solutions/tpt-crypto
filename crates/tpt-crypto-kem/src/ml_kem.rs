@@ -25,7 +25,7 @@ use tpt_crypto_hash::sha3::{Sha3_256, Sha3_512, Shake256};
 use tpt_crypto_hash::{Hasher, Xof};
 
 // Re-expose the parameter-set markers for `ml_kem::MlKem768` style usage.
-pub use crate::params::{MlKem512, MlKem768, MlKem1024};
+pub use crate::params::{MlKem1024, MlKem512, MlKem768};
 
 /// The shared secret length (always 32 bytes in ML-KEM).
 pub type SharedSecret = [u8; 32];
@@ -61,9 +61,7 @@ impl EncapsKey {
         if b.len() != P::PK_LEN {
             return Err(Error::InvalidLength);
         }
-        Ok(EncapsKey {
-            bytes: b.to_vec(),
-        })
+        Ok(EncapsKey { bytes: b.to_vec() })
     }
 }
 
@@ -77,9 +75,7 @@ impl DecapsKey {
         if b.len() != P::SK_LEN {
             return Err(Error::InvalidLength);
         }
-        Ok(DecapsKey {
-            bytes: b.to_vec(),
-        })
+        Ok(DecapsKey { bytes: b.to_vec() })
     }
 }
 
@@ -93,9 +89,7 @@ impl Ciphertext {
         if b.len() != P::CT_LEN {
             return Err(Error::InvalidLength);
         }
-        Ok(Ciphertext {
-            bytes: b.to_vec(),
-        })
+        Ok(Ciphertext { bytes: b.to_vec() })
     }
 }
 
@@ -172,10 +166,7 @@ pub fn keygen_seed<P: MlKemParams>(d: &[u8; 32], z: &[u8; 32]) -> (EncapsKey, De
 /// Encapsulate to `pk` with an explicit 32-byte message `m`, returning the shared
 /// secret and ciphertext. Equivalent to [`encapsulate`] when `m` is chosen at
 /// random; provided for reproducible tests and KAT validation.
-pub fn encapsulate_msg<P: MlKemParams>(
-    pk: &EncapsKey,
-    m: &[u8; 32],
-) -> (SharedSecret, Ciphertext) {
+pub fn encapsulate_msg<P: MlKemParams>(pk: &EncapsKey, m: &[u8; 32]) -> (SharedSecret, Ciphertext) {
     let h_pk = h_parts(&pk.bytes, &[]);
     let g = g_parts(m, &h_pk);
     let mut k = [0u8; 32];
@@ -190,7 +181,10 @@ pub fn encapsulate_msg<P: MlKemParams>(
 
 /// Encapsulate to `pk`, returning the shared secret and ciphertext. `rng`
 /// supplies the random message `m`.
-pub fn encapsulate<P: MlKemParams>(pk: &EncapsKey, rng: &mut impl CryptoRng) -> (SharedSecret, Ciphertext) {
+pub fn encapsulate<P: MlKemParams>(
+    pk: &EncapsKey,
+    rng: &mut impl CryptoRng,
+) -> (SharedSecret, Ciphertext) {
     let m = rng.gen_array::<32>();
     let h_pk = h_parts(&pk.bytes, &[]);
     let g = g_parts(&m, &h_pk);

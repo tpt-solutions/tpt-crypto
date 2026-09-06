@@ -60,8 +60,8 @@ fn compress(cv: &[u8; 32], block: &[u8; 64], counter: u64, block_len: u32, flags
     v[13] = (counter >> 32) as u32;
     v[14] = block_len;
     v[15] = flags;
-        for s in &MSG_SCHEDULE {
-            g(&mut v, 0, 4, 8, 12, m[s[0]], m[s[1]]);
+    for s in &MSG_SCHEDULE {
+        g(&mut v, 0, 4, 8, 12, m[s[0]], m[s[1]]);
         g(&mut v, 1, 5, 9, 13, m[s[2]], m[s[3]]);
         g(&mut v, 2, 6, 10, 14, m[s[4]], m[s[5]]);
         g(&mut v, 3, 7, 11, 15, m[s[6]], m[s[7]]);

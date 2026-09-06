@@ -235,7 +235,14 @@ impl InnerProductProof {
         &self,
         n: usize,
         transcript: &mut Transcript,
-    ) -> Result<(alloc::vec::Vec<Ed25519Scalar>, alloc::vec::Vec<Ed25519Scalar>, alloc::vec::Vec<Ed25519Scalar>), ZkError> {
+    ) -> Result<
+        (
+            alloc::vec::Vec<Ed25519Scalar>,
+            alloc::vec::Vec<Ed25519Scalar>,
+            alloc::vec::Vec<Ed25519Scalar>,
+        ),
+        ZkError,
+    > {
         let lg_n = self.l_vec.len();
         if lg_n >= 32 {
             return Err(ZkError::Verification);

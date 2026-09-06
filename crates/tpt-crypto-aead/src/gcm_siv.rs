@@ -154,7 +154,11 @@ fn gcm_siv_inner(
         let s = polyval_step(&auth_key, &s, &length_block);
 
         let mut tag_input = s;
-        tag_input.iter_mut().enumerate().take(12).for_each(|(i, v)| *v ^= nonce.0[i]);
+        tag_input
+            .iter_mut()
+            .enumerate()
+            .take(12)
+            .for_each(|(i, v)| *v ^= nonce.0[i]);
         tag_input[15] &= 0x7f;
         let tag = enc_cipher.encrypt_block(&tag_input);
 
@@ -179,7 +183,11 @@ fn gcm_siv_inner(
         let s = polyval_step(&auth_key, &s, &length_block);
 
         let mut tag_input = s;
-        tag_input.iter_mut().enumerate().take(12).for_each(|(i, v)| *v ^= nonce.0[i]);
+        tag_input
+            .iter_mut()
+            .enumerate()
+            .take(12)
+            .for_each(|(i, v)| *v ^= nonce.0[i]);
         tag_input[15] &= 0x7f;
         let expected = enc_cipher.encrypt_block(&tag_input);
 
@@ -232,7 +240,9 @@ fn ctr_xor(cipher: &Aes, counter0: &[u8; 16], data: &mut [u8]) {
 
 impl Aead<12, 16> for Aes128GcmSiv {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<12>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
-        gcm_siv_inner(&self.0, nonce, aad, buf, true, None).unwrap().expect("seal path returns Some(tag)")
+        gcm_siv_inner(&self.0, nonce, aad, buf, true, None)
+            .unwrap()
+            .expect("seal path returns Some(tag)")
     }
 
     fn decrypt_in_place_detached(
@@ -248,7 +258,9 @@ impl Aead<12, 16> for Aes128GcmSiv {
 
 impl Aead<12, 16> for Aes256GcmSiv {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<12>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
-        gcm_siv_inner(&self.0, nonce, aad, buf, true, None).unwrap().expect("seal path returns Some(tag)")
+        gcm_siv_inner(&self.0, nonce, aad, buf, true, None)
+            .unwrap()
+            .expect("seal path returns Some(tag)")
     }
 
     fn decrypt_in_place_detached(
@@ -288,9 +300,7 @@ mod tests {
         let expected = hex::decode("dc20e2d83f25705bb49e439eca56de25").unwrap();
         assert_eq!(ct, expected);
         // Round-trip.
-        let pt = cipher
-            .decrypt(&Nonce::new(nonce), &[], &ct)
-            .unwrap();
+        let pt = cipher.decrypt(&Nonce::new(nonce), &[], &ct).unwrap();
         assert_eq!(pt, &[] as &[u8]);
     }
 }

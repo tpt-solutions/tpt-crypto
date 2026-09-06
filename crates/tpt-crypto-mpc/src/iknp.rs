@@ -74,7 +74,11 @@ pub fn extend_1of2<R: CryptoRng>(
 ) -> (Vec<OtMsg>, Vec<Vec<u8>>) {
     let m = sender_msgs.len();
     assert!(m <= KAPPA, "IKNP supports at most KAPPA extended OTs");
-    assert_eq!(m, receiver_choices.len(), "choice count must match message count");
+    assert_eq!(
+        m,
+        receiver_choices.len(),
+        "choice count must match message count"
+    );
 
     // Receiver choice vector `r` as a bitstring (bit j = choice j).
     let mut r_bits = [0u8; MASK_BYTES];

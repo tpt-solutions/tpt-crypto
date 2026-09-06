@@ -384,12 +384,7 @@ fn chacha_poly_setup(key: &[u8; 32], nonce: &[u8; 12]) -> ([u8; 32], [u8; 12]) {
     (poly_key, *nonce)
 }
 
-fn chacha_poly_seal(
-    key: &[u8; 32],
-    nonce: &[u8; 12],
-    aad: &[u8],
-    buf: &mut [u8],
-) -> Tag<16> {
+fn chacha_poly_seal(key: &[u8; 32], nonce: &[u8; 12], aad: &[u8], buf: &mut [u8]) -> Tag<16> {
     let (poly_key, cipher_nonce) = chacha_poly_setup(key, nonce);
     // ciphertext = ChaCha20 with counter starting at 1
     let mut ctr = ChaCha20::new(key, &cipher_nonce);
@@ -539,12 +534,11 @@ mod tests {
         assert_eq!(tag, [0u8; 16]);
 
         // RFC 8439 §2.5.2 test vector.
-        let key: [u8; 32] = hex::decode(
-            "85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b",
-        )
-        .unwrap()
-        .try_into()
-        .unwrap();
+        let key: [u8; 32] =
+            hex::decode("85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b")
+                .unwrap()
+                .try_into()
+                .unwrap();
         let msg = b"Cryptographic Forum Research Group";
         let tag = poly1305_mac(msg, &key);
         assert_eq!(

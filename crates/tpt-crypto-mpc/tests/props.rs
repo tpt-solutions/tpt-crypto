@@ -25,7 +25,10 @@ struct Drng(u64);
 impl CryptoRng for Drng {
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<()> {
         for b in dest.iter_mut() {
-            self.0 = self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
             *b = (self.0 >> 33) as u8;
         }
         Ok(())

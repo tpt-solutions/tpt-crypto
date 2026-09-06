@@ -23,6 +23,9 @@ with real vectors from:
 - the FIPS 203 reference `intermediate values` /
   <https://github.com/post-quantum-cryptography/KAT>.
 
+`cargo xtask kat-check` **skips** this directory: these files record no
+trusted checksums and must not be treated as verified.
+
 When real vectors are added, record here: the exact source URL, its licence, and
 `sha256sum` of each `.kat` file, and wire `tests/ml_kem_kat.rs` (removed in this
 pass) back in.

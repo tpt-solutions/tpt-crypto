@@ -13,7 +13,6 @@
 //! builds on stable Rust (no `generic_const_exprs` needed).
 
 #![allow(long_running_const_eval)]
-
 #![allow(dead_code)]
 
 /// Maximum limb count supported by this crate (384 bits), covering every field
@@ -114,7 +113,10 @@ pub(crate) const fn sub_n<const N: usize>(a: &[u64; N], b: &[u64; N]) -> [u64; N
 /// is a constant-time, compile-friendly alternative to the full long-division
 /// [`mod_reduce`] used by `mul_mod`.
 #[inline]
-pub(crate) const fn reduce_wide(t_in: [u64; MAX_LIMBS + 1], m: &[u64; MAX_LIMBS]) -> [u64; MAX_LIMBS] {
+pub(crate) const fn reduce_wide(
+    t_in: [u64; MAX_LIMBS + 1],
+    m: &[u64; MAX_LIMBS],
+) -> [u64; MAX_LIMBS] {
     let mut t = t_in;
     let mut mpad = [0u64; MAX_LIMBS + 1];
     let mut j = 0;

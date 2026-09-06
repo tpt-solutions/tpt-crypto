@@ -84,7 +84,10 @@ struct Drng(u64);
 impl CryptoRng for Drng {
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<()> {
         for b in dest.iter_mut() {
-            self.0 = self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
             *b = (self.0 >> 33) as u8;
         }
         Ok(())
@@ -115,7 +118,10 @@ fn debug_decompress() {
             let b = EdwardsPoint::basepoint().mul(&r).add(&addend);
             let bc = b.compress();
             let bd = EdwardsPoint::decompress(&bc);
-            assert!(bd.is_some().into_bool(), "decompress B failed, choice={choice}");
+            assert!(
+                bd.is_some().into_bool(),
+                "decompress B failed, choice={choice}"
+            );
         }
     }
 }
@@ -128,8 +134,15 @@ fn base_ot_kat() {
     for choice in [false, true] {
         let got = transfer_base_ot_1of2(&mut Drng(0), &m0, &m1, choice);
         let ref_out = reference_base_ot(&m0, &m1, choice);
-        assert_eq!(got, ref_out, "base OT drift vs reference for choice {choice}");
-        assert_eq!(&got[..], if choice { &m1[..] } else { &m0[..] }, "receiver did not learn chosen message");
+        assert_eq!(
+            got, ref_out,
+            "base OT drift vs reference for choice {choice}"
+        );
+        assert_eq!(
+            &got[..],
+            if choice { &m1[..] } else { &m0[..] },
+            "receiver did not learn chosen message"
+        );
         assert_eq!(got.len(), 32);
     }
 }
@@ -139,7 +152,11 @@ fn oneofn_kat() {
     let msgs: Vec<Vec<u8>> = (0u8..4).map(|i| vec![i * 0x11 + 1; 32]).collect();
     for choice in 0..4 {
         let got = transfer_1ofn(&mut Drng(choice as u64), &msgs, choice);
-        assert_eq!(&got[..], &msgs[choice][..], "1-of-N leaked the wrong message");
+        assert_eq!(
+            &got[..],
+            &msgs[choice][..],
+            "1-of-N leaked the wrong message"
+        );
     }
 }
 
@@ -169,11 +186,7 @@ fn beaver_from_base_ot_kat() {
         let b = t0.b.value.add(&t1.b.value);
         let c = t0.c.value.add(&t1.c.value);
         assert_eq!(c, a.mul(&b), "Beaver triple relation a*b == c failed");
-        let (z0, z1) = multiply(
-            &(x0.value, x1.value),
-            &(y0.value, y1.value),
-            &(t0, t1),
-        );
+        let (z0, z1) = multiply(&(x0.value, x1.value), &(y0.value, y1.value), &(t0, t1));
         assert_eq!(z0.add(&z1), fe(x).mul(&fe(y)));
     }
 }

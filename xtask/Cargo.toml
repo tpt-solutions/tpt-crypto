@@ -8,3 +8,5 @@ authors.workspace = true
 publish = false
 
 [dependencies]
+tpt-crypto-hash = { path = "../crates/tpt-crypto-hash", default-features = false, features = ["std"] }
+serde_json = "1"

@@ -47,6 +47,15 @@ Covers canonical, boundary, and non-canonical inputs for `from_bytes`
 - `p`, `p+1`, `2p-1`: non-canonical (`>= p`), must be rejected by `from_bytes`.
 - `large_canonical`: `(p-1)/2`, canonical.
 
+## Vector file checksums (sha256)
+
+Verified by `cargo xtask kat-check`.
+
+| File | sha256 |
+|------|--------|
+| `field_mul.json` | `55d56cb1e648b0689d341ea78fa50ddbcf2a27cfc50a1ca47dedfce5b3649c45` |
+| `field_reduce.json` | `e2fa0682d92bf85937b29c393f30509dcb621e6b787a45a26c2b30361edad78c` |
+
 ## Cross-check policy
 
 These vectors are a **floor**, not a substitute for the `tpt-math-exact`

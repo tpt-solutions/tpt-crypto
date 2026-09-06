@@ -1,12 +1,12 @@
 [package]
 name = "tpt-crypto-fuzz"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-authors.workspace = true
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.84"
+license = "MIT OR Apache-2.0"
+authors = ["TPT Solutions"]
 description = "Fuzzing harness for tpt-crypto attacker-controlled decoders"
-repository.workspace = true
+publish = false
 
 [dependencies]
 tpt-crypto-aead = { path = "../crates/tpt-crypto-aead", default-features = false, features = ["std"] }
@@ -14,6 +14,36 @@ tpt-crypto-kem = { path = "../crates/tpt-crypto-kem", default-features = false, 
 tpt-crypto-sig = { path = "../crates/tpt-crypto-sig", default-features = false, features = ["std"] }
 tpt-crypto-curve = { path = "../crates/tpt-crypto-curve", default-features = false, features = ["std"] }
 libfuzzer-sys = "0.4"
+
+[[bin]]
+name = "aes_gcm_decrypt"
+path = "fuzz_targets/aes_gcm_decrypt.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "chacha20poly1305_decrypt"
+path = "fuzz_targets/chacha20poly1305_decrypt.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ml_kem_decaps"
+path = "fuzz_targets/ml_kem_decaps.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "point_decompress"
+path = "fuzz_targets/point_decompress.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "signature_verify"
+path = "fuzz_targets/signature_verify.rs"
+test = false
+doc = false
 
 [package.metadata]
 cargo-fuzz = true

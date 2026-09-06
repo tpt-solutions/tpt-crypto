@@ -4,7 +4,7 @@
 //! then packed little-endian (LSB first) into the output byte string. Both the
 //! pack and unpack paths are constant-time: they index only public offsets.
 
-use crate::poly::{decompress, compress, Poly, N};
+use crate::poly::{compress, decompress, Poly, N};
 
 /// Pack `vals.len()` `d`-bit values into `out` (LSB-first, no secret indexing).
 pub fn pack_bits(out: &mut [u8], vals: &[u32], bits: usize) {

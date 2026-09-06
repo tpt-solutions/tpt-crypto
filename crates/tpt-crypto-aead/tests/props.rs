@@ -7,8 +7,10 @@
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use tpt_crypto_aead::Aead;
-use tpt_crypto_aead::{Aes128Gcm, Aes128GcmSiv, Aes256Gcm, Aes256GcmSiv, ChaCha20Poly1305, XChaCha20Poly1305};
 use tpt_crypto_aead::Nonce;
+use tpt_crypto_aead::{
+    Aes128Gcm, Aes128GcmSiv, Aes256Gcm, Aes256GcmSiv, ChaCha20Poly1305, XChaCha20Poly1305,
+};
 
 const fn nonce12() -> Nonce<12> {
     Nonce::new([0u8; 12])
@@ -119,8 +121,10 @@ fn aes256_gcm_siv_round_trip() {
 
 // --- bitflip --------------------------------------------------------------
 
-fn bitflip_test<C, const NONCE_LEN: usize, const TAG_LEN: usize>(cipher: &C, nonce: &Nonce<NONCE_LEN>)
-where
+fn bitflip_test<C, const NONCE_LEN: usize, const TAG_LEN: usize>(
+    cipher: &C,
+    nonce: &Nonce<NONCE_LEN>,
+) where
     C: Aead<NONCE_LEN, TAG_LEN>,
 {
     let mut rng = SmallRng::seed_from_u64(0xCAFE_BABE_DEAD_BEEF);
@@ -139,7 +143,13 @@ where
         let flip_idx = rng.random_range(0..body_len);
         corrupted[flip_idx] ^= 0x01;
         let dec = cipher.decrypt(nonce, &aad, &corrupted);
-        assert!(dec.is_err(), "bitflip at idx={} should fail (pt_len={}, aad_len={})", flip_idx, pt.len(), aad.len());
+        assert!(
+            dec.is_err(),
+            "bitflip at idx={} should fail (pt_len={}, aad_len={})",
+            flip_idx,
+            pt.len(),
+            aad.len()
+        );
     }
 }
 

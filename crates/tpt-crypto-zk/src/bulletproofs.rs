@@ -107,7 +107,9 @@ pub fn delta(n: usize, m: usize, y: &Ed25519Scalar, z: &Ed25519Scalar) -> Ed2551
     let sum_2 = sum_of_powers(&Ed25519Scalar::from_u64(2), n);
     let sum_z = sum_of_powers(z, m);
     let zz = z.mul(z);
-    (z.sub(&zz)).mul(&sum_y).sub(&zz.mul(z).mul(&sum_2).mul(&sum_z))
+    (z.sub(&zz))
+        .mul(&sum_y)
+        .sub(&zz.mul(z).mul(&sum_2).mul(&sum_z))
 }
 
 fn concat_z_and_2(n: usize, m: usize, z: &Ed25519Scalar) -> Vec<Ed25519Scalar> {
@@ -135,7 +137,10 @@ pub fn prove_range(
     rng: &mut SeedExpander,
 ) -> (RangeProof, Vec<Ristretto>) {
     let m = values.len();
-    assert!(n == 8 || n == 16 || n == 32 || n == 64, "unsupported bitsize");
+    assert!(
+        n == 8 || n == 16 || n == 32 || n == 64,
+        "unsupported bitsize"
+    );
     let nm = n * m;
     assert!(nm.is_power_of_two(), "n*m must be a power of two");
     assert_eq!(values.len(), blindings.len());
@@ -294,7 +299,14 @@ pub fn prove_range(
     }
 
     let ipp = InnerProductProof::create(
-        &mut transcript, &q, &g_factors, &h_factors, g_vec, h_vec, l_vec, r_vec,
+        &mut transcript,
+        &q,
+        &g_factors,
+        &h_factors,
+        g_vec,
+        h_vec,
+        l_vec,
+        r_vec,
     );
 
     let proof = RangeProof {

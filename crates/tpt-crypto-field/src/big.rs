@@ -371,10 +371,12 @@ pub(crate) fn find_nonresidue_field<F: crate::field::Field + crate::ct::CtEq>(ha
     let minus_one = F::one().neg();
     let mut zc = 2u64;
     loop {
-        let z = F::from_u64(zc);
-        let e = z.pow_vartime(half);
-        if e.ct_eq(&minus_one).into_bool() {
-            return z;
+        let z = F::enumerate(zc);
+        if !z.is_zero().into_bool() {
+            let e = z.pow_vartime(half);
+            if e.ct_eq(&minus_one).into_bool() {
+                return z;
+            }
         }
         zc += 1;
     }

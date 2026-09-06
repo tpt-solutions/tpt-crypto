@@ -14,11 +14,11 @@ keywords = ["crypto", "signature", "ml-dsa", "ecdsa", "no-std"]
 categories = ["cryptography", "no-std"]
 
 [dependencies]
-tpt-crypto-core = { path = "../tpt-crypto-core", default-features = false }
-tpt-crypto-ct = { path = "../tpt-crypto-ct" }
-tpt-crypto-hash = { path = "../tpt-crypto-hash", default-features = false }
-tpt-crypto-field = { path = "../tpt-crypto-field", default-features = false }
-tpt-crypto-curve = { path = "../tpt-crypto-curve", default-features = false }
+tpt-crypto-core = { workspace = true }
+tpt-crypto-ct = { workspace = true }
+tpt-crypto-hash = { workspace = true }
+tpt-crypto-field = { workspace = true }
+tpt-crypto-curve = { workspace = true }
 
 [features]
 default = ["std"]

@@ -18,8 +18,8 @@ use core::marker::PhantomData;
 use core::ops::Neg;
 
 use crate::consts::{self, MAX_LIMBS};
-use crate::ct::{Choice, CtEq, CtOption};
 use crate::ct::ct_select_u64;
+use crate::ct::{Choice, CtEq, CtOption};
 use tpt_crypto_ct::CtSelect;
 
 /// Parameters of a prime field `GF(p)`.
@@ -648,6 +648,15 @@ pub trait Field: Copy + Clone + Default + PartialEq + fmt::Debug + Send + Sync +
     fn one() -> Self;
     /// Embed a small integer into the field (reduced modulo the characteristic).
     fn from_u64(v: u64) -> Self;
+    /// The `n`-th element in an implementation-defined enumeration of the field,
+    /// used only to seed quadratic-non-residue searches. The default walks the
+    /// small integers `from_u64(n)`; extension towers **must** override this so
+    /// the enumeration reaches elements outside the prime base field (every
+    /// base-field element is a quadratic residue in an even-degree tower, so a
+    /// search restricted to `from_u64` never terminates).
+    fn enumerate(n: u64) -> Self {
+        Self::from_u64(n)
+    }
     /// Constant-time selection between two field elements. If `c == 1` returns `b`.
     fn ct_select(a: &Self, b: &Self, c: Choice) -> Self;
     /// Constant-time zero test.
@@ -726,4 +735,3 @@ impl<P: FieldParams> Field for FieldElement<P> {
         self.sqrt()
     }
 }
-

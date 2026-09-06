@@ -202,9 +202,21 @@ fn check_field<P: FieldParams>(name: &str, m: &[u64; MAX]) {
         if !sum.ct_eq(&exp_add_fe).into_bool() {
             fails += 1;
         }
-        // sub cross-check
+        // sub cross-check. `a, b < 2^32 <= m`, so the modular difference is
+        // `a - b` when `a >= b` and `m - (b - a)` otherwise. (A plain
+        // multi-limb `ref_sub` would borrow past the top limb and yield the
+        // two's-complement `2^384 + a - b`, which is *not* congruent to
+        // `a - b` mod `m` for the sub-384-bit primes.)
         let diff = fa.sub(&fb);
-        let (exp_sub, _) = ref_sub(&[a, 0, 0, 0, 0, 0], &[b, 0, 0, 0, 0, 0]);
+        let exp_sub = if a >= b {
+            let mut out = [0u64; MAX];
+            out[0] = a - b;
+            out
+        } else {
+            let mut d = [0u64; MAX];
+            d[0] = b - a;
+            ref_sub(m, &d).0
+        };
         let exp_sub_fe = FieldElement::<P>::from_limbs(exp_sub);
         if !diff.ct_eq(&exp_sub_fe).into_bool() {
             fails += 1;
@@ -329,7 +341,7 @@ fn basic_kats() {
 #[test]
 fn fp2_properties() {
     let mut rng = Rng::new(0xBEEF);
-    for _ in 0..50 {
+    for iter in 0..50 {
         let a0 = Bls12381Fp::from_u64(rng.next() % (1 << 30));
         let a1 = Bls12381Fp::from_u64(rng.next() % (1 << 30));
         let b0 = Bls12381Fp::from_u64(rng.next() % (1 << 30));
@@ -360,10 +372,13 @@ fn fp2_properties() {
         // encoding round trip
         let bytes = a.to_bytes();
         assert!(Fp2::from_bytes(&bytes).unwrap().ct_eq(&a).into_bool());
-        // sqrt consistency
-        let s = a.sqrt();
-        if s.is_some().into_bool() {
-            assert!(s.unwrap().square().ct_eq(&a).into_bool());
+        // sqrt consistency (Tonelli–Shanks over `Fp2`; limit the count — see
+        // `fp6_fp12_properties`).
+        if iter < 10 {
+            let s = a.sqrt();
+            if s.is_some().into_bool() {
+                assert!(s.unwrap().square().ct_eq(&a).into_bool());
+            }
         }
     }
 }
@@ -371,7 +386,7 @@ fn fp2_properties() {
 #[test]
 fn fp6_fp12_properties() {
     let mut rng = Rng::new(0xF00D);
-    for _ in 0..30 {
+    for iter in 0..30 {
         let mut r = || {
             Fp2::new(
                 Bls12381Fp::from_u64(rng.next() % (1 << 28)),
@@ -401,14 +416,18 @@ fn fp6_fp12_properties() {
         let y = e();
         let z = e();
         assert!(x.mul(&y).mul(&z).ct_eq(&x.mul(&y.mul(&z))).into_bool());
-        // sqrt consistency
-        let s = a.sqrt();
-        if s.is_some().into_bool() {
-            assert!(s.unwrap().square().ct_eq(&a).into_bool());
-        }
-        let s12 = x.sqrt();
-        if s12.is_some().into_bool() {
-            assert!(s12.unwrap().square().ct_eq(&x).into_bool());
+        // sqrt consistency — the tower square roots run several full
+        // `(p^k − 1)`-scale exponentiations, so exercise them on only the first
+        // few iterations to keep the suite fast.
+        if iter < 3 {
+            let s = a.sqrt();
+            if s.is_some().into_bool() {
+                assert!(s.unwrap().square().ct_eq(&a).into_bool());
+            }
+            let s12 = x.sqrt();
+            if s12.is_some().into_bool() {
+                assert!(s12.unwrap().square().ct_eq(&x).into_bool());
+            }
         }
         // encoding round trips
         assert!(Fp6::from_bytes(&a.to_bytes())

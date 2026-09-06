@@ -97,10 +97,7 @@ pub fn sender_init<R: CryptoRng>(rng: &mut R) -> (SenderRound1, SenderState) {
     let mut x = rng.gen_array::<32>();
     clamp_scalar(&mut x);
     let a = EdwardsPoint::basepoint().mul(&x);
-    (
-        SenderRound1 { a: a.compress() },
-        SenderState { x, a },
-    )
+    (SenderRound1 { a: a.compress() }, SenderState { x, a })
 }
 
 /// Receiver's first step: sample scalar `r`, publish `B = r * G + (choice ? A : id)`
@@ -119,7 +116,10 @@ pub fn receiver_init<R: CryptoRng>(
     let addend = <EdwardsPoint as CtSelect>::ct_select(choice, a_pt, id);
     let b = EdwardsPoint::basepoint().mul(&r).add(&addend);
     let k = a_pt.mul(&r).compress();
-    (ReceiverRound1 { b: b.compress() }, ReceiverState { k, choice })
+    (
+        ReceiverRound1 { b: b.compress() },
+        ReceiverState { k, choice },
+    )
 }
 
 /// Sender's final step: derive `k0 = x * B`, `k1 = x * (B - A)`, encrypt `m0`, `m1`.

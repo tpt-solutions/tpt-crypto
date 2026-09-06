@@ -160,7 +160,12 @@ impl BlockCipher for Aes {
 #[inline]
 fn subword(w: u32) -> u32 {
     let b = w.to_be_bytes();
-    u32::from_be_bytes([sbox_byte(b[0]), sbox_byte(b[1]), sbox_byte(b[2]), sbox_byte(b[3])])
+    u32::from_be_bytes([
+        sbox_byte(b[0]),
+        sbox_byte(b[1]),
+        sbox_byte(b[2]),
+        sbox_byte(b[3]),
+    ])
 }
 
 #[inline]
@@ -175,7 +180,12 @@ impl Aes {
     fn encrypt_core(&self, block: &[u8; 16]) -> [u8; 16] {
         let mut state = [0u32; 4];
         for i in 0..4 {
-            state[i] = u32::from_be_bytes([block[4 * i], block[4 * i + 1], block[4 * i + 2], block[4 * i + 3]]);
+            state[i] = u32::from_be_bytes([
+                block[4 * i],
+                block[4 * i + 1],
+                block[4 * i + 2],
+                block[4 * i + 3],
+            ]);
         }
         add_round_key(&mut state, &self.rk[0..4]);
 
@@ -208,7 +218,12 @@ fn add_round_key(state: &mut [u32; 4], rk: &[u32]) {
 fn sub_bytes(state: &mut [u32; 4]) {
     for w in state.iter_mut() {
         let b = w.to_be_bytes();
-        *w = u32::from_be_bytes([sbox_byte(b[0]), sbox_byte(b[1]), sbox_byte(b[2]), sbox_byte(b[3])]);
+        *w = u32::from_be_bytes([
+            sbox_byte(b[0]),
+            sbox_byte(b[1]),
+            sbox_byte(b[2]),
+            sbox_byte(b[3]),
+        ]);
     }
 }
 
@@ -347,7 +362,8 @@ mod tests {
 
     #[test]
     fn aes256_fips197() {
-        let key = hex::decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f").unwrap();
+        let key = hex::decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+            .unwrap();
         let pt = hex::decode("00112233445566778899aabbccddeeff").unwrap();
         let ct = hex::decode("8ea2b7ca516745bfeafc49904b496089").unwrap();
         let core = Aes::new_256(&key);

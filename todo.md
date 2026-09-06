@@ -227,13 +227,11 @@ variant (feature-gated re-exports instead of steps 3–6).
       correct (verified: `Ed25519ScalarParams::ONE_MONT == 2^256 mod L`).
 - [x] `specs/field_mul.telos` (`result == a*b mod P ∀ a,b<P`),
       `specs/field_reduce.telos`
-- [ ] BUG: `Fp2/Fp6/Fp12::sqrt` (`extension.rs`) infinite-loops —
-      `find_nonresidue_field::<F>` (`big.rs`) only tries `F::from_u64(k)`
-      candidates, but every base-field element is a QR in these towers, so the
-      non-residue search never terminates. Not currently exercised except by a
-      would-be tower `sqrt` caller (the `-curve` h2c now carries its own Fp2
-      sqrt). Fix: seed the search with a genuine tower non-residue
-      (e.g. `ξ = u + 1` for Fp2) or add `u`-bearing candidates.
+- [x] BUG: `Fp2/Fp6/Fp12::sqrt` (`extension.rs`) infinite-loops —
+      **FIXED:** each tower now hardcodes a genuine non-residue (`1+u` for Fp2,
+      `v` for Fp6, `w` for Fp12) and calls `tonelli_shanks_field` directly;
+      `find_nonresidue_field` is dead code. The `-curve` h2c carries its own
+      dedicated Fp2 sqrt (eprint 2012/685 Alg 9) regardless.
 
 ### crates/tpt-crypto-curve
 - [x] Scaffold `crates/tpt-crypto-curve/` — `Cargo.toml` (deps: `-field`, `-ct`,
@@ -546,7 +544,8 @@ variant (feature-gated re-exports instead of steps 3–6).
 - [ ] Minimal PLONK verifier (~500 LoC): transcript, KZG **or** IPA commitment
       opening check, permutation + gate checks; accepts any compliant proof
       (no prover — that is `tpt-telos`'s job)
-      — `pub mod plonk;` declared but `src/plonk.rs` not created yet.
+      — `pub mod plonk;` declared; `src/plonk.rs` exists as a compiling
+      placeholder (`verify_proof` returns `ZkError::Unsupported`).
 - [ ] KATs: bulletproofs reference test vectors (dalek-compatible),
       PLONK proof fixtures from a reference prover
       — `tests/kat/` dir present but empty.

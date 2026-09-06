@@ -15,8 +15,8 @@ use alloc::vec::Vec;
 use crate::encode::{pack_poly, unpack_poly};
 use crate::params::MlKemParams;
 use crate::poly::{
-    basemul_polys, freeze, invntt_p, ntt_p, poly_add, poly_frommsg, poly_tomsg, poly_tomont,
-    Poly, N,
+    basemul_polys, freeze, invntt_p, ntt_p, poly_add, poly_frommsg, poly_tomont, poly_tomsg, Poly,
+    N,
 };
 use crate::sampler::{cbd, sample_ntt};
 use tpt_crypto_core::Error;

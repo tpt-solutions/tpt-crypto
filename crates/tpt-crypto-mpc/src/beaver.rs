@@ -216,18 +216,16 @@ pub fn multiply<F: Field>(
     let e = dy0.add(&dy1);
 
     let de = d.mul(&e);
-    let z0 = t
-        .0
-        .c
-        .value
-        .add(&t.0.a.value.mul(&e))
-        .add(&t.0.b.value.mul(&d))
-        .add(&de);
-    let z1 = t
-        .1
-        .c
-        .value
-        .add(&t.1.a.value.mul(&e))
-        .add(&t.1.b.value.mul(&d));
+    let z0 =
+        t.0.c
+            .value
+            .add(&t.0.a.value.mul(&e))
+            .add(&t.0.b.value.mul(&d))
+            .add(&de);
+    let z1 =
+        t.1.c
+            .value
+            .add(&t.1.a.value.mul(&e))
+            .add(&t.1.b.value.mul(&d));
     (z0, z1)
 }

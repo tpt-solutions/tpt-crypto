@@ -31,7 +31,8 @@ macro_rules! impl_aead_compat {
                 mut buffer: aead::inout::InOutBuf<'_, '_, u8>,
             ) -> Result<aead::Tag<Self>, aead::Error> {
                 let n = Nonce::<12>::from_slice(nonce.as_slice()).map_err(|_| aead::Error)?;
-                let tag = TptAead::encrypt_in_place_detached(self, &n, associated_data, buffer.get_out());
+                let tag =
+                    TptAead::encrypt_in_place_detached(self, &n, associated_data, buffer.get_out());
                 Ok(aead::Tag::<Self>::from(tag.0))
             }
 

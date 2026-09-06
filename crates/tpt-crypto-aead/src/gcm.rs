@@ -190,7 +190,9 @@ fn ctr_xor(cipher: &Aes, counter0: &[u8; 16], data: &mut [u8]) {
 
 impl Aead<12, 16> for Aes128Gcm {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<12>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
-        gcm_inner(&self.0, nonce, aad, buf, true, None).unwrap().expect("seal path returns Some(tag)")
+        gcm_inner(&self.0, nonce, aad, buf, true, None)
+            .unwrap()
+            .expect("seal path returns Some(tag)")
     }
 
     fn decrypt_in_place_detached(
@@ -206,7 +208,9 @@ impl Aead<12, 16> for Aes128Gcm {
 
 impl Aead<12, 16> for Aes256Gcm {
     fn encrypt_in_place_detached(&self, nonce: &Nonce<12>, aad: &[u8], buf: &mut [u8]) -> Tag<16> {
-        gcm_inner(&self.0, nonce, aad, buf, true, None).unwrap().expect("seal path returns Some(tag)")
+        gcm_inner(&self.0, nonce, aad, buf, true, None)
+            .unwrap()
+            .expect("seal path returns Some(tag)")
     }
 
     fn decrypt_in_place_detached(
@@ -245,11 +249,15 @@ mod tests {
         let ct = cipher.encrypt(&Nonce::new(nonce), &[], &pt);
         assert_eq!(
             &ct[..16],
-            hex::decode("0388dace60b6a392f328c2b971b2fe78").unwrap().as_slice()
+            hex::decode("0388dace60b6a392f328c2b971b2fe78")
+                .unwrap()
+                .as_slice()
         );
         assert_eq!(
             &ct[16..],
-            hex::decode("ab6e47d42cec13bdf53a67b21257bddf").unwrap().as_slice()
+            hex::decode("ab6e47d42cec13bdf53a67b21257bddf")
+                .unwrap()
+                .as_slice()
         );
         // Round-trip decrypt recovers the plaintext.
         let pt2 = cipher.decrypt(&Nonce::new(nonce), &[], &ct).unwrap();

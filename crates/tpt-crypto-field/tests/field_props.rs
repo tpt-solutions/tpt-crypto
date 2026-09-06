@@ -332,7 +332,7 @@ proptest! {
 #[test]
 fn p384_mul_debug() {
     use tpt_crypto_field::params::P384BaseParams;
-    use tpt_crypto_field::{FieldElement, FieldParams, CtEq};
+    use tpt_crypto_field::{CtEq, FieldElement, FieldParams};
     let p = &P384BaseParams::MODULUS;
 
     // (1) to_bytes correctness for a small known value.
@@ -364,19 +364,39 @@ fn p384_mul_debug() {
                 assert!(
                     ab.ct_eq(&ab_ref).into_bool(),
                     "ab mismatch a={:?} b={:?}: got {:?} want {:?}",
-                    xi, yi, ab.to_bytes(), ab_ref.to_bytes()
+                    xi,
+                    yi,
+                    ab.to_bytes(),
+                    ab_ref.to_bytes()
                 );
                 assert!(
                     bc.ct_eq(&bc_ref).into_bool(),
                     "bc mismatch b={:?} c={:?}: got {:?} want {:?}",
-                    yi, zi, bc.to_bytes(), bc_ref.to_bytes()
+                    yi,
+                    zi,
+                    bc.to_bytes(),
+                    bc_ref.to_bytes()
                 );
                 let l = ab.mul(&c);
                 let r = a.mul(&bc);
                 let ref_l = ref_mul(&ref_mul(&xi, &yi, p), &zi, p);
                 let ref_r = ref_mul(&xi, &ref_mul(&yi, &zi, p), p);
-                assert_eq!(l.to_bytes(), to_canon(&ref_l), "l mismatch a={:?} b={:?} c={:?}", xi, yi, zi);
-                assert_eq!(r.to_bytes(), to_canon(&ref_r), "r mismatch a={:?} b={:?} c={:?}", xi, yi, zi);
+                assert_eq!(
+                    l.to_bytes(),
+                    to_canon(&ref_l),
+                    "l mismatch a={:?} b={:?} c={:?}",
+                    xi,
+                    yi,
+                    zi
+                );
+                assert_eq!(
+                    r.to_bytes(),
+                    to_canon(&ref_r),
+                    "r mismatch a={:?} b={:?} c={:?}",
+                    xi,
+                    yi,
+                    zi
+                );
 
                 // Independent oracle: the INTEGER product of the two operands must
                 // equal the integer recovered from mont_mul(a,b).
@@ -394,4 +414,3 @@ fn p384_mul_debug() {
     }
     eprintln!("p384 mul debug OK");
 }
-
