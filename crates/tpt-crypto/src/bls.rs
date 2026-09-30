@@ -1,36 +1,28 @@
-//! BLS12-381 signatures (stub until `tpt-crypto-curve` lands BLS support).
+//! BLS12-381 aggregatable signatures (for consensus / `tpt-sync`).
 //!
-//! The API surface matches `spec.txt §4` so callers can be written against
-//! this module and will work unchanged once the `-curve` implementation
-//! is ready.
+//! Thin re-export of [`tpt_crypto_sig::bls`] under the `spec.txt §4` API:
+//!
+//! ```
+//! use tpt_crypto::bls::{self, SecretKey};
+//!
+//! # let sk1 = SecretKey::keygen(&[7u8; 32]).unwrap();
+//! # let sk2 = SecretKey::keygen(&[11u8; 32]).unwrap();
+//! # let pk1 = sk1.public_key();
+//! # let pk2 = sk2.public_key();
+//! let message = b"beacon block root";
+//! let sig1 = bls::sign(&sk1, message);
+//! let sig2 = bls::sign(&sk2, message);
+//! let agg_sig = bls::aggregate(&[sig1, sig2]).unwrap();
+//! bls::verify_aggregate(&[pk1, pk2], message, &agg_sig).unwrap();
+//! # assert!(bls::verify(&pk1, message, &sig1).is_ok());
+//! ```
+//!
+//! The bare functions use the `…_POP_` ciphersuite (draft-irtf-cfrg-bls-
+//! signature-04, minimal-pubkey-size); [`Ciphersuite`] selects Basic / Aug
+//! variants, and [`proof_of_possession`] implements key-registration proofs.
 
-#![allow(dead_code)]
-
-use tpt_crypto_core::{Error, Result};
-
-/// BLS12-381 public key (placeholder until `-curve` exposes it).
-#[derive(Debug, Clone, Copy)]
-pub struct PublicKey([u8; 48]);
-
-/// BLS12-381 secret key (placeholder).
-#[derive(Debug, Clone, Copy)]
-pub struct SecretKey([u8; 32]);
-
-/// BLS12-381 signature (placeholder).
-#[derive(Debug, Clone, Copy)]
-pub struct Signature([u8; 96]);
-
-/// Stub: sign `msg` with `sk`.
-pub fn sign(_sk: &SecretKey, _msg: &[u8]) -> Signature {
-    Signature([0u8; 96])
-}
-
-/// Stub: aggregate `sigs`.
-pub fn aggregate(_sigs: &[Signature]) -> Signature {
-    Signature([0u8; 96])
-}
-
-/// Stub: verify `agg` against `pks` and `msg`.
-pub fn verify_aggregate(_pks: &[PublicKey], _msg: &[u8], _agg: &Signature) -> Result<(), Error> {
-    Err(Error::Unsupported)
-}
+pub use tpt_crypto_sig::bls::{
+    aggregate, aggregate_verify, aggregate_verify_with, proof_of_possession, sign, sign_with,
+    verify, verify_aggregate, verify_aggregate_with, verify_proof_of_possession, verify_with,
+    Ciphersuite, PublicKey, SecretKey, Signature, DEFAULT_SUITE, PK_LEN, SIG_LEN, SK_LEN,
+};

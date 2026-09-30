@@ -14,6 +14,8 @@
 
 extern crate alloc;
 
+#[cfg(feature = "alloc")]
+pub mod bls;
 pub mod bytes;
 pub mod constant_time;
 pub mod ecdsa;
@@ -48,6 +50,9 @@ pub enum Error {
     InvalidEncoding,
     /// A KAT file was missing, malformed, or failed to match.
     Kat,
+    /// The input violates a scheme precondition (e.g. duplicate messages in an
+    /// aggregate that requires distinctness).
+    InvalidInput,
     /// The requested operation or parameter set is not yet implemented.
     Unsupported,
 }
@@ -60,6 +65,7 @@ impl fmt::Display for Error {
             Error::RngFailure => "RNG failure",
             Error::InvalidEncoding => "malformed encoding",
             Error::Kat => "known-answer test mismatch",
+            Error::InvalidInput => "invalid input",
             Error::Unsupported => "operation not implemented",
         };
         f.write_str(s)

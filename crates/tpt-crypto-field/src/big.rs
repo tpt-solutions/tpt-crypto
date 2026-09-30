@@ -85,14 +85,18 @@ fn shr_bits(a: &[u64], n: u32) -> Vec<u64> {
     let ls = (n / 64) as usize;
     let bs = n % 64;
     let mut out = vec![0u64; a.len()];
-    for i in 0..a.len() {
-        if i >= ls {
-            let mut v = a[i - ls];
-            if bs > 0 && i > ls {
-                v |= a[i - ls - 1] << (64 - bs);
-            }
-            out[i] = v >> bs;
+    for (i, out_i) in out.iter_mut().enumerate() {
+        let src = i + ls;
+        if src >= a.len() {
+            break;
         }
+        *out_i = if bs == 0 {
+            a[src]
+        } else {
+            // Bits flow in from the *next higher* limb (little-endian).
+            let hi = if src + 1 < a.len() { a[src + 1] } else { 0 };
+            (a[src] >> bs) | (hi << (64 - bs))
+        };
     }
     trim(&mut out);
     out

@@ -12,7 +12,7 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::encode::{pack_poly, unpack_poly};
+use crate::encode::{pack_bits, pack_poly, unpack_bits, unpack_poly};
 use crate::params::MlKemParams;
 use crate::poly::{
     basemul_polys, freeze, invntt_p, ntt_p, poly_add, poly_frommsg, poly_tomont, poly_tomsg, Poly,
@@ -67,8 +67,10 @@ pub fn derive_s_hat<P: MlKemParams>(d: &[u8; 32]) -> PolyVec {
     s_hat
 }
 
-/// Derive the K-PKE public key from the 32-byte seed `d`.
-pub fn kpke_keygen<P: MlKemParams>(d: &[u8; 32]) -> Vec<u8> {
+/// Derive the K-PKE keypair from the 32-byte seed `d`, returning
+/// `(ek, dk_PKE)` with `ek = ByteEncode₁₂(t̂) ‖ ρ` and
+/// `dk_PKE = ByteEncode₁₂(ŝ)` (FIPS 203 Algorithm 13).
+pub fn kpke_keygen<P: MlKemParams>(d: &[u8; 32]) -> (Vec<u8>, Vec<u8>) {
     // (ρ, σ) = G(d ‖ ⟨k⟩)
     let (rho, sigma) = expand_d::<P>(d);
 
@@ -82,13 +84,16 @@ pub fn kpke_keygen<P: MlKemParams>(d: &[u8; 32]) -> Vec<u8> {
         cbd(&mut e.vec[i], &sigma, (P::K + i) as u8, P::ETA1);
     }
 
-    let s_hat: Vec<Poly> = (0..P::K).map(|j| ntt_p(&s.vec[j])).collect();
+    let mut s_hat = PolyVec::zero(P::K);
+    for j in 0..P::K {
+        s_hat.vec[j] = ntt_p(&s.vec[j]);
+    }
     let mut t_hat = PolyVec::zero(P::K);
     for i in 0..P::K {
-        for (j, s_hat_j) in s_hat.iter().enumerate() {
+        for j in 0..P::K {
             // Â[i][j] = SampleNTT(XOF(ρ, j, i)); already in the NTT domain.
             let a_hat = sample_ntt(&rho, j as u8, i as u8);
-            let prod = basemul_polys(&a_hat, s_hat_j);
+            let prod = basemul_polys(&a_hat, &s_hat.vec[j]);
             t_hat.vec[i] = poly_add(&t_hat.vec[i], &prod);
         }
         // `basemul` leaves an R^-1 deficit; lift the whole row back (reference
@@ -104,20 +109,55 @@ pub fn kpke_keygen<P: MlKemParams>(d: &[u8; 32]) -> Vec<u8> {
         }
         t_hat.vec[i] = c;
     }
-    encode_pk::<P>(&rho, &t_hat)
+    let ek = encode_pk::<P>(&rho, &t_hat);
+    let dk_pke = encode_poly_vec_12::<P>(&s_hat);
+    (ek, dk_pke)
 }
 
-/// Encode a public key `(ρ ‖ t̂)` with `t̂` packed at 12 bits/coefficient.
-pub fn encode_pk<P: MlKemParams>(rho: &[u8; 32], t_hat: &PolyVec) -> Vec<u8> {
-    let mut pk = vec![0u8; P::PK_LEN];
-    pk[..32].copy_from_slice(rho);
-    let mut off = 32;
+/// Cast canonical NTT-domain coefficients (each `< q`) to `u32` for packing.
+fn as_u32(p: &Poly) -> [u32; N] {
+    let mut out = [0u32; N];
+    for (o, x) in out.iter_mut().zip(p.iter()) {
+        *o = *x as u32;
+    }
+    out
+}
+
+/// `dk_PKE = ByteEncode₁₂(ŝ)` — plain 12-bit packing (no compression),
+/// `384·k` bytes (FIPS 203 Algorithm 13 output).
+pub fn encode_poly_vec_12<P: MlKemParams>(v: &PolyVec) -> Vec<u8> {
+    let mut out = vec![0u8; 384 * P::K];
     for i in 0..P::K {
         let mut buf = [0u8; 384];
-        pack_poly(&mut buf, &t_hat.vec[i], 12);
+        pack_bits(&mut buf, &as_u32(&v.vec[i]), 12);
+        out[i * 384..(i + 1) * 384].copy_from_slice(&buf);
+    }
+    out
+}
+
+/// Decode a plain `ByteEncode₁₂` vector (`dk_PKE`), rejecting the wrong length.
+pub fn decode_poly_vec_12<P: MlKemParams>(bytes: &[u8]) -> Result<PolyVec, Error> {
+    if bytes.len() != 384 * P::K {
+        return Err(Error::InvalidLength);
+    }
+    let mut v = PolyVec::zero(P::K);
+    for i in 0..P::K {
+        v.vec[i] = unpack_bits(&bytes[i * 384..(i + 1) * 384], N, 12).map(|x| x as i32);
+    }
+    Ok(v)
+}
+
+/// Encode a public key as `ByteEncode₁₂(t̂) ‖ ρ` (FIPS 203 Algorithm 13).
+fn encode_pk<P: MlKemParams>(rho: &[u8; 32], t_hat: &PolyVec) -> Vec<u8> {
+    let mut pk = vec![0u8; P::PK_LEN];
+    let mut off = 0usize;
+    for i in 0..P::K {
+        let mut buf = [0u8; 384];
+        pack_bits(&mut buf, &as_u32(&t_hat.vec[i]), 12);
         pk[off..off + 384].copy_from_slice(&buf);
         off += 384;
     }
+    pk[off..off + 32].copy_from_slice(rho);
     pk
 }
 
@@ -126,14 +166,14 @@ pub fn decode_pk<P: MlKemParams>(pk: &[u8]) -> Result<([u8; 32], PolyVec), Error
     if pk.len() != P::PK_LEN {
         return Err(Error::InvalidLength);
     }
-    let mut rho = [0u8; 32];
-    rho.copy_from_slice(&pk[..32]);
     let mut t_hat = PolyVec::zero(P::K);
-    let mut off = 32;
+    let mut off = 0usize;
     for i in 0..P::K {
-        t_hat.vec[i] = unpack_poly(&pk[off..off + 384], 12);
+        t_hat.vec[i] = unpack_bits(&pk[off..off + 384], N, 12).map(|x| x as i32);
         off += 384;
     }
+    let mut rho = [0u8; 32];
+    rho.copy_from_slice(&pk[off..off + 32]);
     Ok((rho, t_hat))
 }
 

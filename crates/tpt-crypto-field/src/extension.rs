@@ -479,10 +479,10 @@ fn tonelli_shanks_field<F: Field + CtEq>(
             }
             k += 1;
         }
-        let mut e2 = i;
-        if found != 0 {
-            e2 = i - found - 1;
-        }
+        // `found == i` only happens for quadratic non-residues (`b = a^T` has
+        // maximal order); saturate to 0 — the final `result² == a` check
+        // rejects those anyway.
+        let e2 = i.saturating_sub(found + 1);
         let mut d = c;
         let mut sq = 0u32;
         while sq < e2 {
@@ -492,7 +492,10 @@ fn tonelli_shanks_field<F: Field + CtEq>(
         let x_new = x.mul(&d);
         let c_new = d.square();
         let b_new = b.mul(&c_new);
-        let apply = done.invert();
+        // Apply only while not yet converged *and* `b` still differs from one:
+        // the entry state `b == 1` means `x = a^((T+1)/2)` is already the root
+        // and applying the update would move it to an invalid candidate.
+        let apply = done.invert().and(b_is_one.invert());
         x = F::ct_select(&x, &x_new, apply);
         c = F::ct_select(&c, &c_new, apply);
         b = F::ct_select(&b, &b_new, apply);

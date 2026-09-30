@@ -126,6 +126,28 @@ pub fn ml_dsa_snippet() {}
 /// ```
 pub fn ring_subset_snippet() {}
 
+/// BLS12-381 aggregatable signatures through the facade. Mirrors the
+/// `spec.txt` §4 "BLS aggregatable signatures (for consensus / `tpt-sync`)"
+/// snippet: same-message aggregation with a single product-pairing check.
+///
+/// ```
+/// use tpt_crypto::bls::{self, SecretKey};
+///
+/// # let sk1 = SecretKey::keygen(&[7u8; 32]).unwrap();
+/// # let sk2 = SecretKey::keygen(&[11u8; 32]).unwrap();
+/// # let pk1 = sk1.public_key();
+/// # let pk2 = sk2.public_key();
+/// let message = b"beacon attestation";
+/// let sig1 = bls::sign(&sk1, message);
+/// let sig2 = bls::sign(&sk2, message);
+/// let agg_sig = bls::aggregate(&[sig1, sig2]).expect("non-empty aggregate");
+/// bls::verify_aggregate(&[pk1, pk2], message, &agg_sig).expect("aggregate verifies");
+///
+/// // A different message breaks the aggregate.
+/// assert!(bls::verify_aggregate(&[pk1, pk2], b"other", &agg_sig).is_err());
+/// ```
+pub fn bls_aggregate_snippet() {}
+
 #[cfg(test)]
 mod tests {
     use tpt_crypto_core::ct_eq;
@@ -161,6 +183,20 @@ mod tests {
         let sig = sign::<MlDsa44>(&sk, msg, &[]).expect("sign");
         assert!(verify::<MlDsa44>(&pk, msg, &sig, &[]).is_ok());
         assert!(verify::<MlDsa44>(&pk, b"tampered", &sig, &[]).is_err());
+    }
+
+    #[test]
+    fn bls_facade_round_trip() {
+        use tpt_crypto::bls::{self, SecretKey};
+
+        let sk1 = SecretKey::keygen(&[0x51u8; 32]).unwrap();
+        let sk2 = SecretKey::keygen(&[0x52u8; 32]).unwrap();
+        let msg = b"facade bls test";
+        let s1 = bls::sign(&sk1, msg);
+        let s2 = bls::sign(&sk2, msg);
+        let agg = bls::aggregate(&[s1, s2]).unwrap();
+        bls::verify_aggregate(&[sk1.public_key(), sk2.public_key()], msg, &agg).unwrap();
+        assert!(bls::verify_aggregate(&[sk1.public_key(), sk2.public_key()], b"x", &agg).is_err());
     }
 
     #[test]

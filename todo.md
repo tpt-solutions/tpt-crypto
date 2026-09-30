@@ -232,6 +232,14 @@ variant (feature-gated re-exports instead of steps 3–6).
       `v` for Fp6, `w` for Fp12) and calls `tonelli_shanks_field` directly;
       `find_nonresidue_field` is dead code. The `-curve` h2c carries its own
       dedicated Fp2 sqrt (eprint 2012/685 Alg 9) regardless.
+      **ROOT-CAUSE FIXED (2026-10-01):** the tower sqrt returned `None` for
+      every non-trivial QR — `Big::shr_bits` shifted bits in from the *lower*
+      limb (wrong direction) so `tower_info`'s `T`/`(T+1)/2` exponents were
+      garbage; additionally `tonelli_shanks_field` applied its first update
+      even in the converged `b == 1` entry state (moving off the root) and
+      underflowed `i - found - 1` for non-residues. All tower sqrt paths
+      (`Fp2`/`Fp6`/`Fp12`) now verified by the field proptests + BLS G2
+      point decompression KATs.
 
 ### crates/tpt-crypto-curve
 - [x] Scaffold `crates/tpt-crypto-curve/` — `Cargo.toml` (deps: `-field`, `-ct`,
@@ -383,8 +391,15 @@ variant (feature-gated re-exports instead of steps 3–6).
       12 pass.
 - [x] `specs/aead_tag_verify.telos` (accept iff tag valid; timing ⟂ tag)
 
-- [ ] **Milestone**: dry-run clean for `-field`,`-curve`,`-aead`;
+- [~] **Milestone**: dry-run clean for `-field`,`-curve`,`-aead`;
       `examples/ring_subset.rs` (ECDSA + AES-GCM + SHA-256 end to end)
+      — examples **done**: `examples/src/lib.rs::ring_subset_snippet` doctest +
+      `ring_subset_facade_round_trip` test (SHA-256 → ECDSA P-256 → AES-GCM,
+      all through the facade, compiled+tested in `cargo test -p
+      tpt-crypto-examples`). The publish `--dry-run` half remains blocked on
+      the first crates.io publish of `core` → `ct` → `hash` (path deps do not
+      resolve against the registry index; publish is explicitly deferred to a
+      later one-step pass, per the header note).
 
 ---
 
@@ -421,12 +436,17 @@ variant (feature-gated re-exports instead of steps 3–6).
       long-term secrets) — gated, larger
       — `src/frodo.rs` / `src/mceliece.rs` are feature-gated stubs returning
       `Error::Unsupported`; API surface only.
-- [ ] KATs: FIPS 203 ACVP vectors + NIST `.rsp` KAT files (all param sets)
-      — the committed `tests/kat/ml_kem_*.kat` files are **not trustworthy**
-      (no provenance; their expected `pk` matches no standard `G` construction and
-      leaks `SHA3-512(d‖0x02)` into the key tail — see
-      `tests/kat/PROVENANCE.md`). A draft `tests/ml_kem_kat.rs` was written and
-      then removed. Still need real ACVP/NIST vectors + PROVENANCE.
+- [x] KATs: FIPS 203 ACVP vectors + NIST `.rsp` KAT files (all param sets)
+      — `tests/kat/fips203_{512,768,1024}.rsp` (1000 records each) validated by
+      `tests/ml_kem_kat.rs` (keygen/encaps/decaps/implicit-reject, full byte
+      equality). Two real implementation bugs surfaced and were fixed on the
+      way: (a) `encode_pk`/`decode_pk` used `ρ ‖ t̂` byte order instead of
+      FIPS 203's `ByteEncode₁₂(t̂) ‖ ρ`, and (b) the `t̂`/`ŝ` packing applied
+      ciphertext-style compression (`ByteEncode_d ∘ Compress_d`) instead of
+      plain `ByteEncode₁₂`; the sk layout is now the standard
+      `dk_PKE ‖ ek ‖ H(ek) ‖ z` and decapsulation decodes `ŝ` from `dk_PKE`.
+      Provenance cross-checked against `kyber-py`; see
+      `tests/kat/PROVENANCE.md`.
 - [x] proptest: `decapsulate(sk, encapsulate(pk).0) == encapsulate(pk).1`;
       malformed ciphertext → implicit-reject (no panic, no distinguishable time)
       — `tests/props.rs`: round-trip for 512/768/1024 (now with live assertions)
@@ -488,9 +508,21 @@ variant (feature-gated re-exports instead of steps 3–6).
       deterministic-`r` KATs, pubkey KAT, determinism, round-trip/tamper,
       low-`S`, DER+fixed round-trips + malformed rejection. Discharges
       `specs/ecdsa_nonce_ct.telos` structurally + by KAT.
-- [ ] BLS12-381 (spec API): `sign`, `verify`, `aggregate`,
+- [x] BLS12-381 (spec API): `sign`, `verify`, `aggregate`,
       `verify_aggregate` (same-message + distinct-message), proof-of-possession;
-      ciphersuite `BLS_SIG_..._NUL_`
+      ciphersuites `BLS_SIG_..._{NUL,AUG,POP}_`
+      — `src/bls.rs` (alloc-gated) over `-curve`'s G1/G2/pairing + RFC 9380
+      hash-to-curve. draft-irtf-cfrg-bls-signature-04 minimal-pubkey-size:
+      keys in compressed G1 (48 B), signatures in compressed G2 (96 B); the
+      zcash flag format (`0x80` compressed / `0x40` infinity / `0x20` y-sort)
+      with on-curve + subgroup validation lives in
+      `-curve::bls12_381::{G1,G2}::{to,from}_compressed` (needed a working
+      tower `Fp2::sqrt` — see the `-field` note). Verification is one
+      `multi_pairing` per check; aggregate semantics per suite (Basic/Pop
+      distinct-messages enforced, Aug hashes `pk‖msg`, same-message
+      fast-aggregate). Default suite is POP (Ethereum-compatible).
+      **Fixed en route:** the pairing-check orientation (BLS verifies
+      `e(pk, H(m)) == e(P1, σ)`) and the `aggregate_verify` term signs.
 - [x] Spec API: `ml_dsa::keygen::<MlDsa65>`, `sign(sk, msg, ctx)`, `verify(...)`
       — working for all three parameter sets.
 - [~] Optional `signature` trait-compat impls behind `signature` feature
@@ -498,23 +530,34 @@ variant (feature-gated re-exports instead of steps 3–6).
 - [~] KATs: FIPS 204 & 205 ACVP, RFC 8032 (Ed25519), RFC 6979 + NIST CAVP (ECDSA),
       Wycheproof (ECDSA/EdDSA), draft-irtf-cfrg-bls-signature vectors
       — RFC 8032 §7.1 test-1 in `tests/ed25519.rs`; RFC 6979 A.2.5/A.2.6
-      deterministic ECDSA KATs in `tests/ecdsa.rs`. `tests/ml_dsa_kat.rs`
-      still a placeholder, no ACVP vectors; BLS pending impl. NIST CAVP
-      `.rsp` / Wycheproof JSON sets still to add.
+      deterministic ECDSA KATs in `tests/ecdsa.rs`. BLS **done**:
+      `tests/bls_kat.rs` runs the Ethereum `bls12-381-tests` v0.1.2 corpus
+      (CC0-1.0, POP ciphersuite) — sign/verify/aggregate/aggregate_verify/
+      fast_aggregate_verify/deserialization_G1+G2 + the RFC 9380 hash_to_G2
+      vectors (QUUX DST) — all green; provenance + sha256s in
+      `tests/kat/PROVENANCE.md`. `tests/ml_dsa_kat.rs` still a placeholder,
+      no ACVP vectors; NIST CAVP `.rsp` / Wycheproof JSON sets still to add.
 - [~] proptest: `verify(pk, m, sign(sk, m))` ok; wrong key/msg/ctx → `Verification`;
       `verify_aggregate` iff all inputs valid
       — `tests/ml_dsa_props.rs` now real (rand-based, all 3 param sets): honest
       round-trip, wrong msg/ctx/key → `Verification`, hedged verifies, and every
-      single-bit signature mutation is rejected. BLS `verify_aggregate` still
-      pending (no BLS impl yet).
+      single-bit signature mutation is rejected. BLS: `tests/bls_props.rs`
+      covers honest sign→verify, aggregate-iff-all-valid (with one tampered
+      contribution), same-message aggregation + wrong-message rejection,
+      keygen determinism + PoP, and the Aug duplicate-message allowance.
 - [~] `specs/bls_aggregate.telos` (`valid iff all input sigs valid`),
       `specs/ecdsa_nonce_ct.telos`
-      — both contract files authored. `ecdsa_nonce_ct` is now discharged
-      (RFC 6979 impl + KATs in `-sig`); `bls_aggregate` still blocked on the
-      BLS12-381 pairing implementation.
+      — both contract files authored. `ecdsa_nonce_ct` is discharged
+      (RFC 6979 impl + KATs in `-sig`); `bls_aggregate` is discharged
+      functionally by `tests/bls_props.rs` (aggregate-iff-all-valid, incl.
+      tampered-contribution rejection) on top of the official vectors.
 
-- [ ] **Milestone**: dry-run clean for `-kem`,`-sig`;
+- [~] **Milestone**: dry-run clean for `-kem`,`-sig`;
       `examples/ml_kem.rs` + `examples/ml_dsa.rs` reproduce `spec.txt` §4
+      — examples **done**: `ml_kem_snippet` + `ml_dsa_snippet` doctests and
+      facade round-trip tests in `examples/src/lib.rs` (plus the new
+      `bls_aggregate_snippet`). `--dry-run` half blocked on first publish of
+      the foundation crates (same as the Phase 2 milestone).
 
 ---
 
@@ -609,13 +652,19 @@ variant (feature-gated re-exports instead of steps 3–6).
 6. [x] `fmt` / `clippy` / `deny` clean across feature combinations
    (facade + examples emit no warnings; remaining clippy noise is in the
    pre-existing `-zk` / `-mpc` crates).
-7. [~] `examples/`: `examples/src/lib.rs` has compiled+tested doctests +
-   unit tests for the §4 secret-handling, ML-KEM, and ML-DSA snippets
-   (via the facade). Bulletproofs / BLS snippets pending those impls.
-8. [ ] Update `tpt-rust-map/registry.toml` status
+7. [x] `examples/`: `examples/src/lib.rs` has compiled+tested doctests +
+   unit tests for the §4 secret-handling, ML-KEM, ML-DSA, BLS-aggregate, and
+   ring-subset snippets (via the facade; the examples crate enables
+   `pq,classical,bls`). Bulletproofs snippet pending that impl.
+8. [x] Update `tpt-rust-map/registry.toml` status
+   — all `tpt-crypto-*` entries present with `status = "git"` (incl. the new
+   `-sig` entry).
 
 - [ ] **Milestone**: `cargo xtask release-dry-run` — all 11 crates
       `cargo publish --dry-run` clean in dependency order
+      — blocked on the first real publish (leaf crates `core`/`ct` verified
+      clean in Phase 1; every other crate fails only on registry resolution of
+      the not-yet-published path deps, not on packaging/metadata).
 
 ---
 

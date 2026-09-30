@@ -23,7 +23,12 @@ tpt-crypto-curve = { workspace = true }
 [features]
 default = ["std"]
 std = ["tpt-crypto-core/std", "tpt-crypto-hash/std", "alloc"]
-alloc = ["tpt-crypto-core/alloc", "tpt-crypto-hash/alloc"]
+alloc = [
+    "tpt-crypto-core/alloc",
+    "tpt-crypto-hash/alloc",
+    "tpt-crypto-field/alloc",
+    "tpt-crypto-curve/alloc",
+]
 signature = []
 slh-dsa = ["alloc"]
 rand_core = ["tpt-crypto-core/rand_core"]

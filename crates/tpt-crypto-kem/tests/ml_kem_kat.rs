@@ -9,8 +9,7 @@
 use std::collections::BTreeMap;
 
 use tpt_crypto_kem::ml_kem::{
-    decapsulate, encapsulate_msg, keygen_seed, DecapsKey, EncapsKey, MlKem1024, MlKem512,
-    MlKem768,
+    decapsulate, encapsulate_msg, keygen_seed, DecapsKey, EncapsKey, MlKem1024, MlKem512, MlKem768,
 };
 use tpt_crypto_kem::params::MlKemParams;
 
@@ -42,7 +41,9 @@ fn parse_rsp(path: &str) -> Vec<KatVector> {
         if line.is_empty() {
             continue;
         }
-        let (key, value) = line.split_once('=').unwrap_or_else(|| panic!("bad line: {line:?}"));
+        let (key, value) = line
+            .split_once('=')
+            .unwrap_or_else(|| panic!("bad line: {line:?}"));
         let key = key.trim();
         if key == "count" && !fields.is_empty() {
             out.push(vector_from_fields(&fields));
@@ -58,9 +59,8 @@ fn parse_rsp(path: &str) -> Vec<KatVector> {
 }
 
 fn vector_from_fields(f: &BTreeMap<String, String>) -> KatVector {
-    let hex = |k: &str| -> Vec<u8> {
-        hex::decode(&f[k]).unwrap_or_else(|e| panic!("hex[{k}]: {e}"))
-    };
+    let hex =
+        |k: &str| -> Vec<u8> { hex::decode(&f[k]).unwrap_or_else(|e| panic!("hex[{k}]: {e}")) };
     KatVector {
         count: f["count"].parse().expect("count"),
         d: arr32(&hex("d")),
@@ -95,7 +95,11 @@ fn check_file<P: MlKemParams>(path: &str) {
 
         // Implicit rejection: an invalid ciphertext yields the recorded ss_n.
         let ss_adv = decapsulate::<P>(&dk, &v.ct_n).expect("well-formed ct decapsulates");
-        assert_eq!(ss_adv, v.ss_n, "[{path}] count {} implicit rejection", v.count);
+        assert_eq!(
+            ss_adv, v.ss_n,
+            "[{path}] count {} implicit rejection",
+            v.count
+        );
     }
 }
 
@@ -115,8 +119,5 @@ fn kat_ml_kem_1024() {
 }
 
 fn kat_path(name: &str) -> String {
-    format!(
-        "{}/tests/kat/{name}",
-        env!("CARGO_MANIFEST_DIR")
-    )
+    format!("{}/tests/kat/{name}", env!("CARGO_MANIFEST_DIR"))
 }

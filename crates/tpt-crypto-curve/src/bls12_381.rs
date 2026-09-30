@@ -24,7 +24,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use tpt_crypto_field::{
-    bls12381_final_exp_exponent, Bls12381Fp as Fp, Choice, CtEq, Field, Fp12, Fp2, Fp6,
+    bls12381_final_exp_exponent, Bls12381Fp as Fp, Choice, CtEq, CtOption, Field, Fp12, Fp2, Fp6,
 };
 
 /// BLS parameter `|x|` (the seed `x = -0xd201_0000_0001_0000` is negative).
@@ -607,6 +607,185 @@ pub fn multi_pairing(terms: &[(G1, G2)]) -> Gt {
 #[must_use]
 pub fn subgroup_order_be() -> [u8; 32] {
     R_BE
+}
+
+// --- compressed point serialization (the standard BLS12-381 "zcash" format) --
+
+/// `(p-1)/2` as canonical little-endian limbs; field elements above this are
+/// the lexicographically-largest square root.
+const HALF_P_LE: [u64; 6] = [
+    0xdcff_7fff_ffff_d555,
+    0x0f55_ffff_58a9_ffff,
+    0xb398_6950_7b58_7b12,
+    0xb23b_a5c2_79c2_895f,
+    0x258d_d3db_21a5_d66b,
+    0x0d00_88f5_1cff_f34d,
+];
+
+/// `a > (p-1)/2` for a canonical `Fp` (public data — plain limb compare).
+fn fp_is_lex_largest(y: &Fp) -> Choice {
+    let int = y.to_integer();
+    let mut gt = Choice::from_bool(false);
+    let mut eq = Choice::from_bool(true);
+    let mut i = 6usize;
+    while i > 0 {
+        i -= 1;
+        gt = gt.or(eq.and(Choice::from_bool(int[i] > HALF_P_LE[i])));
+        eq = eq.and(Choice::from_bool(int[i] == HALF_P_LE[i]));
+    }
+    gt
+}
+
+/// Whether `y = c0 + c1·u` is the lexicographically-largest square root of its
+/// square: `c1 > (p-1)/2`, or `c1 == 0 && c0 > (p-1)/2`.
+fn fp2_is_lex_largest(y: &Fp2) -> Choice {
+    fp_is_lex_largest(&y.c1).or(y.c1.is_zero().and(fp_is_lex_largest(&y.c0)))
+}
+
+/// Serialize the `y`-sign flag bit (`0x20`) plus the compression flag (`0x80`).
+fn flag_byte(lex_largest: Choice) -> u8 {
+    0x80 | if lex_largest.into_bool() { 0x20 } else { 0x00 }
+}
+
+/// `a ⊕ b` for a [`Choice`] and a plain bool (the sort-flag comparison).
+fn choice_xor_bool(a: Choice, b: bool) -> Choice {
+    a.and(Choice::from_bool(!b))
+        .or(a.invert().and(Choice::from_bool(b)))
+}
+
+/// Lift a `CtOption` into a plain `Option` (public-data parsing — the branch
+/// is on a public value, like the SEC1 tag dispatch).
+fn to_opt<T>(o: CtOption<T>) -> Option<T> {
+    if o.is_some().into_bool() {
+        Some(o.unwrap())
+    } else {
+        None
+    }
+}
+
+/// Strip the three flag bits from the most significant byte.
+fn strip_flags(b: u8) -> u8 {
+    b & 0x1f
+}
+
+impl G1 {
+    /// Compressed 48-byte serialization: `x` big-endian with the top-byte
+    /// flags `0x80` (compressed), `0x40` (infinity), `0x20` (y sort bit).
+    /// The identity serializes as `0xc0 ‖ 0x00…0`.
+    #[must_use]
+    pub fn to_compressed(&self) -> [u8; 48] {
+        let mut out = [0u8; 48];
+        if self.is_identity().into_bool() {
+            out[0] = 0xc0;
+            return out;
+        }
+        if let Some((x, y)) = self.to_affine() {
+            out = x.to_bytes();
+            out[0] |= flag_byte(fp_is_lex_largest(&y));
+        }
+        out
+    }
+
+    /// Parse a compressed 48-byte point: validates the flags (compression set;
+    /// infinity only for the all-zero payload), canonical `x < p`, that `x³+4`
+    /// is a square, and subgroup membership. Public-data parsing — branching on
+    /// the flags is fine, exactly like SEC1 in [`crate::weierstrass`].
+    pub fn from_compressed(bytes: &[u8; 48]) -> Option<Self> {
+        let compressed = bytes[0] & 0x80 != 0;
+        let inf = bytes[0] & 0x40 != 0;
+        let sign = bytes[0] & 0x20 != 0;
+        if !compressed {
+            return None;
+        }
+        if inf {
+            // Infinity must be all-zero apart from the two set flags.
+            if sign || bytes[1..].iter().any(|&b| b != 0) {
+                return None;
+            }
+            return Some(G1::identity());
+        }
+        let mut xb = *bytes;
+        xb[0] = strip_flags(xb[0]);
+        let x = to_opt(Fp::from_bytes(&xb))?;
+        // y² = x³ + 4 — solve, then pick the root matching the sort bit.
+        let y2 = x.square().mul(&x).add(&Fp::from_u64(4));
+        let root = to_opt(y2.sqrt())?;
+        let y = Fp::ct_select(
+            &root,
+            &root.neg(),
+            choice_xor_bool(fp_is_lex_largest(&root), sign),
+        );
+        let p = G1::from_affine_unchecked(x, y);
+        if p.is_on_curve()
+            .and(p.is_torsion_free())
+            .invert()
+            .into_bool()
+        {
+            return None;
+        }
+        Some(p)
+    }
+}
+
+impl G2 {
+    /// Compressed 96-byte serialization: the first 48 bytes are the `u`-
+    /// coefficient `x.c1` (with the top-byte flags, sort bit on `y`), the next
+    /// 48 bytes are `x.c0`. The identity serializes as `0xc0 ‖ 0x00…0`.
+    #[must_use]
+    pub fn to_compressed(&self) -> [u8; 96] {
+        let mut out = [0u8; 96];
+        if self.is_identity().into_bool() {
+            out[0] = 0xc0;
+            return out;
+        }
+        if let Some((x, y)) = self.to_affine() {
+            out[..48].copy_from_slice(&x.c1.to_bytes());
+            out[48..].copy_from_slice(&x.c0.to_bytes());
+            out[0] |= flag_byte(fp2_is_lex_largest(&y));
+        }
+        out
+    }
+
+    /// Parse a compressed 96-byte point (same validation as
+    /// [`G1::from_compressed`], over `Fp²`).
+    pub fn from_compressed(bytes: &[u8; 96]) -> Option<Self> {
+        let compressed = bytes[0] & 0x80 != 0;
+        let inf = bytes[0] & 0x40 != 0;
+        let sign = bytes[0] & 0x20 != 0;
+        if !compressed {
+            return None;
+        }
+        if inf {
+            if sign || bytes[1..].iter().any(|&b| b != 0) {
+                return None;
+            }
+            return Some(G2::identity());
+        }
+        let mut c1b = [0u8; 48];
+        c1b.copy_from_slice(&bytes[..48]);
+        c1b[0] = strip_flags(c1b[0]);
+        let c0b: [u8; 48] = bytes[48..].try_into().ok()?;
+        let c1 = to_opt(Fp::from_bytes(&c1b))?;
+        let c0 = to_opt(Fp::from_bytes(&c0b))?;
+        let x = Fp2::new(c0, c1);
+        let b = Fp2::new(Fp::from_u64(4), Fp::from_u64(4));
+        let y2 = x.square().mul(&x).add(&b);
+        let root = to_opt(y2.sqrt())?;
+        let y = Fp2::ct_select(
+            &root,
+            &root.neg(),
+            choice_xor_bool(fp2_is_lex_largest(&root), sign),
+        );
+        let p = G2::from_affine_unchecked(x, y);
+        if p.is_on_curve()
+            .and(p.is_torsion_free())
+            .invert()
+            .into_bool()
+        {
+            return None;
+        }
+        Some(p)
+    }
 }
 
 #[allow(dead_code)]

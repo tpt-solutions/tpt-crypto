@@ -37,7 +37,7 @@ pub struct EncapsKey {
     pub bytes: Vec<u8>,
 }
 
-/// An ML-KEM secret key (`dk = ek ‖ d ‖ H(ek) ‖ z`).
+/// An ML-KEM secret key (`dk = dk_PKE ‖ ek ‖ H(ek) ‖ z`, FIPS 203 §7.2).
 #[derive(Clone)]
 pub struct DecapsKey {
     /// Encoded secret key bytes.
@@ -125,40 +125,31 @@ fn j_parts(a: &[u8], b: &[u8]) -> [u8; 32] {
 pub fn keygen<P: MlKemParams>(rng: &mut impl CryptoRng) -> (EncapsKey, DecapsKey) {
     let d = rng.gen_array::<32>();
     let z = rng.gen_array::<32>();
-    let pk = pke::kpke_keygen::<P>(&d);
-    let h = h_parts(&pk, &[]);
-
-    let mut sk = vec![0u8; P::SK_LEN];
-    let mut off = 0usize;
-    sk[off..off + P::PK_LEN].copy_from_slice(&pk);
-    off += P::PK_LEN;
-    sk[off..off + 32].copy_from_slice(&d);
-    off += 32;
-    sk[off..off + 32].copy_from_slice(&h);
-    off += 32;
-    sk[off..off + 32].copy_from_slice(&z);
-
-    (EncapsKey { bytes: pk }, DecapsKey { bytes: sk })
+    finish_keygen::<P>(&d, &z)
 }
 
 /// Deterministic key generation from explicit seeds.
 ///
-/// `d` seeds the matrix (via `H(d)`), and `z` is the implicit-rejection nonce.
-/// Provided for reproducible tests and KAT validation; equivalent to
-/// [`keygen`] when `(d, z)` is drawn from an RNG.
+/// `d` seeds the matrix and noise (via `G(d ‖ ⟨k⟩)`), and `z` is the
+/// implicit-rejection nonce. Provided for reproducible tests and KAT
+/// validation; equivalent to [`keygen`] when `(d, z)` is drawn from an RNG.
 pub fn keygen_seed<P: MlKemParams>(d: &[u8; 32], z: &[u8; 32]) -> (EncapsKey, DecapsKey) {
-    let pk = pke::kpke_keygen::<P>(d);
+    finish_keygen::<P>(d, z)
+}
+
+/// Assemble `(ek, dk)` with `dk = dk_PKE ‖ ek ‖ H(ek) ‖ z`
+/// (FIPS 203 Algorithm 16).
+fn finish_keygen<P: MlKemParams>(d: &[u8; 32], z: &[u8; 32]) -> (EncapsKey, DecapsKey) {
+    let (pk, dk_pke) = pke::kpke_keygen::<P>(d);
     let h = h_parts(&pk, &[]);
 
+    let dk_len = 384 * P::K;
     let mut sk = vec![0u8; P::SK_LEN];
-    let mut off = 0usize;
-    sk[off..off + P::PK_LEN].copy_from_slice(&pk);
-    off += P::PK_LEN;
-    sk[off..off + 32].copy_from_slice(d);
-    off += 32;
+    sk[..dk_len].copy_from_slice(&dk_pke);
+    sk[dk_len..dk_len + P::PK_LEN].copy_from_slice(&pk);
+    let off = dk_len + P::PK_LEN;
     sk[off..off + 32].copy_from_slice(&h);
-    off += 32;
-    sk[off..off + 32].copy_from_slice(z);
+    sk[off + 32..off + 64].copy_from_slice(z);
 
     (EncapsKey { bytes: pk }, DecapsKey { bytes: sk })
 }
@@ -208,9 +199,8 @@ pub fn decapsulate<P: MlKemParams>(sk: &DecapsKey, ct: &[u8]) -> Result<SharedSe
     if ct.len() != P::CT_LEN {
         return Err(Error::InvalidCiphertext);
     }
-    let (pk, d_slice, h, z) = split_sk::<P>(sk);
-    let d: [u8; 32] = d_slice.try_into().map_err(|_| Error::InvalidLength)?;
-    let s_hat = pke::derive_s_hat::<P>(&d);
+    let (dk_pke, pk, h, z) = split_sk::<P>(sk);
+    let s_hat = pke::decode_poly_vec_12::<P>(dk_pke)?;
 
     let (rho, t_hat) = pke::decode_pk::<P>(pk)?;
     let m_prime = pke::kpke_decrypt::<P>(&s_hat, ct)?;
@@ -230,13 +220,16 @@ pub fn decapsulate<P: MlKemParams>(sk: &DecapsKey, ct: &[u8]) -> Result<SharedSe
     Ok(ct_select_array(eq, k_prime, reject))
 }
 
-/// Split a secret key into its four components (constant-time slicing).
+/// Split a secret key `dk = dk_PKE ‖ ek ‖ H(ek) ‖ z` into its four components.
 fn split_sk<P: MlKemParams>(sk: &DecapsKey) -> (&[u8], &[u8], &[u8], &[u8]) {
     let b = &sk.bytes;
-    let p = P::PK_LEN;
-    let pk = &b[..p];
-    let d_slice = &b[p..p + 32];
-    let h = &b[p + 32..p + 64];
-    let z = &b[p + 64..p + 96];
-    (pk, d_slice, h, z)
+    let dk_len = 384 * P::K;
+    let ek_off = dk_len;
+    let h_off = ek_off + P::PK_LEN;
+    (
+        &b[..dk_len],
+        &b[ek_off..h_off],
+        &b[h_off..h_off + 32],
+        &b[h_off + 32..h_off + 64],
+    )
 }
