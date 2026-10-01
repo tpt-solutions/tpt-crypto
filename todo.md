@@ -756,8 +756,12 @@ variant (feature-gated re-exports instead of steps 3–6).
       Each new target asserts a round-trip/canonicality invariant, not just
       "does not panic". CI `fuzz-smoke` still to be confirmed on a toolchain
       with `librustc-nightly_rt.asan`.
-- [ ] `benches/BUDGET.md`: per-primitive perf target vs `ring` / `dalek` /
+- [~] `benches/BUDGET.md`: per-primitive perf target vs `ring` / `dalek` /
       `pqcrypto`; criterion targets build in `bench-smoke`
+      — BUDGET.md covers all 11 crates (incl. BLS + PLONK rows added with the
+      new primitives); criterion targets build (`cargo bench --no-run -p
+      tpt-crypto-benches` clean). Targets still "pending" (not yet measured
+      against the baselines).
 - [ ] `cargo-semver-checks` in CI (runs on tags)
 - [ ] SBOM artifact (`cargo xtask sbom`) uploaded by CI
 - [ ] Trait-compat feature impls (`digest`, `aead`, `signature`,

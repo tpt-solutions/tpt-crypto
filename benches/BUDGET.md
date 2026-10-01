@@ -98,6 +98,9 @@ no `ring` C-FFI comparisons (that would defeat the substrate's purpose).
 | `ed25519/verify`       | ≥ 5 kops/s                          | pending |
 | `ecdsa-p256/sign`      | ≥ 3 kops/s                          | pending |
 | `ecdsa-p384/sign`      | ≥ 1.5 kops/s                        | pending |
+| `bls12-381/sign`       | ≥ 1 kops/s (pairing-dominated)      | pending |
+| `bls12-381/verify`     | ≥ 500 ops/s                         | pending |
+| `bls12-381/verify-agg` | ≥ 300 aggregate-verifications/s (n=64) | pending |
 
 ---
 
@@ -108,6 +111,7 @@ no `ring` C-FFI comparisons (that would defeat the substrate's purpose).
 | `bulletproofs/prove/1` | ≥ 1 proof/s for 32-bit range proof  | pending |
 | `bulletproofs/verify/1`| ≥ 10 verifications/s for 32-bit     | pending |
 | `pedersen/commit`      | ≥ 100 kops/s                        | pending |
+| `plonk/verify/n=4`     | ≥ 500 verifications/s (IPA opening) | pending |
 
 ---
 
