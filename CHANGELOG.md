@@ -38,6 +38,17 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `xtask` developer tooling: `check`, `fmt`, `clippy`, `test`, `leakage`,
   `no-std`, `kat-check`, `verify`, `release-dry-run`, `sbom`.
 - `deny.toml`: cargo-deny policy (license allow-list, `*-sys`/OpenSSL/ring bans).
+- `tpt-crypto-zk` KAT suite: `tests/kat/VECTORS.txt` (6 aggregated/single
+  Bulletproofs range-proof vectors across `n ∈ {8, 32, 64}` and `m ∈ {1, 2, 4}`,
+  plus inner-product-argument, Pedersen, and transcript vectors) with
+  `tests/kat/PROVENANCE.md`; the file's SHA-256 is registered with
+  `cargo xtask kat-check`. Regenerate with
+  `cargo test -p tpt-crypto-zk --test generate_kat`.
+- Fuzz targets for the remaining attacker-controlled decoders:
+  `ecdsa_der_parse` (P-256/P-384 ASN.1 DER signature parsing),
+  `ecdsa_public_key_parse` (SEC1 public-key decoding), and
+  `range_proof_parse` (Bulletproofs proof parsing → verification, exercising
+  point decompression and scalar canonicality with untrusted input).
 - `BUDGET.md`: per-primitive performance targets vs `subtle`/`dalek`/`pqcrypto`.
 - `AGENTS.md`: workspace conventions, build commands, layering rules, hard rules.
 

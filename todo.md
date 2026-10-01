@@ -583,17 +583,57 @@ variant (feature-gated re-exports instead of steps 3–6).
 - [~] Inner-product argument; Bulletproofs range proofs — single + aggregated,
       ranges up to `2^64` (`prove_range`, `verify_range` per spec API)
       — `src/ipa.rs` + `src/bulletproofs.rs` (`prove_range`/`verify_range`,
-      `range_proof_{to,from}_bytes`); not yet building/tested.
+      `range_proof_{to,from}_bytes`); `verify_range` is exercised and green.
+      **DEFECT FOUND (2026-10-01): `InnerProductProof::verify` (the standalone
+      helper in `src/ipa.rs`) rejects honest proofs produced by
+      `InnerProductProof::create` — its verification equation is inconsistent
+      with the prover.** It is *not* on the range-proof path (`verify_range`
+      builds its own multiscalar check from `verification_scalars`, which is
+      correct and passes, and is covered end-to-end by `tests/kat.rs` and
+      `tests/range_proof.rs`), so the shipped primitive is unaffected — but the
+      helper is unusable as written and must be fixed or deleted before anyone
+      relies on it.
+
+      *Analysis so far.* The fold is `a' = u·a_L + u⁻¹·a_R` with
+      `G' = u⁻¹·G_L + u·G_R`, so the correct relation is
+      `P = a'b'Q + Σ(a'·s_i)G_i + Σ(b'·s'_i)H_i − Σu²L − Σu⁻²R`. Two concrete
+      faults were identified in `verify`: (1) it appends the `−u²` scalars for
+      `L` but never the matching `−u⁻²` scalars for `R`, leaving the final MSM
+      misaligned; (2) the `b`-side weight is `s.rev()` rather than the
+      inverse-in-reverse-order `1/s[n−1−i]`. Applying both still fails, so a
+      third fault remains — most likely in the construction of the `s` vector
+      itself (`verification_scalars`, the `s[i] = s[i−k]·u²` recurrence) or in
+      how the generator factors are folded into the first round.
+
+      **Deliberately not patched blind.** Two candidate fixes were written,
+      tested, and reverted rather than shipped. A parameter sweep over the
+      plausible `s` / `1/s` weight conventions × `L`/`R` sign choices found no
+      consistent equation (and also confirmed the failure is *not* specific to
+      non-constant generator factors — it reproduces with all-ones factors,
+      which isolates it to the folding algebra). A correct fix needs a fresh
+      derivation of the IPA verifier against the textbook construction, not a
+      local tweak. `src/ipa.rs` is therefore **unchanged from `f19794e`**.
 - [ ] Minimal PLONK verifier (~500 LoC): transcript, KZG **or** IPA commitment
       opening check, permutation + gate checks; accepts any compliant proof
       (no prover — that is `tpt-telos`'s job)
       — `pub mod plonk;` declared; `src/plonk.rs` exists as a compiling
       placeholder (`verify_proof` returns `ZkError::Unsupported`).
-- [ ] KATs: bulletproofs reference test vectors (dalek-compatible),
+- [x] KATs: bulletproofs reference test vectors (dalek-compatible),
       PLONK proof fixtures from a reference prover
-      — `tests/kat/` dir present but empty.
-- [ ] proptest: honest `prove_range` always verifies; out-of-range value →
+      — bulletproofs/IPA/Pedersen/transcript vectors landed in
+      `tests/kat/VECTORS.txt` + `tests/kat/PROVENANCE.md` (sha256 registered
+      with `cargo xtask kat-check`), driven by `tests/kat.rs` (4 tests) and
+      regenerable via `tests/generate_kat.rs`. **No cross-implementation
+      vectors exist for this construction** (built directly on `-curve`/
+      `-field`), so these are regression vectors, documented as such in
+      PROVENANCE; soundness properties are covered by `tests/range_proof.rs`.
+      PLONK fixtures still pending (blocked on the verifier, below).
+- [x] proptest: honest `prove_range` always verifies; out-of-range value →
       prove fails; tampered proof → verify fails
+      — `tests/range_proof.rs`: completeness (incl. after a serialization round
+      trip), binding against a wrong commitment, out-of-range rejection,
+      parameter validation, plus 2 `proptest!` cases (random values verify;
+      single-bit proof flips are rejected). 6 tests, all pass.
 - [~] `specs/bulletproofs_verify.telos` (`true iff proof valid for commitment`)
       — contract authored; verification blocked on the bulletproofs module
       building + KAT vectors.
@@ -674,9 +714,22 @@ variant (feature-gated re-exports instead of steps 3–6).
       `kat-check` (verify `PROVENANCE.md` sha256s), `leakage` (dudect runner),
       `verify` (shell `tpt-telos-cli` over `specs/*.telos`, print report),
       `release-dry-run` (`cargo publish --dry-run` in topo order), `sbom`
-- [ ] `fuzz/` (`cargo-fuzz`): targets for every attacker-controlled decoder —
+- [~] `fuzz/` (`cargo-fuzz`): targets for every attacker-controlled decoder —
       signature parse, ciphertext parse, public-key parse, proof parse,
       ASN.1 DER, point decompression
+      — 8 targets, all type-check clean under `cargo check --bins`
+      (`cargo +nightly fuzz build` needs the ASan runtime, absent in this
+      environment for *all* targets incl. the pre-existing ones):
+      `aes_gcm_decrypt`, `chacha20poly1305_decrypt`, `ml_kem_decaps`,
+      `point_decompress`, `signature_verify` (Ed25519), and added this pass —
+      `ecdsa_der_parse` (P-256/P-384 `Signature::from_der`; strict-minimal
+      INTEGER + trailing-garbage rejection), `ecdsa_public_key_parse`
+      (`VerifyingKey::from_sec1`, compressed/uncompressed), and
+      `range_proof_parse` (`range_proof_from_bytes` → `verify_range`, driving
+      `EdwardsPoint::decompress` and scalar canonicality with untrusted input).
+      Each new target asserts a round-trip/canonicality invariant, not just
+      "does not panic". CI `fuzz-smoke` still to be confirmed on a toolchain
+      with `librustc-nightly_rt.asan`.
 - [ ] `benches/BUDGET.md`: per-primitive perf target vs `ring` / `dalek` /
       `pqcrypto`; criterion targets build in `bench-smoke`
 - [ ] `cargo-semver-checks` in CI (runs on tags)

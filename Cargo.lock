@@ -872,6 +872,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "tpt-crypto-benches"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "tpt-crypto-aead",
+ "tpt-crypto-core",
+ "tpt-crypto-ct",
+ "tpt-crypto-curve",
+ "tpt-crypto-field",
+ "tpt-crypto-hash",
+ "tpt-crypto-kem",
+ "tpt-crypto-sig",
+ "tpt-crypto-zk",
+]
+
+[[package]]
 name = "tpt-crypto-core"
 version = "0.1.0"
 dependencies = [

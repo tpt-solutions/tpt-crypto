@@ -13,6 +13,7 @@ tpt-crypto-aead = { path = "../crates/tpt-crypto-aead", default-features = false
 tpt-crypto-kem = { path = "../crates/tpt-crypto-kem", default-features = false, features = ["std"] }
 tpt-crypto-sig = { path = "../crates/tpt-crypto-sig", default-features = false, features = ["std"] }
 tpt-crypto-curve = { path = "../crates/tpt-crypto-curve", default-features = false, features = ["std"] }
+tpt-crypto-zk = { path = "../crates/tpt-crypto-zk", default-features = false, features = ["alloc"] }
 libfuzzer-sys = "0.4"
 
 [[bin]]
@@ -42,6 +43,24 @@ doc = false
 [[bin]]
 name = "signature_verify"
 path = "fuzz_targets/signature_verify.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ecdsa_der_parse"
+path = "fuzz_targets/ecdsa_der_parse.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ecdsa_public_key_parse"
+path = "fuzz_targets/ecdsa_public_key_parse.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "range_proof_parse"
+path = "fuzz_targets/range_proof_parse.rs"
 test = false
 doc = false
 

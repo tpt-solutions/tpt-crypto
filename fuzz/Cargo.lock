@@ -123,6 +123,7 @@ dependencies = [
  "tpt-crypto-curve",
  "tpt-crypto-kem",
  "tpt-crypto-sig",
+ "tpt-crypto-zk",
 ]
 
 [[package]]
@@ -144,6 +145,17 @@ dependencies = [
 
 [[package]]
 name = "tpt-crypto-sig"
+version = "0.1.0"
+dependencies = [
+ "tpt-crypto-core",
+ "tpt-crypto-ct",
+ "tpt-crypto-curve",
+ "tpt-crypto-field",
+ "tpt-crypto-hash",
+]
+
+[[package]]
+name = "tpt-crypto-zk"
 version = "0.1.0"
 dependencies = [
  "tpt-crypto-core",

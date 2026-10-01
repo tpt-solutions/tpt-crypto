@@ -1,0 +1,43 @@
+[package]
+name = "tpt-crypto-benches"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Criterion benchmarks for tpt-crypto, tracking the targets in benches/BUDGET.md"
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+tpt-crypto-core = { path = "../crates/tpt-crypto-core", features = ["std"] }
+tpt-crypto-ct = { path = "../crates/tpt-crypto-ct", features = ["std"] }
+tpt-crypto-hash = { path = "../crates/tpt-crypto-hash", features = ["std"] }
+tpt-crypto-aead = { path = "../crates/tpt-crypto-aead", features = ["std"] }
+tpt-crypto-field = { path = "../crates/tpt-crypto-field", features = ["alloc"] }
+tpt-crypto-curve = { path = "../crates/tpt-crypto-curve", features = ["std"] }
+tpt-crypto-kem = { path = "../crates/tpt-crypto-kem", features = ["std"] }
+tpt-crypto-sig = { path = "../crates/tpt-crypto-sig", features = ["std"] }
+tpt-crypto-zk = { path = "../crates/tpt-crypto-zk", features = ["alloc"] }
+
+[[bench]]
+name = "hash"
+harness = false
+
+[[bench]]
+name = "aead"
+harness = false
+
+[[bench]]
+name = "field"
+harness = false
+
+[[bench]]
+name = "kem"
+harness = false
+
+[[bench]]
+name = "zk"
+harness = false
