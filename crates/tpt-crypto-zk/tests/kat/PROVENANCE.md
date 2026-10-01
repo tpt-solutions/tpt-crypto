@@ -23,12 +23,13 @@ vector set exists to compare against.
 | `[ipa]` | `InnerProductProof::create` for `n = 8` with non-trivial `g`/`h` factors, the statement point `P`, and the serialized proof |
 | `[pedersen]` | The fixed `PedersenGens` generators `G`/`H` and `commit(12345, 99)` |
 | `[transcript]` | A `Transcript` challenge after absorbing a fixed domain and message (Fiat–Shamir determinism) |
+| `[plonk]` | A full PLONK proof for the tutorial circuit `x³ + x = 30` (n = 4), the verifying-key commitments, and the canonical proof encoding — the verifier consumes the frozen proof/keys |
 
 **Checksums** (verified by `cargo xtask kat-check`):
 
 | File | SHA-256 |
 | --- | --- |
-| `VECTORS.txt` | `c405f6e9149a87dde0955e75b7309df31596ba01f2fa52db504609ad5ff16c50` |
+| `VECTORS.txt` | `d2adb7fc7c216d3f9d8cc5a6cae46340098f8ef98ed436da4792d689ef5e888c` |
 
 **Determinism:** every value derives from a fixed seed, so
 `cargo test -p tpt-crypto-zk --test generate_kat` reproduces `VECTORS.txt`
@@ -46,4 +47,6 @@ construction (see above). The KAT suite therefore guards against *regression*
 — unintended changes to the transcript, generators, or encodings — and not
 against a *shared* specification bug. The soundness-relevant properties are
 covered instead by `tests/range_proof.rs` (completeness, binding, bit-flip and
-out-of-range rejection).
+out-of-range rejection) and `tests/plonk.rs` (honest-verify completeness,
+evaluation/commitment tampering rejection, wrong-public-input rejection,
+serialization truncation).

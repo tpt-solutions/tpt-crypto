@@ -5,7 +5,7 @@
 //! is documented in `tests/kat/PROVENANCE.md`.
 
 use tpt_crypto_zk::{
-    bulletproofs::SeedExpander, prove_range, range_proof_from_bytes, range_proof_to_bytes,
+    bulletproofs::SeedExpander, plonk, prove_range, range_proof_from_bytes, range_proof_to_bytes,
     verify_range, Ed25519Scalar, InnerProductProof, PedersenGens, Ristretto, Transcript,
 };
 
@@ -160,17 +160,16 @@ fn ipa_kat() {
     assert_eq!(p.compress().to_vec(), expected_p);
 
     let mut t = Transcript::new(b"IPA-KAT");
-    let proof =
-        InnerProductProof::create(
-            &mut t,
-            &q,
-            &g_factors,
-            &h_factors,
-            g.clone(),
-            h.clone(),
-            a.clone(),
-            b.clone(),
-        );
+    let proof = InnerProductProof::create(
+        &mut t,
+        &q,
+        &g_factors,
+        &h_factors,
+        g.clone(),
+        h.clone(),
+        a.clone(),
+        b.clone(),
+    );
     assert_eq!(proof.to_bytes(), expected_proof);
 
     // The frozen proof round-trips through the parser...
@@ -227,4 +226,44 @@ fn transcript_kat() {
     t.append_message(b"msg", b"hello");
     let ch = t.challenge_scalar(b"ch");
     assert_eq!(ch.to_bytes().to_vec(), expected);
+}
+
+/// Scalar from the KAT file's 32-byte big-endian hex.
+fn kat_scalar(sec: &[(String, String)], key: &str) -> Ed25519Scalar {
+    let mut be = [0u8; 48];
+    be[16..].copy_from_slice(&unhex(field(sec, key)));
+    let o = Ed25519Scalar::from_bytes(&be);
+    assert!(o.is_some().into_bool(), "non-canonical KAT scalar");
+    o.unwrap()
+}
+
+#[test]
+fn plonk_kat() {
+    let section = named("plonk");
+    let n: usize = field(&section, "n").parse().expect("usize n");
+    let k1 = kat_scalar(&section, "k1");
+    let k2 = kat_scalar(&section, "k2");
+    let q_hex: Vec<Vec<u8>> = field(&section, "q").split(' ').map(unhex).collect();
+    assert_eq!(q_hex.len(), 8);
+    let pt = |v: &[u8]| -> Ristretto {
+        let mut b = [0u8; 32];
+        b.copy_from_slice(v);
+        Ristretto::decompress(&b).expect("valid committed key point")
+    };
+    let vk = plonk::VerifyingKey {
+        n,
+        k1,
+        k2,
+        q_l: pt(&q_hex[0]),
+        q_r: pt(&q_hex[1]),
+        q_o: pt(&q_hex[2]),
+        q_m: pt(&q_hex[3]),
+        q_c: pt(&q_hex[4]),
+        sigma_1: pt(&q_hex[5]),
+        sigma_2: pt(&q_hex[6]),
+        sigma_3: pt(&q_hex[7]),
+    };
+    let proof =
+        plonk::Proof::from_bytes(&unhex(field(&section, "proof"))).expect("plonk proof parses");
+    vk.verify(&proof).expect("plonk KAT verifies");
 }

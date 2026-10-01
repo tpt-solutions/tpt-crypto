@@ -613,11 +613,29 @@ variant (feature-gated re-exports instead of steps 3–6).
       which isolates it to the folding algebra). A correct fix needs a fresh
       derivation of the IPA verifier against the textbook construction, not a
       local tweak. `src/ipa.rs` is therefore **unchanged from `f19794e`**.
-- [ ] Minimal PLONK verifier (~500 LoC): transcript, KZG **or** IPA commitment
+- [x] Minimal PLONK verifier (~500 LoC): transcript, KZG **or** IPA commitment
       opening check, permutation + gate checks; accepts any compliant proof
       (no prover — that is `tpt-telos`'s job)
-      — `pub mod plonk;` declared; `src/plonk.rs` exists as a compiling
-      placeholder (`verify_proof` returns `ZkError::Unsupported`).
+      — `src/plonk.rs`: GWC19 round structure over IPA/Pedersen vector
+      commitments (`C = <p,G> + r·H₀`): witness/grand-product/quotient
+      commitments, all-at-ζ evaluations, one scalar quotient-identity check at
+      ζ (made possible by opening `[z]` at BOTH ζ and ωζ — no linearization
+      polynomial, no `[r]`; Schwartz–Zippel soundness at ζ), and two batched
+      IPA openings (ζ-batch over 15 polynomials + `[z]` at ωζ). Gate
+      `q_l·a + q_r·b + q_o·c + q_m·ab + q_c = 0`; public inputs baked into
+      `q_c` (fixed-input vk). Documented field limitation: the Ed25519 scalar
+      field has 2-adicity 2, so power-of-two domains are capped at n = 4
+      (larger circuits need a 2-adic field, e.g. BLS12-381 Fr — future work).
+      Validated by a full reference prover in `tests/plonk_common` (driving
+      `tests/plonk.rs`: honest-verify completeness, per-evaluation and
+      per-commitment tampering rejection, wrong-public-input rejection,
+      serialization round-trip + truncation) and a committed KAT fixture
+      (`[plonk]` section of VECTORS.txt).
+      **Fixed en route:** `InnerProductProof::verify` dropped the R points
+      (it pushed only the −u² weights — needing −u_i^{-2} for R — and `msm`
+      zips to the shorter slice, silently truncating); no test covered the
+      standalone path (the range proof inlines its own mega-check), which is
+      exactly the gap the PLONK work exposed.
 - [x] KATs: bulletproofs reference test vectors (dalek-compatible),
       PLONK proof fixtures from a reference prover
       — bulletproofs/IPA/Pedersen/transcript vectors landed in
@@ -635,8 +653,9 @@ variant (feature-gated re-exports instead of steps 3–6).
       parameter validation, plus 2 `proptest!` cases (random values verify;
       single-bit proof flips are rejected). 6 tests, all pass.
 - [~] `specs/bulletproofs_verify.telos` (`true iff proof valid for commitment`)
-      — contract authored; verification blocked on the bulletproofs module
-      building + KAT vectors.
+      — contract authored; discharged functionally by `tests/range_proof.rs`
+      (accept iff valid, reject on any tamper) + the `[range]` KATs. PLONK's
+      analogue is `tests/plonk.rs` + the `[plonk]` KAT fixture.
 
 ### crates/tpt-crypto-mpc  (`no_std` + `alloc`)
 > Crate scaffolded and committed (`4e6c0d9`). Deps: `-core`, `-ct`, `-field`,

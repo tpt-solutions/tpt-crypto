@@ -8,6 +8,9 @@ use tpt_crypto_zk::{
     InnerProductProof, PedersenGens, Ristretto, Transcript,
 };
 
+#[path = "plonk_common/mod.rs"]
+pub mod plonk_common;
+
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
@@ -114,13 +117,43 @@ fn fixed_vectors() -> String {
     )
 }
 
+fn plonk_vector() -> String {
+    let circ = plonk_common::tutorial_circuit(3);
+    let (vk, proof) = plonk_common::prove(&circ, 42);
+    let pk_bytes = [
+        vk.q_l.compress(),
+        vk.q_r.compress(),
+        vk.q_o.compress(),
+        vk.q_m.compress(),
+        vk.q_c.compress(),
+        vk.sigma_1.compress(),
+        vk.sigma_2.compress(),
+        vk.sigma_3.compress(),
+    ];
+    // The proof must verify at generation time.
+    vk.verify(&proof).expect("generated plonk proof verifies");
+    format!(
+        "[plonk]\nn = {}\nk1 = {}\nk2 = {}\nq = {}\nproof = {}\n\n",
+        vk.n,
+        hex(&vk.k1.to_bytes()[16..]),
+        hex(&vk.k2.to_bytes()[16..]),
+        pk_bytes
+            .iter()
+            .map(|p| hex(p))
+            .collect::<Vec<_>>()
+            .join(" "),
+        hex(&proof.to_bytes()),
+    )
+}
+
 #[test]
 fn generate_kat() {
     let text = format!(
-        "# tpt-crypto-zk known-answer vectors (see PROVENANCE.md)\n\n{}{}{}",
+        "# tpt-crypto-zk known-answer vectors (see PROVENANCE.md)\n\n{}{}{}{}",
         range_vectors(),
         ipa_vector(),
         fixed_vectors(),
+        plonk_vector(),
     );
     std::fs::create_dir_all("tests/kat").unwrap();
     let mut f = std::fs::File::create("tests/kat/VECTORS.txt").unwrap();

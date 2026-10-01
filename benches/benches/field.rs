@@ -10,12 +10,8 @@ fn field(c: &mut Criterion) {
     let a = P256Base::from_u64(0x1234_5678_9abc_def0);
     let b = P256Base::from_u64(0x0fed_cba9_8765_4321);
     g.throughput(Throughput::Elements(1));
-    g.bench_function("p256/mul", |x| {
-        x.iter(|| core::hint::black_box(a.mul(&b)))
-    });
-    g.bench_function("p256/add", |x| {
-        x.iter(|| core::hint::black_box(a.add(&b)))
-    });
+    g.bench_function("p256/mul", |x| x.iter(|| core::hint::black_box(a.mul(&b))));
+    g.bench_function("p256/add", |x| x.iter(|| core::hint::black_box(a.add(&b))));
 
     let c = Bls12381Fp::from_u64(0x1234_5678_9abc_def0);
     let d = Bls12381Fp::from_u64(0x0fed_cba9_8765_4321);

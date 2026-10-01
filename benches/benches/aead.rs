@@ -2,9 +2,7 @@
 //! `benches/BUDGET.md`. Each construction encrypts a 1 KiB buffer.
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use tpt_crypto_aead::{
-    Aead, Aes128Gcm, Aes128GcmSiv, Aes256Gcm, ChaCha20Poly1305, Nonce,
-};
+use tpt_crypto_aead::{Aead, Aes128Gcm, Aes128GcmSiv, Aes256Gcm, ChaCha20Poly1305, Nonce};
 
 const KB: usize = 1024;
 const NONCE_12: [u8; 12] = [0x11; 12];

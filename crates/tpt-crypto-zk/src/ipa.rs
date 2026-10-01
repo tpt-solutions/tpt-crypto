@@ -295,7 +295,7 @@ impl InnerProductProof {
         g: &[Ristretto],
         h: &[Ristretto],
     ) -> Result<(), ZkError> {
-        let (u_sq, _u_inv_sq, s) = self.verification_scalars(n, transcript)?;
+        let (u_sq, u_inv_sq, s) = self.verification_scalars(n, transcript)?;
 
         let mut scalars = alloc::vec::Vec::new();
         let mut points = alloc::vec::Vec::new();
@@ -316,14 +316,18 @@ impl InnerProductProof {
         for p_ in h.iter() {
             points.push(*p_);
         }
-        for ui in &u_sq {
+        // The L points carry weight −u_i², the R points −u_i^{-2}. Pair each
+        // scalar with its point as it is pushed: `msm` zips to the shorter
+        // slice, so an unpaired tail would be silently dropped.
+        for ((ui, li), (uiv, ri)) in u_sq
+            .iter()
+            .zip(self.l_vec.iter())
+            .zip(u_inv_sq.iter().zip(self.r_vec.iter()))
+        {
             scalars.push(ui.neg());
-        }
-        for l in &self.l_vec {
-            points.push(Ristretto::decompress(l).ok_or(ZkError::Malformed)?);
-        }
-        for r in &self.r_vec {
-            points.push(Ristretto::decompress(r).ok_or(ZkError::Malformed)?);
+            points.push(Ristretto::decompress(li).ok_or(ZkError::Malformed)?);
+            scalars.push(uiv.neg());
+            points.push(Ristretto::decompress(ri).ok_or(ZkError::Malformed)?);
         }
 
         let expect_p = msm(&scalars, &points);

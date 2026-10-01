@@ -25,9 +25,7 @@ fn zk(c: &mut Criterion) {
     let mut rng = SeedExpander::new(b"bench");
     let (proof, commitments) = prove_range(&[value], &[blind], 32, &mut rng);
     g.bench_function("bulletproofs/verify/1", |b| {
-        b.iter(|| {
-            core::hint::black_box(verify_range(&commitments, &proof, 32).is_ok())
-        })
+        b.iter(|| core::hint::black_box(verify_range(&commitments, &proof, 32).is_ok()))
     });
 
     let gens = PedersenGens::default();

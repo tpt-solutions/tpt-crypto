@@ -9,8 +9,9 @@
 //! * [`InnerProductProof`] — the inner-product argument, the core building block.
 //! * [`prove_range`] / [`verify_range`] — Bulletproofs range proofs (single and
 //!   aggregated, ranges up to `2^64`).
-//! * [`plonk`] — a minimal PLONK verifier (~500 LoC) using inner-product
-//!   commitment opening.
+//! * [`plonk`] — a minimal PLONK verifier (GWC19 round structure) over IPA
+//!   polynomial commitments, with gate + permutation checks and batched
+//!   openings (verifier only; the test suite carries a reference prover).
 //!
 //! All secret-dependent operations are constant-time. The group used is the
 //! prime-order subgroup of Ed25519 (order `L`), so discrete logarithms are
