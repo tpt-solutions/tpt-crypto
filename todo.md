@@ -476,12 +476,21 @@ variant (feature-gated re-exports instead of steps 3–6).
       counts ≤ ω, strictly-increasing indices, zero tail) and `verify` returns
       `InvalidEncoding` instead of panicking on a mutated signature;
       (d) `μ` now includes the `|Ctx|` length byte (FIPS 204 §5.2).
-- [~] SLH-DSA (FIPS 205): WOTS+, XMSS, FORS, hypertree; SHA2 + SHAKE param sets;
-      `slh-dsa` feature (large)
-      — `src/slh_dsa.rs` scaffolded (now an unconditional `pub mod`, no longer
-      feature-gated): `SlhDsaParam` enum + stub key/sig types, operations return
-      `Error::Unsupported`. No WOTS+/XMSS/FORS/hypertree yet.
-      `tests/slh_dsa_kat.rs` is a placeholder.
+- [x] SLH-DSA (FIPS 205): WOTS+, XMSS, FORS, hypertree; SHA2 + SHAKE param sets;
+      `slh-dsa` feature (alloc-gated)
+      — `src/slh_dsa.rs`: all 12 parameter sets (FIPS 205 Table 2), the
+      tweakable hashes (SHAKE-256 streams; SHA-2 with the `ADRS_C` compressed
+      address, MGF1 masking for `H_msg`, HMAC for `PRF_msg`), WOTS+ chains
+      with checksum, XMSS trees + auth paths, FORS, and the `d`-layer
+      hypertree; deterministic (default) + hedged signing; `M' = dom ‖
+      |ctx| ‖ ctx ‖ M` context formatting. Validated against NIST ACVP
+      keyGen/sigGen/sigVer vectors (96 records, all 12 sets) — see
+      `tests/kat/slh_dsa_acvp.txt` + `PROVENANCE.md`. **Bugs the vectors
+      exposed and fixed:** the ADRS keypair field was lost on type changes
+      (WOTS chains after leaf 0 and all FORS nodes hashed with keypair = 0 —
+      invisible to round-trips, fatal to cross-implementation verify), the
+      hypertree offset used `1 + fors_len` bytes instead of `n + fors_len`,
+      and the 256f tree-index mask overflowed `1u64 << 64`.
 - [x] Ed25519 sign/verify (on `-curve`), batch verify
       — `src/ed25519.rs`: `SigningKey` (seed in `SecretBox`) / `VerifyingKey` /
       `Signature` newtypes over `-curve`'s RFC 8032 core, with strict §5.1.7
@@ -542,7 +551,7 @@ variant (feature-gated re-exports instead of steps 3–6).
       `ExpandA` output (with the matching `mat_vec_mul` Montgomery bookkeeping
       fix); (c) the parameter table's `ω` was 120/196 for ML-DSA-65/87 instead
       of 55/75 — pack/unpack agreed with each other, so round-trips passed
-      while every real signature verify failed. SLH-DSA ACVP + NIST CAVP
+      while every real signature verify failed. NIST CAVP
       `.rsp` / Wycheproof JSON sets still to add.
 - [~] proptest: `verify(pk, m, sign(sk, m))` ok; wrong key/msg/ctx → `Verification`;
       `verify_aggregate` iff all inputs valid
