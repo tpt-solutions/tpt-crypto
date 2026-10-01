@@ -170,7 +170,7 @@ ml_dsa_params!(
     (Q - 1) / 32,
     49,
     196,
-    120,
+    55,
     192,
     [Poly; 30],
     [Poly; 5],
@@ -185,7 +185,7 @@ ml_dsa_params!(
     (Q - 1) / 32,
     60,
     120,
-    196,
+    75,
     256,
     [Poly; 56],
     [Poly; 7],
@@ -306,8 +306,14 @@ fn mat_vec_mul(a: &[Poly], v: &[Poly], out: &mut [Poly]) {
     for i in 0..out.len() {
         let mut acc = Poly::ZERO;
         for j in 0..l {
+            // FIPS 204 NTT-domain product: coefficientwise. `a` holds the raw
+            // ExpandA coefficients, `v` the Montgomery-NTT form of a canonical
+            // vector (`ntt` = to_mont ∘ plain-ζ butterflies).
             acc.pointwise_acc(&a[i * l + j], &v[j]);
         }
+        // The accumulated product lacks the Montgomery factor `inv_ntt`
+        // strips; lift it so the inverse transform lands on coefficients.
+        acc.to_mont_vec();
         acc.inv_ntt();
         acc.canonicalize();
         out[i] = acc;
@@ -425,12 +431,17 @@ where
     P::VecL: PolyArray,
     P::VecK: PolyArray,
 {
+    // (ρ, ρ′, K) ← H(ξ ‖ ⟨k⟩ ‖ ⟨ℓ⟩) = SHAKE256(ξ ‖ k ‖ ℓ, 128), split
+    // 32/64/32 (FIPS 204 Algorithm 6 — the parameter-set bytes bind the seed
+    // to this parameter set).
+    let mut expanded = [0u8; 128];
+    shake256_concat(&[xi, &[P::K as u8, P::L as u8]], &mut expanded);
     let mut rho = [0u8; 32];
-    shake256(xi, &mut rho);
+    rho.copy_from_slice(&expanded[..32]);
     let mut rho_prime = [0u8; 64];
-    shake256_concat(&[xi, &[1u8]], &mut rho_prime);
+    rho_prime.copy_from_slice(&expanded[32..96]);
     let mut k_seed = [0u8; 32];
-    shake256_concat(&[xi, &[2u8]], &mut k_seed);
+    k_seed.copy_from_slice(&expanded[96..128]);
 
     let a = crate::ml_dsa::sample::expand_a::<P>(&rho);
     let (s1, s2) = crate::ml_dsa::sample::expand_s::<P>(&rho_prime);
@@ -1010,6 +1021,7 @@ where
     }
 
     // Build the packed w₁ and recompute c̃.
+
     let mut w1_packed = vec![0u8; P::K * polyw1_len(P::GAMMA2)];
     {
         let w1_slice = w1_rec.as_poly_slice();

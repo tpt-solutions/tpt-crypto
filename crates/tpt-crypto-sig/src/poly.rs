@@ -22,6 +22,8 @@ const D: i32 = 13;
 const QINV: i32 = 58_728_449;
 /// `256⁻¹ mod q`, the inverse-NTT normalization factor (`invntt` divides by 256).
 const INV256: i32 = 8_347_681;
+/// `R² mod q` with `R = 2³²` — lifts a plain value into Montgomery form.
+const R2: i64 = 4_193_792 * 4_193_792 % Q as i64;
 
 /// NTT twiddle factors `ζ^{brv(i)}` in Montgomery form (reference `ZETAS`).
 pub const ZETAS: [i32; N] = [
@@ -208,6 +210,52 @@ impl Poly {
     pub fn pointwise(&mut self, a: &Poly, b: &Poly) {
         for i in 0..N {
             self.coeffs[i] = Self::montgomery_reduce((a.coeffs[i] as i64) * (b.coeffs[i] as i64));
+        }
+    }
+
+    /// FIPS 204 NTT-domain multiplication between an `ExpandA`-sampled `a`
+    /// (raw XOF coefficients) and a Montgomery-NTT `b`, accumulated into
+    /// `self` (reference `poly_basemul_montgomery` over 4-coefficient blocks
+    /// with the Montgomery-scaled `ζ` twiddles). The result carries **no**
+    /// Montgomery factor; callers lift with `to_mont` before `inv_ntt`.
+    pub fn basemul_acc(&mut self, a: &Poly, b: &Poly) {
+        let (a, b) = (&a.coeffs, &b.coeffs);
+        let r = &mut self.coeffs;
+        for i in 0..N / 4 {
+            let zeta = ZETAS[64 + i];
+            // First pair: coefficients [4i, 4i+1].
+            let t = Self::montgomery_reduce(
+                Self::montgomery_reduce(a[4 * i + 1] as i64 * b[4 * i + 1] as i64) as i64
+                    * zeta as i64,
+            );
+            r[4 * i] = Self::reduce_mod(r[4 * i] as i64 + t as i64)
+                .wrapping_add(Self::montgomery_reduce(a[4 * i] as i64 * b[4 * i] as i64));
+            r[4 * i + 1] = Self::reduce_mod(
+                r[4 * i + 1] as i64
+                    + Self::montgomery_reduce(a[4 * i] as i64 * b[4 * i + 1] as i64) as i64
+                    + Self::montgomery_reduce(a[4 * i + 1] as i64 * b[4 * i] as i64) as i64,
+            );
+            // Second pair: coefficients [4i+2, 4i+3] with −ζ.
+            let z2 = -zeta;
+            let t = Self::montgomery_reduce(
+                Self::montgomery_reduce(a[4 * i + 3] as i64 * b[4 * i + 3] as i64) as i64
+                    * z2 as i64,
+            );
+            r[4 * i + 2] = Self::reduce_mod(r[4 * i + 2] as i64 + t as i64).wrapping_add(
+                Self::montgomery_reduce(a[4 * i + 2] as i64 * b[4 * i + 2] as i64),
+            );
+            r[4 * i + 3] = Self::reduce_mod(
+                r[4 * i + 3] as i64
+                    + Self::montgomery_reduce(a[4 * i + 2] as i64 * b[4 * i + 3] as i64) as i64
+                    + Self::montgomery_reduce(a[4 * i + 3] as i64 * b[4 * i + 2] as i64) as i64,
+            );
+        }
+    }
+
+    /// Lift every coefficient into Montgomery form (`x ↦ x·R mod q`).
+    pub fn to_mont_vec(&mut self) {
+        for c in self.coeffs.iter_mut() {
+            *c = Self::montgomery_reduce(*c as i64 * R2);
         }
     }
 

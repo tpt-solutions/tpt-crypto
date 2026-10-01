@@ -176,8 +176,11 @@ pub fn expand_a<P: MlDsaParams>(rho: &[u8; 32]) -> P::Mat {
     let m = mat.as_poly_slice_mut();
     for i in 0..P::K {
         for j in 0..P::L {
-            let mut p = poly_uniform(rho, ((i << 8) + j) as u16);
-            p.ntt();
+            // ExpandA (FIPS 204 Algorithm 32): the XOF output *is* the
+            // NTT-domain polynomial — do NOT transform it further. The
+            // coefficientwise product with MONT·NTT(ŝ₁) leaves exactly the
+            // Montgomery factor that `mat_vec_mul` lifts before `inv_ntt`.
+            let p = poly_uniform(rho, ((i << 8) + j) as u16);
             m[i * P::L + j] = p;
         }
     }

@@ -532,11 +532,18 @@ variant (feature-gated re-exports instead of steps 3–6).
       — RFC 8032 §7.1 test-1 in `tests/ed25519.rs`; RFC 6979 A.2.5/A.2.6
       deterministic ECDSA KATs in `tests/ecdsa.rs`. BLS **done**:
       `tests/bls_kat.rs` runs the Ethereum `bls12-381-tests` v0.1.2 corpus
-      (CC0-1.0, POP ciphersuite) — sign/verify/aggregate/aggregate_verify/
-      fast_aggregate_verify/deserialization_G1+G2 + the RFC 9380 hash_to_G2
-      vectors (QUUX DST) — all green; provenance + sha256s in
-      `tests/kat/PROVENANCE.md`. `tests/ml_dsa_kat.rs` still a placeholder,
-      no ACVP vectors; NIST CAVP `.rsp` / Wycheproof JSON sets still to add.
+      (CC0-1.0, POP ciphersuite) — all green. ML-DSA ACVP **done**:
+      `tests/ml_dsa_kat.rs` + `tests/kat/ml_dsa_acvp.txt` (distilled NIST
+      ACVP-Server keyGen/sigVer sets; 30 kg + 45 sv records, all three
+      parameter sets; provenance cross-checked against `dilithium-py`).
+      **Three conformance bugs the ACVP vectors exposed and fixed:**
+      (a) `keygen_from_seed` used `SHAKE256(ξ‖1)/SHAKE256(ξ‖2)` instead of
+      `H(ξ ‖ ⟨k⟩ ‖ ⟨ℓ⟩)`; (b) `expand_a` NTT'd the already-NTT-domain
+      `ExpandA` output (with the matching `mat_vec_mul` Montgomery bookkeeping
+      fix); (c) the parameter table's `ω` was 120/196 for ML-DSA-65/87 instead
+      of 55/75 — pack/unpack agreed with each other, so round-trips passed
+      while every real signature verify failed. SLH-DSA ACVP + NIST CAVP
+      `.rsp` / Wycheproof JSON sets still to add.
 - [~] proptest: `verify(pk, m, sign(sk, m))` ok; wrong key/msg/ctx → `Verification`;
       `verify_aggregate` iff all inputs valid
       — `tests/ml_dsa_props.rs` now real (rand-based, all 3 param sets): honest

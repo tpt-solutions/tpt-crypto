@@ -1,125 +1,37 @@
-# BLS12-381 signature KAT vectors — PROVENANCE
+# ML-DSA KAT vectors — PROVENANCE
 
-## `bls-eth2/` — Ethereum `bls12-381-tests` release v0.1.2
+## `ml_dsa_acvp.txt` — NIST ACVP (FIPS 204), VERIFIED
 
-- Source: <https://github.com/ethereum/bls12-381-tests> release
-  [`v0.1.2`](https://github.com/ethereum/bls12-381-tests/releases/tag/v0.1.2),
-  asset `bls_tests_json.tar.gz`.
-- Upstream tarball sha256: `0dc1dfabfa7b3e0f8e8029f9cb2bb8733597526fa085b18f160d2c4eb0b448bc`.
-- License: CC0-1.0 (the repo's `LICENSE`).
-- Ciphersuite: `BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_`
-  (draft-irtf-cfrg-bls-signature-04, minimal-pubkey-size, proof-of-possession
-  variant) — signatures in G2, public keys in G1, both in the standard
-  compressed serialization.
-- Covered by `crates/tpt-crypto-sig/tests/bls_kat.rs`: `sign`, `verify`,
-  `aggregate`, `aggregate_verify`, `fast_aggregate_verify`,
-  `deserialization_G1`, `deserialization_G2` (POP DST), and `hash_to_G2`.
-  NOTE: the four `hash_to_G2` vectors are the RFC 9380 §8.8.2 suite vectors —
-  the upstream generator hashes them with the RFC test tag
-  `QUUX-V01-CS02-with-BLS12381G2_XMD:SHA-256_SSWU_RO_`, **not** the POP
-  ciphersuite DST, and lists Fp2 coefficients as (c0, c1). The `batch_verify`
-  vectors are committed for reference; batch verification is not implemented
-  yet.
+Distilled from the official ACVP validation sets:
+
+- Source: <https://github.com/usnistgov/ACVP-Server> `gen-val/json-files/`
+  (`ML-DSA-keyGen-FIPS204` prompt+expectedResults, `ML-DSA-sigVer-FIPS204`
+  prompt+expectedResults).
+- License: NIST material, public domain.
+- Distillation: the first 10 keyGen records per parameter set (`seed`/`pk`/`sk`)
+  and every `external`-interface `pure` (non-prehash) sigVer record
+  (pk/message/context/signature/expected verdict) — 30 kg + 45 sv records.
+- Consumed by `tests/ml_dsa_kat.rs`: `keygen_from_seed` must reproduce the
+  ACVP key bytes for all three parameter sets, and `verify` must accept
+  exactly the ACVP-valid signatures.
+- Cross-checked against the `dilithium-py` 1.4.0 reference implementation
+  (its `key_derive` reproduces the ACVP key/sk bytes exactly).
+
+**Implementation bugs these vectors exposed and fixed (2026-10-02):**
+
+1. `keygen_from_seed` expanded the seed as `SHAKE256(ξ ‖ 1)` / `SHAKE256(ξ ‖ 2)`
+   instead of FIPS 204's `(ρ, ρ′, K) ← H(ξ ‖ ⟨k⟩ ‖ ⟨ℓ⟩)`.
+2. `expand_a` applied an extra NTT to the `ExpandA` XOF output, which is
+   *already* the NTT-domain polynomial (FIPS 204 Algorithm 32). `mat_vec_mul`
+   was adjusted to the matching Montgomery bookkeeping (coefficientwise
+   product, one `to_mont` lift before `inv_ntt`).
+3. The parameter table's `ω` (max hint count) was wrong for ML-DSA-65
+   (120 → 55) and ML-DSA-87 (196 → 75); both pack_hint/unpack_hint agreed with
+   each other, so round-trip tests passed while every cross-implementation
+   signature verify failed.
 
 Checksums (sha256, relative to `crates/tpt-crypto-sig/tests/kat/`):
 
 | File | Sha256 |
 | --- | --- |
-| `bls-eth2/aggregate/aggregate_0x0000000000000000000000000000000000000000000000000000000000000000.json` | `0fd77da79efe9888a1b4fb50956a67f222805f128e629b5ac2732e2d1f72cf13` |
-| `bls-eth2/aggregate/aggregate_0x5656565656565656565656565656565656565656565656565656565656565656.json` | `c34b74708fcfee2c5b9ad36b70e7023ac05d1a8b029535cc6c33a7dacd954ec5` |
-| `bls-eth2/aggregate/aggregate_0xabababababababababababababababababababababababababababababababab.json` | `afde7dec686cb4923d0450cfb9921275b8d78552b4dcb02d5166b091ea5c4b19` |
-| `bls-eth2/aggregate/aggregate_infinity_signature.json` | `8685d4aed7901c676274d0da8836699bf75e9f3d619016ccf4ff469a421a1151` |
-| `bls-eth2/aggregate/aggregate_na_signatures.json` | `5636eb45b3d19b6b239ed956fd264806be1b66e517cc46b3297a9ca66f80a6af` |
-| `bls-eth2/aggregate/aggregate_single_signature.json` | `f564859b440e57929105f6d743650099d0e8cab67e0f3419585134b1fcfeb7ba` |
-| `bls-eth2/aggregate_verify/aggregate_verify_infinity_pubkey.json` | `60841a3cb4e7d42ceb211047b312d9c8393c8bfb8cb7d87a69593884cbfd7605` |
-| `bls-eth2/aggregate_verify/aggregate_verify_na_pubkeys_and_infinity_signature.json` | `27daea5586b2b76e54c542cd8fedec2f90536485fb7f891a781fdf4bda415c22` |
-| `bls-eth2/aggregate_verify/aggregate_verify_na_pubkeys_and_na_signature.json` | `e7f77d7c4e4108eac0f57a51f406cbfb7e266c7257328d1e120a7bed3793fa51` |
-| `bls-eth2/aggregate_verify/aggregate_verify_tampered_signature.json` | `d78773f71230f3e0098be068c4563f0f772c90c347a96414c8a75bf5cdedca82` |
-| `bls-eth2/aggregate_verify/aggregate_verify_valid.json` | `71f50eb165aea843e607c070274e5d27734181c1c7bcb80c2baa93d273afd8dc` |
-| `bls-eth2/batch_verify/batch_verify_invalid_forged_signature_set.json` | `07acd4eb0c7779eace6e594bf38b7dc8ab89bb026226065ac23bc709bb30c4f0` |
-| `bls-eth2/batch_verify/batch_verify_invalid_infinity_signature_set.json` | `9bb351f65b4cf38ef8422d2820e0fabc73779d003036ac450b907b265d53bfc4` |
-| `bls-eth2/batch_verify/batch_verify_valid_multiple_signature_set.json` | `b442e85adefa054c3026110a0222b519da8b43f52e1886a99dd51345f5e5a290` |
-| `bls-eth2/batch_verify/batch_verify_valid_simple_signature_set.json` | `afb12805cc81f5969b0b6ac7aeebca13e35408032c8089590964ea90ec180cda` |
-| `bls-eth2/deserialization_G1/deserialization_fails_infinity_with_false_b_flag.json` | `4f370805b31cef0fd2e32b7957f9ca45b04e6f7b3a848e66e5c141108529f737` |
-| `bls-eth2/deserialization_G1/deserialization_fails_infinity_with_true_b_flag.json` | `52e16d37f8712463fe33e1fdab7348b75bf9f2b8226dd7a3efb23d6ee8317e95` |
-| `bls-eth2/deserialization_G1/deserialization_fails_not_in_G1.json` | `342a52c85f94c6de967242502bec60a1bad20e8617453db78e34164f66857607` |
-| `bls-eth2/deserialization_G1/deserialization_fails_not_in_curve.json` | `38e05a91c2279d1421cae8f7c85b60506c6a0ccafde2c66a4a5c991451cef1d0` |
-| `bls-eth2/deserialization_G1/deserialization_fails_too_few_bytes.json` | `0637bc43aa6796c344bc408c8535f55c08113508403de51212db8797ff00401c` |
-| `bls-eth2/deserialization_G1/deserialization_fails_too_many_bytes.json` | `45173bd2c81ce35e3d6a4f19566b4bf264d6fdbd80f5152730c3d2005749df41` |
-| `bls-eth2/deserialization_G1/deserialization_fails_with_b_flag_and_a_flag_true.json` | `6151af6cfd8e9d3506f2b5782b97cd88cdbb07cbd7f46bedd25db17ef716adaa` |
-| `bls-eth2/deserialization_G1/deserialization_fails_with_b_flag_and_x_nonzero.json` | `80ad78f08e430e5087bd3e8d66779d7400ac1eb407ef04eac5b39564153000b1` |
-| `bls-eth2/deserialization_G1/deserialization_fails_with_wrong_c_flag.json` | `2e05e442bd845a80f25fe77d9ee96130d24b8df7f7fd764b7142c0d43ba7343f` |
-| `bls-eth2/deserialization_G1/deserialization_fails_x_equal_to_modulus.json` | `becb6cd9a66708f791f7e2a8c0562819c9b6e9b2e2519d5cc50251e23248fdd3` |
-| `bls-eth2/deserialization_G1/deserialization_fails_x_greater_than_modulus.json` | `afc23807023f97c7742b73cd81a3bb529a3c92a385801d2885c1de8525e167ce` |
-| `bls-eth2/deserialization_G1/deserialization_succeeds_correct_point.json` | `bb488460b420125c9401b7aef19b5d241ce16b833acea790b74ea3bf4a1c6c80` |
-| `bls-eth2/deserialization_G1/deserialization_succeeds_infinity_with_true_b_flag.json` | `e1588f732eab672ef6bcf3837dc88e34b49693fae20db33801539707536492b9` |
-| `bls-eth2/deserialization_G2/deserialization_fails_infinity_with_false_b_flag.json` | `4690738cccab16ecbc7beef991dc645c959828c8243c30725b8819290fe354f3` |
-| `bls-eth2/deserialization_G2/deserialization_fails_infinity_with_true_b_flag.json` | `13a96d2d79faa239a84c9bf7dfbbae7258082b68d3356626154161a74f13b317` |
-| `bls-eth2/deserialization_G2/deserialization_fails_not_in_G2.json` | `4e749a64abae5822df40cc084d1ed6f11678a9f60eae3a7b4846939322795856` |
-| `bls-eth2/deserialization_G2/deserialization_fails_not_in_curve.json` | `30ac496e271fb06674271ccd21730100af14e9a8831564f62301590b092e124d` |
-| `bls-eth2/deserialization_G2/deserialization_fails_too_few_bytes.json` | `5ca18108bb5ffd65524de29dd4de2e7c81a53dce7499b42f308c2e97cdecca70` |
-| `bls-eth2/deserialization_G2/deserialization_fails_too_many_bytes.json` | `3be16fd39054f32c8682505f36ece64543ca33a717a5e3b00b6e74c31e6e3838` |
-| `bls-eth2/deserialization_G2/deserialization_fails_with_b_flag_and_a_flag_true.json` | `8d9efb1e76992543bbd6ae110f12abbf571652a6d3df8dae6bcf5fcc6f6d930e` |
-| `bls-eth2/deserialization_G2/deserialization_fails_with_b_flag_and_x_nonzero.json` | `0540683766c0c35f2acb9ad66c90a89cf25e0b069692682858ad5ece23528301` |
-| `bls-eth2/deserialization_G2/deserialization_fails_with_wrong_c_flag.json` | `ff03c02a7311bf084117d9d332c5891d2791482a5a194da27227083cd5f8ce71` |
-| `bls-eth2/deserialization_G2/deserialization_fails_xim_equal_to_modulus.json` | `8d19d1bd33acbad0d8d8aebd12cffbc840a90c1b8b7198388c98ef188b0a85d1` |
-| `bls-eth2/deserialization_G2/deserialization_fails_xim_greater_than_modulus.json` | `cce081c1c63e633798d8344ad60dad9b812189f4af69e7ccfef8513fd1d162f3` |
-| `bls-eth2/deserialization_G2/deserialization_fails_xre_equal_to_modulus.json` | `b68750d7c5e83ab18c4a86ebce92132a63e78ad826f62f058d615bd5f60a4259` |
-| `bls-eth2/deserialization_G2/deserialization_fails_xre_greater_than_modulus.json` | `0f8ceeea9f5acd75f9e154d1ef892061ee5a69934a9df54dc917de141795b3a3` |
-| `bls-eth2/deserialization_G2/deserialization_succeeds_correct_point.json` | `76f50a2294a8d5fc5d253d3b979a83d147d23dc58ab200e8c2eb0e389c4c5217` |
-| `bls-eth2/deserialization_G2/deserialization_succeeds_infinity_with_true_b_flag.json` | `41ba1b725e60cac96939062013db2bc234941bb37e6497d646788ef1f3f33968` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_extra_pubkey_4f079f946446fabf.json` | `4ca7a65e9654102feb3a98c0304e467848ff24496930eec7fd6b698114116df3` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_extra_pubkey_5a38e6b4017fe4dd.json` | `79b09e4c6c0b671debde16953f005e57502c657ec7555b0681f1fed27c51d158` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_extra_pubkey_a698ea45b109f303.json` | `32a55b57f6a4fa0f95bd9bbb1ac22bc090c3af6bbdcb3568911c353e676d5335` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_infinity_pubkey.json` | `69ae53e2df06ac0bd8b14d3e7f74f6e1d07ffe528b8ab4720ace3c6eeed8ed87` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_na_pubkeys_and_infinity_signature.json` | `82eafeb45b11d2b28412e235bf787964974b8b4261b0d7d4811e8ee49721287e` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_na_pubkeys_and_na_signature.json` | `a3cb927237027f62db194b4b43c31a16aa760954cd79cdbedc65f9938fd35442` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_tampered_signature_3d7576f3c0e3570a.json` | `d8b37be4dde164f1bb035f8559c90a9472148f7f45a550c312626770bd8d8da7` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_tampered_signature_5e745ad0c6199a6c.json` | `17c8676d7b74613eebf85f9b67bfd8a8a6e231bdc2f79e61e54e2078a8e3b561` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_tampered_signature_652ce62f09290811.json` | `126e5c36383407724e5060198137e79971dd563c847c6ce23baf37eb0bf9f1f7` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_valid_3d7576f3c0e3570a.json` | `71b158e0d263798db02b5900b6f5ac1cb9e3556880bdb1269c35def19457de34` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_valid_5e745ad0c6199a6c.json` | `2fb075aaee82ed1a72315c0952039d155bb33c688035d2ab411c2cd3944c75b2` |
-| `bls-eth2/fast_aggregate_verify/fast_aggregate_verify_valid_652ce62f09290811.json` | `b94f9b580f879b61f7a4668a57ecaa9283f7181a56555cac86c98d372cb6946a` |
-| `bls-eth2/hash_to_G2/hash_to_G2__2782afaa8406d038.json` | `aa6116d7055524abeeacae07d6e6e16d0810b84a864a50988f7da2074128923f` |
-| `bls-eth2/hash_to_G2/hash_to_G2__7590bd067999bbfb.json` | `734585cace2b005d7d71266a78b722cf18e22db583d2b1fcea28758562bddac5` |
-| `bls-eth2/hash_to_G2/hash_to_G2__a54942c8e365f378.json` | `7cbfbbdfa174e80ef6cfb8bf96e2432e4fb9f318ae25722fe77532de0e0348ef` |
-| `bls-eth2/hash_to_G2/hash_to_G2__c938b486cf69e8f7.json` | `5a7240b26df5effa77820cc46dbb1b522127c847c10a2384463e875493c7f12c` |
-| `bls-eth2/sign/sign_case_11b8c7cad5238946.json` | `767c9bb0c9222a656abfa3ec9cfc19e71dfd5b8456361f33608a739b6a1b97b0` |
-| `bls-eth2/sign/sign_case_142f678a8d05fcd1.json` | `c08768db3ce2207c6dab56965d0705d09ea7cf8aa8eae66a460f6f4ceeba53c3` |
-| `bls-eth2/sign/sign_case_37286e1a6d1f6eb3.json` | `dad1c8c2e541103508f9f8a84c513deb1da45997f2c55ba110def2b4a5913326` |
-| `bls-eth2/sign/sign_case_7055381f640f2c1d.json` | `ed1177493322c9a7db9f342f822b45a21cc7d0756409d6c56e57dfe69281dcbf` |
-| `bls-eth2/sign/sign_case_84d45c9c7cca6b92.json` | `fffd82df05a3cc8e25b0c95935821e93cffa3fee3274b9d04113e590fd36665b` |
-| `bls-eth2/sign/sign_case_8cd3d4d0d9a5b265.json` | `87e87efd08ce6f1fa754b5430a883e2caed34ce3b78194b94d6f2ae85402f9bd` |
-| `bls-eth2/sign/sign_case_c82df61aa3ee60fb.json` | `89dd0dde565734efda623e0747dc7dfb16fc89cde8470b81384a012951500091` |
-| `bls-eth2/sign/sign_case_d0e28d7e76eb6e9c.json` | `33000e5e07d884b92c624a94d8e2ad0761918bd807637183a2415daefbcd5712` |
-| `bls-eth2/sign/sign_case_f2ae1097e7d0e18b.json` | `da32d3aefb62896a3c461a0e695ab83394332e14c48916377b0628aa786dde02` |
-| `bls-eth2/sign/sign_case_zero_privkey.json` | `36caa8c6da6266f5f137533076a7e0e87cd33aa1a397395a0ffb99cfb02c52d2` |
-| `bls-eth2/verify/verify_infinity_pubkey_and_infinity_signature.json` | `076e7e02f2f0091cb2d63ea9ffd79d6c13c431fed976dec286f9bf5abff6dbdb` |
-| `bls-eth2/verify/verify_tampered_signature_case_195246ee3bd3b6ec.json` | `72da8c11d325746a966b51c7a727d1934cf6c6d0aad2f33db768d0575f99c3e4` |
-| `bls-eth2/verify/verify_tampered_signature_case_2ea479adf8c40300.json` | `6a14b63a1e9ef8446198d6f5598d74594242a1b11dcebdc463cfbf7a8199b299` |
-| `bls-eth2/verify/verify_tampered_signature_case_2f09d443ab8a3ac2.json` | `ed29bdbbb3fd8f2eda777157c2f7751a6e68599f724493d5cf6b76188de08d3a` |
-| `bls-eth2/verify/verify_tampered_signature_case_3208262581c8fc09.json` | `aa152b238d3ab1b36c53b933ba39cb0c4778f6aacd494558820cb6404e31b7d0` |
-| `bls-eth2/verify/verify_tampered_signature_case_6b3b17f6962a490c.json` | `978d9016c755a2612742e18ba6428b32cc37c92e1a363f869c95f575282e2e6c` |
-| `bls-eth2/verify/verify_tampered_signature_case_6eeb7c52dfd9baf0.json` | `f74f8a1c8b47a63ea5c7886c7b0fcaf4a9f174218a88f4f30d2d6dc97338a924` |
-| `bls-eth2/verify/verify_tampered_signature_case_8761a0b7e920c323.json` | `e7731b24086dc1a84dad88052032f672ce6a9ec4f3cdd5a2309917073b520868` |
-| `bls-eth2/verify/verify_tampered_signature_case_d34885d766d5f705.json` | `fca724b68190542ff5ee8ca4d2862f5216003cc2b4e11bd481cf7ca30c0e8845` |
-| `bls-eth2/verify/verify_tampered_signature_case_e8a50c445c855360.json` | `7ccbbe5377d0b587d3ceaf164e1b6d4d464166338a27c766d7f039fa3d6072d7` |
-| `bls-eth2/verify/verify_valid_case_195246ee3bd3b6ec.json` | `31d0d1e654ab088825e054bb2669aa7662f81d6e41dc5d6d9130e9cf82ec390f` |
-| `bls-eth2/verify/verify_valid_case_2ea479adf8c40300.json` | `3f4648de420dcb333c90293b719e336889fb280fdabb47c3db7e7aa41f8efe2e` |
-| `bls-eth2/verify/verify_valid_case_2f09d443ab8a3ac2.json` | `0684ec2a0fc87de41584621d745afcae73fb5e05b321bcfb6cf14fd893c5ffc1` |
-| `bls-eth2/verify/verify_valid_case_3208262581c8fc09.json` | `52f3e50bdafd25afca80dabb99f2fe3ba4342d93bf7dd570a3e6785efe56e9f8` |
-| `bls-eth2/verify/verify_valid_case_6b3b17f6962a490c.json` | `4f98b059930df23abadc3236c578d27c232c7d9f659082159b1a339139372960` |
-| `bls-eth2/verify/verify_valid_case_6eeb7c52dfd9baf0.json` | `3692901694dd143941bbd9c9d5184145855c8f9585e43093968dc97c5be79653` |
-| `bls-eth2/verify/verify_valid_case_8761a0b7e920c323.json` | `073f5431c86442b038c44c223b7c35ef0982ddacf427c780a4e75a9e7475fdf4` |
-| `bls-eth2/verify/verify_valid_case_d34885d766d5f705.json` | `bf14aa35e132b83a46e1ecd3e0678f93ea23c1a75aaf5f44b955bdf48998a8cc` |
-| `bls-eth2/verify/verify_valid_case_e8a50c445c855360.json` | `b8d47dc670d6ebb314afc7b4eb446ed5cacb54365f2a6f6bcffac5a291dde944` |
-| `bls-eth2/verify/verify_wrong_pubkey_case_195246ee3bd3b6ec.json` | `1b1f413845d9b08a3c08daf22e0f075a4dcf05d463f67aea2fa974e526c14364` |
-| `bls-eth2/verify/verify_wrong_pubkey_case_2ea479adf8c40300.json` | `8dbb5f5b5f4cf205e2e014cbd5f55a05ffac44b279d77b9723afb3845959e6d2` |
-| `bls-eth2/verify/verify_wrong_pubkey_case_2f09d443ab8a3ac2.json` | `51990cfe30c215d0028775cdd96410baf6e86ffc7df4c78a17622693dcb8329b` |
-| `bls-eth2/verify/verify_wrong_pubkey_case_3208262581c8fc09.json` | `899ee3986e9fdb994dd4b3d35f90b6108c85e8d84fb4fdfd5e2f1ee55e039c6b` |
-| `bls-eth2/verify/verify_wrong_pubkey_case_6b3b17f6962a490c.json` | `aaefec94b72f38086ae3907c4006e31c5f5330584cf1eb022bfba72fe8d5f3d2` |
-| `bls-eth2/verify/verify_wrong_pubkey_case_6eeb7c52dfd9baf0.json` | `6db4c432b28a36fbb5218c368c7e2185b86eb2a599ce6eef034c161093aa125b` |
-| `bls-eth2/verify/verify_wrong_pubkey_case_8761a0b7e920c323.json` | `6d2e130639371bf3979d012298f02eb1a8504c398c5cf55c0476298f39604d72` |
-| `bls-eth2/verify/verify_wrong_pubkey_case_d34885d766d5f705.json` | `bf2ea57894b7847aabb395702c923ab18703b64d282f71e4ce95d39b10e5cf79` |
-| `bls-eth2/verify/verify_wrong_pubkey_case_e8a50c445c855360.json` | `c0ffab3aac8191721492c2794e4e256fd671d9041b774376800dff5e749dd22e` |
-| `bls-eth2/verify/verifycase_one_privkey_47117849458281be.json` | `f37d78d7a506720e95f8f9753f30a470fe34f4028067fd80c938a92211bf8f70` |
+| `ml_dsa_acvp.txt` | `98fa5330bfb01236c0daca78dddc931cdbc5400123c81563af9cf3f797c12239` |
