@@ -180,13 +180,13 @@ pub fn transfer_1ofn<R: CryptoRng>(rng: &mut R, msgs: &[Vec<u8>], choice: usize)
     // Sender encrypts every message under the *second* OT key (`k1`), which the
     // receiver holds only for the chosen index.
     let mut chosen_ct: Vec<u8> = Vec::new();
-    for i in 0..n {
+    for (i, msg) in msgs.iter().enumerate() {
         let k0 = rng.gen_array::<32>();
         let k1 = rng.gen_array::<32>();
         let c_i = ot_key(&k1, 0);
         let ct = {
-            let mut c = msgs[i].clone();
-            xor_bytes(&mut c, &keystream(&c_i, msgs[i].len()));
+            let mut c = msg.clone();
+            xor_bytes(&mut c, &keystream(&c_i, msg.len()));
             c
         };
         let bit = i == choice;

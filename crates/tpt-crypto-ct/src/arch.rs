@@ -296,6 +296,7 @@ pub fn has_pclmulqdq() -> bool {
 }
 
 #[cfg(not(all(target_arch = "x86_64", feature = "std")))]
+/// Fallback probe: AES-NI is never reported on this target/feature set.
 #[inline]
 #[must_use]
 pub fn has_aes_ni() -> bool {
@@ -303,6 +304,7 @@ pub fn has_aes_ni() -> bool {
 }
 
 #[cfg(not(all(target_arch = "x86_64", feature = "std")))]
+/// Fallback probe: PCLMULQDQ is never reported on this target/feature set.
 #[inline]
 #[must_use]
 pub fn has_pclmulqdq() -> bool {

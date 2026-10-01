@@ -9,7 +9,7 @@
 use tpt_crypto_core::{CryptoRng, Result};
 use tpt_crypto_ct::{Choice, CtSelect};
 use tpt_crypto_curve::EdwardsPoint;
-use tpt_crypto_field::{Field, FieldElement, P256ScalarParams};
+use tpt_crypto_field::{FieldElement, P256ScalarParams};
 use tpt_crypto_hash::blake3::{blake3, Blake3};
 use tpt_crypto_hash::Xof;
 

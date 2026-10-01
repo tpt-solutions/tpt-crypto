@@ -21,5 +21,5 @@ workspace version `0.1.0` (unreleased) this pass.
 - `rand_core` feature: `RandCoreRng` / `CoreRng` adapters between `CryptoRng`
   and the `rand_core` ecosystem.
 - `constant_time` doc module: guarantees, threat model, review checklist.
-- `specs/secret_no_branch.telos`: type-level contract that secret handling
+- `specs/secret_no_branch.spec`: type-level contract that secret handling
   encodes no secret-dependent branch.

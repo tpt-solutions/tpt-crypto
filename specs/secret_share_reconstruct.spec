@@ -49,3 +49,8 @@ verification:
   // tests/kat.rs `share_reconstruct_kat` and tests/props.rs:
   // reconstruct(share(x)) == x, plus Beaver-multiplied shares reconstruct to
   // `a*b`, over random inputs.
+
+evidence:
+  cargo-test: -p tpt-crypto-mpc --test kat share_reconstruct_kat
+  cargo-test: -p tpt-crypto-mpc --test props share_reconstruct_roundtrip
+  cargo-test: -p tpt-crypto-mpc --test props beaver_multiply_reconstructs

@@ -47,7 +47,11 @@ non_leaks:
     before any group operation; a parse failure is a returned error, never UB
 
 verification:
-  // pending: bulletproofs module not yet building/tested. Targets:
-  // dalek-compatible reference range-proof vectors in tests/kat/, plus
-  // proptest: honest prove_range always verifies; out-of-range value =>
-  // prove fails; single-bit proof mutation => verify fails.
+  // tests/range_proof.rs (run in --release; debug builds are very slow):
+  // honest proofs verify for n = 8/16/32/64 and aggregated m = 2, survive a
+  // byte round trip, reject a commitment to a different value, reject every
+  // single-bit mutation of the proof, and an out-of-range value never yields
+  // an accepting proof. Dalek-compatible reference vectors are still to add.
+
+evidence:
+  cargo-test: -p tpt-crypto-zk --release --test range_proof

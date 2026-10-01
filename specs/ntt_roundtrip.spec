@@ -47,3 +47,6 @@ non_leaks:
 verification:
   // tests/props.rs: inv_ntt(ntt(p)) == p over random polynomials, and
   // schoolbook negacyclic convolution matches base_mul-then-inv_ntt.
+
+evidence:
+  cargo-test: -p tpt-crypto-kem --lib ntt_mul_matches_schoolbook

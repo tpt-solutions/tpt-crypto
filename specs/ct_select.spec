@@ -29,3 +29,7 @@ verification:
   // discharged structurally: ct_select is implemented via full-width bitmask
   // (or a data-flow `cmov`/`csel` instruction) with no control-flow dependency
   // on `cond`. Re-check under `cargo +nightly miri test -p tpt-crypto-ct`.
+
+evidence:
+  cargo-test: -p tpt-crypto-ct --test proptest ct_select
+  cargo-test: -p tpt-crypto-ct --features leakage --test leakage leakage_ct_select -- --test-threads=1

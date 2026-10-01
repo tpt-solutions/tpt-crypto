@@ -40,3 +40,11 @@ verification:
    // NIST SP 800-185 cSHAKE / KMAC vectors in `tests/kat.rs`, plus the
    // `sha3_256_streaming` and `shake128_split` property tests in
    // `tests/props.rs`.
+
+evidence:
+  cargo-test: -p tpt-crypto-hash --test kat sha3
+  cargo-test: -p tpt-crypto-hash --test kat shake
+  cargo-test: -p tpt-crypto-hash --test kat cshake_kat
+  cargo-test: -p tpt-crypto-hash --test kat kmac_kat
+  cargo-test: -p tpt-crypto-hash --test props sha3_256_streaming
+  cargo-test: -p tpt-crypto-hash --test props shake128_split

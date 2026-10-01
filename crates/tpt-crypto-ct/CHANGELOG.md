@@ -23,4 +23,4 @@ All notable changes to `tpt-crypto-ct` are documented here.
   - dudect-style Welch t-test leakage harness (`tests/leakage.rs`, run via
     `cargo xtask leakage`) covering `ct_select`, `ct_eq`, `ct_lookup`.
   - `proptest` coverage: `ct_select(c,a,b) == if c {a} else {b}`.
-  - `specs/ct_select.telos`: `ensures: execution_trace ⟂ cond`.
+  - `specs/ct_select.spec`: `ensures: execution_trace ⟂ cond`.

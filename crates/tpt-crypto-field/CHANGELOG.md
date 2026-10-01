@@ -14,7 +14,7 @@ version `0.1.0` (unreleased) this pass.
 - Parameter sets: P-256 / P-384 base + scalar, BLS12-381 `Fp` + `Fr`,
   Ed25519 field + scalar.
 - BLS12-381 extension towers `Fp2`, `Fp6`, `Fp12`.
-- `specs/field_mul.telos`, `specs/field_reduce.telos`.
+- `specs/field_mul.spec`, `specs/field_reduce.spec`.
 
 ### Fixed
 - Montgomery CIOS overflow-limb bug: for `LIMBS == MAX_LIMBS` (6) the SOS

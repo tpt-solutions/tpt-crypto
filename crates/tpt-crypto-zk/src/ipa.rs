@@ -341,8 +341,8 @@ impl InnerProductProof {
             buf.extend_from_slice(l);
             buf.extend_from_slice(r);
         }
-        buf.extend_from_slice(&self.a.to_bytes()[16..48]);
-        buf.extend_from_slice(&self.b.to_bytes()[16..48]);
+        buf.extend_from_slice(&scalar_to_le_bytes(&self.a));
+        buf.extend_from_slice(&scalar_to_le_bytes(&self.b));
         buf
     }
 
@@ -383,6 +383,17 @@ impl InnerProductProof {
         let b = bytes_to_scalar_checked(&lb).ok_or(ZkError::Malformed)?;
         Ok(InnerProductProof { l_vec, r_vec, a, b })
     }
+}
+
+/// Encode a scalar as 32 little-endian bytes (inverse of `bytes_to_scalar_checked`).
+pub(crate) fn scalar_to_le_bytes(s: &Ed25519Scalar) -> [u8; 32] {
+    // The field crate encodes scalars as 48-byte big-endian; keep the low 32.
+    let be = s.to_bytes();
+    let mut le = [0u8; 32];
+    for i in 0..32 {
+        le[i] = be[47 - i];
+    }
+    le
 }
 
 /// Reconstruct a scalar from its 32-byte little-endian encoding, rejecting

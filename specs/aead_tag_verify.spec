@@ -50,3 +50,8 @@ verification:
   // every single-bit flip of ciphertext / tag / AAD yields Err(Verification)
   // for all six constructions; tag comparison constant-timeness is covered by
   // the -ct leakage harness over `ct_eq_bytes`.
+
+evidence:
+  cargo-test: -p tpt-crypto-aead --test props round_trip
+  cargo-test: -p tpt-crypto-aead --test props bitflip
+  cargo-test: -p tpt-crypto-ct --features leakage --test leakage leakage_ct_eq -- --test-threads=1

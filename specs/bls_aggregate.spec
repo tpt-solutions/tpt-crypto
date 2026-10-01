@@ -53,8 +53,14 @@ non_leaks:
     order multiplication that could branch on point structure
 
 verification:
-  // pending: BLS12-381 pairing not yet implemented. Target vectors:
+  // BLS12-381 pairing and signatures are implemented; vectors:
   // draft-irtf-cfrg-bls-signature test vectors (AggregateVerify,
   // FastAggregateVerify), plus proptest bilinearity
   // `e([a]P, [b]Q) == e(P, Q)^{ab}` and:
   //   verify_aggregate(aggregate(sigs)) ok  iff  all individual verifies ok.
+
+evidence:
+  cargo-test: -p tpt-crypto-sig --test bls_kat kat_aggregate
+  cargo-test: -p tpt-crypto-sig --test bls_kat kat_fast_aggregate_verify
+  cargo-test: -p tpt-crypto-sig --test bls_props honest_round_trip_and_aggregate_iff_all_valid
+  cargo-test: -p tpt-crypto-curve --test bls12_381 bilinearity

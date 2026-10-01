@@ -35,7 +35,7 @@ full template). When adding or modifying a crate, confirm:
 - [ ] `no_std` crates opt into the workspace lints (`[lints] workspace = true`).
 - [ ] Every new primitive ships KAT vectors + `tests/kat/PROVENANCE.md` (source
       URL, license, sha256 of each vector file).
-- [ ] Every constant-time primitive has a `specs/<primitive>.telos` contract and
+- [ ] Every constant-time primitive has a `specs/<primitive>.spec` contract and
       a `proptest` round-trip; side-channel-sensitive primitives also have a
       `cargo xtask leakage` class.
 - [ ] `registry.toml` is updated: a new crate reads `status = "git"`.
@@ -49,8 +49,8 @@ secret-dependent branch, memory-access pattern, or index. New primitives must:
 
 - Use `ct_select` / masking from `tpt-crypto-ct` for any secret-dependent
   choice — never `if`, `match`, or indexed access on a secret.
-- Add a `tpt-telos` contract under `specs/` stating that the execution trace is
-  independent of the secret; `cargo xtask verify` discharges it.
+- Add a `.spec` contract under `specs/` stating that the execution trace is
+  independent of the secret; `cargo xtask verify` binds it to cited test evidence.
 - Add a `leakage` class (Welch t-test) where the primitive is side-channel
   exposed.
 

@@ -14,4 +14,4 @@ version `0.1.0` (unreleased) this pass.
 - Oblivious transfer: Chou–Orlandi 1-of-2 base OT over Curve25519 (`ot`),
   1-of-N from 1-of-2 (`transfer_1ofn`), IKNP OT extension (`iknp`,
   `extend_1of2`).
-- `specs/secret_share_reconstruct.telos`.
+- `specs/secret_share_reconstruct.spec`.

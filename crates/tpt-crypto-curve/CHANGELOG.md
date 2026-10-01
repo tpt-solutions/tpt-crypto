@@ -17,7 +17,7 @@ version `0.1.0` (unreleased) this pass.
   fixed-length double-and-add, `is_on_curve`, projective `CtEq`, SEC1
   compressed/uncompressed encode + `from_sec1`. RFC 5903 §8.1/§8.2 ECDH
   vectors and `n·G = O` pass.
-- `specs/scalarmul_ct.telos` (timing ⟂ scalar).
+- `specs/scalarmul_ct.spec` (timing ⟂ scalar).
 
 ### Fixed
 - X25519 conditional-swap parity bookkeeping (was using an inversion trick that

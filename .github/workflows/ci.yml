@@ -58,7 +58,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - run: cargo xtask no-std
+      - run: cargo xtask no-std ${{ matrix.target }}
 
   target-feature-matrix:
     name: target-feature-matrix
@@ -73,18 +73,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build+test -aead / -hash with/without SIMD target-features
         run: |
-          for feat in "${{ matrix.features }}"; do
-            for crate in tpt-crypto-aead tpt-crypto-hash; do
-              if [ -z "$feat" ]; then
-                cargo build  -p "$crate" --no-default-features --features std
-                cargo test   -p "$crate" --no-default-features --features std
-              else
-                cargo build  -p "$crate" --no-default-features --features std \
-                  --target-feature "$feat"
-                cargo test   -p "$crate" --no-default-features --features std \
-                  --target-feature "$feat"
-              fi
-            done
+          feat="${{ matrix.features }}"
+          if [ -n "$feat" ]; then
+            export RUSTFLAGS="-C target-feature=+${feat//,/,+}"
+          fi
+          for crate in tpt-crypto-aead tpt-crypto-hash; do
+            cargo build -p "$crate" --no-default-features --features std
+            cargo test  -p "$crate" --no-default-features --features std
           done
 
   cargo-deny:
@@ -123,10 +118,9 @@ jobs:
       - uses: taiki-e/install-action@cargo-hack
       - run: cargo hack test --feature-powerset -p tpt-crypto
 
-  telos-verify:
-    name: telos-verify
+  spec-verify:
+    name: spec-verify
     runs-on: ubuntu-latest
-    continue-on-error: true # non-blocking → blocking per primitive as it lands
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -146,6 +140,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz --locked
       - run: cd fuzz && cargo +nightly fuzz build
 
   semver-checks:

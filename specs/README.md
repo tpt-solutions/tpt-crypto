@@ -1,20 +1,22 @@
-# `specs/`
+# specs/
 
-This directory holds the `*.telos` formal contracts for `tpt-crypto` primitives,
-verified by `cargo xtask verify` (which shells out to `tpt-telos-cli`).
+Contracts for `tpt-crypto` primitives, checked by `cargo xtask verify`.
 
-Each contract encodes the security/functional properties a primitive must hold,
-e.g.:
+Each `*.spec` file states a primitive's contract (`description`, `inputs`,
+`ensures`, `non_leaks`) and an `evidence:` block binding it to executable
+checks:
 
-- `secret_no_branch.telos` — types encode "no secret-dependent branch".
-- `ct_select.telos` — `ensures: execution_trace ⟂ cond`.
-- `sha256.telos`, `keccak_f.telos` — hash correctness contracts.
-- `field_mul.telos`, `field_reduce.telos` — field arithmetic contracts.
-- `scalarmul_ct.telos` — scalar multiplication timing ⟂ scalar.
-- `aead_tag_verify.telos` — accept iff tag valid; timing ⟂ tag.
-- `ml_kem_decapsulate.telos`, `ntt_roundtrip.telos`.
-- `bls_aggregate.telos`, `ecdsa_nonce_ct.telos`.
-- `bulletproofs_verify.telos`, `secret_share_reconstruct.telos`.
+```
+evidence:
+  cargo-test: -p tpt-crypto-hash --test kat sha2_      # runs `cargo test <args>`
+  pending: reason the contract has no tests yet         # reported, not failed
+```
 
-Contracts are promoted from non-blocking to blocking in CI as each primitive lands
-in `todo.md`.
+`xtask verify` fails a spec if its header is malformed, it has no `ensures:` /
+`evidence:`, any cited test fails, or a filter matches zero tests (stale name).
+`pending:` entries are listed; `cargo xtask verify --strict` makes them fail.
+
+What this can and cannot show: functional claims are backed by KATs and property
+tests; constant-time claims (`execution_trace ⟂ secret`) are backed by structural
+review plus the dudect-style Welch t-test harness (`cargo xtask leakage`), which
+is statistical evidence, not a proof.

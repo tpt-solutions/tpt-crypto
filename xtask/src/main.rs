@@ -21,9 +21,13 @@ fn main() {
         "clippy" => clippy(),
         "test" => test(),
         "leakage" => leakage(),
-        "no-std" => no_std(),
+        "no-std" => no_std(
+            args.get(1)
+                .map(String::as_str)
+                .unwrap_or("thumbv6m-none-eabi"),
+        ),
         "kat-check" => kat_check(),
-        "verify" => verify(),
+        "verify" => verify(args.iter().any(|a| a == "--strict")),
         "release-dry-run" => release_dry_run(),
         "sbom" => sbom(),
         "help" | "--help" | "-h" => {
@@ -49,7 +53,7 @@ fn print_help() {
          leakage          run the dudect-style Welch t-test harness (tpt-crypto-ct)\n  \
          no-std           build no_std crates for thumbv6m-none-eabi\n  \
          kat-check        verify tests/kat/PROVENANCE.md sha256s\n  \
-         verify           run tpt-telos over specs/*.telos\n  \
+         verify           check specs/*.spec against cited test evidence (--strict fails on pending)\n  \
          release-dry-run  cargo publish --dry-run in topo order\n  \
          sbom             emit a SBOM artifact\n"
     );
@@ -124,8 +128,8 @@ fn leakage() -> i32 {
     }
 }
 
-fn no_std() -> i32 {
-    println!("xtask no-std: building heapless crates for thumbv6m-none-eabi (no alloc) ...");
+fn no_std(target: &str) -> i32 {
+    println!("xtask no-std: building heapless crates for {target} (no alloc) ...");
     // Every substrate crate is `#![no_std]`; `std` is the default feature but
     // pulling the `alloc` path in requires the `alloc` feature explicitly.
     // For each crate whose ecosystem is heapless we build with
@@ -142,9 +146,7 @@ fn no_std() -> i32 {
     ];
     let mut worst = 0;
     for name in crates {
-        println!(
-            "xtask no-std: building {name} for thumbv6m-none-eabi (--no-default-features) ..."
-        );
+        println!("xtask no-std: building {name} for {target} (--no-default-features) ...");
         let status = Command::new("cargo")
             .args([
                 "build",
@@ -152,7 +154,7 @@ fn no_std() -> i32 {
                 name,
                 "--no-default-features",
                 "--target",
-                "thumbv6m-none-eabi",
+                target,
             ])
             .status();
         match status {
@@ -168,7 +170,7 @@ fn no_std() -> i32 {
         }
     }
     if worst == 0 {
-        println!("no-std: PASS — all heapless crates build for thumbv6m-none-eabi.");
+        println!("no-std: PASS — all heapless crates build for {target}.");
     }
     worst
 }
@@ -291,47 +293,155 @@ fn hex_of(bytes: &[u8]) -> String {
     s
 }
 
-fn verify() -> i32 {
-    println!("xtask verify: running tpt-telos-cli over specs/*.telos ...");
-    // `cargo xtask verify` shells out to the external `tpt-telos-ci` binary.
-    // If the tool is not installed, fail loudly (the docs call for a report).
-    // The CI `telos-verify` job marks this gate non-blocking in CI config.
-    let spec_dir = std::path::Path::new("specs");
-    let mut worst = 0;
-    let mut verified = 0;
-    if let Ok(entries) = std::fs::read_dir(spec_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().map(|e| e == "telos").unwrap_or(false) {
-                let status = Command::new("tpt-telos-cli")
-                    .arg(path.to_str().unwrap())
-                    .status();
-                match status {
-                    Ok(s) if s.success() => {
-                        println!("verify: {}: OK", path.display());
-                        verified += 1;
-                    }
-                    Ok(_) => {
-                        eprintln!("verify: {}: FAILED", path.display());
-                        worst = 1;
-                    }
-                    Err(e) => {
+/// One machine-checked claim from a spec's `evidence:` block.
+enum Evidence {
+    /// `cargo-test: <args>` — run `cargo test <args>`; must pass and run ≥ 1 test.
+    CargoTest(Vec<String>),
+    /// `pending: <reason>` — contract acknowledged but not yet backed by tests.
+    Pending(String),
+}
+
+/// Parse a `specs/*.spec` file: require the `spec <name>` header (matching the
+/// file stem), an `ensures:` section and a non-empty `evidence:` section.
+fn parse_spec(stem: &str, text: &str) -> Result<Vec<Evidence>, String> {
+    let mut lines = text.lines().filter(|l| !l.trim().is_empty());
+    match lines.next().map(str::trim) {
+        Some(h) if h == format!("spec {stem}") => {}
+        other => return Err(format!("first line must be `spec {stem}`, found {other:?}")),
+    }
+    let mut has_ensures = false;
+    let mut in_evidence = false;
+    let mut evidence = Vec::new();
+    for line in text.lines() {
+        let is_section = !line.starts_with(char::is_whitespace) && line.trim_end().ends_with(':');
+        if is_section {
+            has_ensures |= line.trim() == "ensures:";
+            in_evidence = line.trim() == "evidence:";
+            continue;
+        }
+        if !in_evidence || line.trim().is_empty() {
+            continue;
+        }
+        let t = line.trim();
+        if let Some(args) = t.strip_prefix("cargo-test:") {
+            evidence.push(Evidence::CargoTest(
+                args.split_whitespace().map(String::from).collect(),
+            ));
+        } else if let Some(why) = t.strip_prefix("pending:") {
+            evidence.push(Evidence::Pending(why.trim().to_string()));
+        } else {
+            return Err(format!("unknown evidence entry: `{t}`"));
+        }
+    }
+    if !has_ensures {
+        return Err("missing `ensures:` section".into());
+    }
+    if evidence.is_empty() {
+        return Err("missing or empty `evidence:` section".into());
+    }
+    Ok(evidence)
+}
+
+/// Run `cargo test <args>`; succeed only if it passes and at least one test ran.
+fn run_evidence(args: &[String]) -> Result<(), String> {
+    let out = Command::new("cargo")
+        .arg("test")
+        .args(args)
+        .output()
+        .map_err(|e| format!("could not invoke cargo: {e}"))?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    if !out.status.success() {
+        return Err(format!(
+            "cargo test failed\n{}\n{}",
+            stdout,
+            String::from_utf8_lossy(&out.stderr)
+        ));
+    }
+    let passed: u64 = stdout
+        .lines()
+        .filter(|l| l.starts_with("test result: ok."))
+        .filter_map(|l| {
+            l.split("ok. ")
+                .nth(1)?
+                .split_whitespace()
+                .next()?
+                .parse::<u64>()
+                .ok()
+        })
+        .sum();
+    if passed == 0 {
+        return Err("filter matched no tests (stale test name?)".into());
+    }
+    Ok(())
+}
+
+/// In-house contract checker. Each `specs/*.spec` binds its `ensures:` claims
+/// to named tests in an `evidence:` block; the spec holds only if every cited
+/// test exists, runs, and passes. `pending:` entries are reported (and fail
+/// under `--strict`) so unproven contracts stay visible.
+fn verify(strict: bool) -> i32 {
+    println!("xtask verify: checking specs/*.spec against cited test evidence ...");
+    let mut paths: Vec<_> = std::fs::read_dir("specs")
+        .map(|d| d.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default();
+    paths.retain(|p| p.extension().is_some_and(|e| e == "spec"));
+    paths.sort();
+    let (mut verified, mut pending, mut failed) = (0, 0, 0);
+    for path in &paths {
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let text = match std::fs::read_to_string(path) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("verify: {}: unreadable: {e}", path.display());
+                failed += 1;
+                continue;
+            }
+        };
+        let evidence = match parse_spec(stem, &text) {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("verify: {}: FAILED — {e}", path.display());
+                failed += 1;
+                continue;
+            }
+        };
+        let mut spec_ok = true;
+        let mut spec_pending = false;
+        for ev in &evidence {
+            match ev {
+                Evidence::CargoTest(args) => {
+                    if let Err(e) = run_evidence(args) {
                         eprintln!(
-                            "verify: {}: could not run tpt-telos-cli: {e}",
-                            path.display()
+                            "verify: {}: FAILED — cargo test {}: {e}",
+                            path.display(),
+                            args.join(" ")
                         );
-                        worst = 1;
+                        spec_ok = false;
                     }
+                }
+                Evidence::Pending(why) => {
+                    println!("verify: {}: PENDING — {why}", path.display());
+                    spec_pending = true;
                 }
             }
         }
+        if !spec_ok {
+            failed += 1;
+        } else if spec_pending {
+            pending += 1;
+        } else {
+            println!("verify: {}: OK", path.display());
+            verified += 1;
+        }
     }
-    if worst == 0 {
-        println!("verify: PASS — {verified} contract(s) verified.");
-    } else {
+    println!("verify: {verified} verified, {pending} pending, {failed} failed.");
+    if failed > 0 || (strict && pending > 0) {
         eprintln!("verify: FAIL (see above).");
+        1
+    } else {
+        println!("verify: PASS");
+        0
     }
-    worst
 }
 
 fn release_dry_run() -> i32 {

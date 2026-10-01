@@ -15,4 +15,11 @@ version `0.1.0` (unreleased) this pass.
   aggregated, ranges to `2^64`, with `range_proof_to_bytes` /
   `range_proof_from_bytes`.
 - `plonk` — minimal PLONK verifier built on inner-product commitment opening.
-- `specs/bulletproofs_verify.telos`.
+- `specs/bulletproofs_verify.spec` and `tests/range_proof.rs`.
+
+### Fixed
+- Range proofs never verified: the prover and verifier both started the
+  `y⁻ⁱ` generator weights at `y⁻¹` instead of `1`, and aggregated proofs
+  committed `T1`/`T2` once per value instead of once in total.
+- `range_proof_to_bytes` / `InnerProductProof::to_bytes` wrote scalars
+  big-endian while the decoders read little-endian, so no proof round-tripped.

@@ -36,3 +36,8 @@ verification:
    // big-rational reference over hand-computed and Wycheproof edge-case vectors
    // in `tests/kat/field_mul.json` (see `tests/kat/PROVENANCE.md`).
    // spot-checked exhaustively for the smallest fields under `proptest`.
+
+evidence:
+  cargo-test: -p tpt-crypto-field --test field_tests prime_fields_cross_check
+  cargo-test: -p tpt-crypto-field --test field_props p256_base_props
+  cargo-test: -p tpt-crypto-field --test mul_check mul_basics

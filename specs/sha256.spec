@@ -34,3 +34,8 @@ verification:
    // discharged by NIST CAVP known-answer vectors (empty, "abc") in
    // `tests/kat.rs` and by the `sha256_streaming` / `sha512_streaming`
    // property tests in `tests/props.rs` (random chunkings of random inputs).
+
+evidence:
+  cargo-test: -p tpt-crypto-hash --test kat sha2_
+  cargo-test: -p tpt-crypto-hash --test props sha256_streaming
+  cargo-test: -p tpt-crypto-hash --test props sha512_streaming

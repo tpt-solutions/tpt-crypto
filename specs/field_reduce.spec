@@ -33,3 +33,7 @@ verification:
    // discharged by the `tests/smoke.rs` round-trip (from_bytes(to_bytes(x)) == x)
    // and by Wycheproof non-canonical encoding rejection in
    // `tests/kat/field_reduce.json` (see `tests/kat/PROVENANCE.md`).
+
+evidence:
+  cargo-test: -p tpt-crypto-field --test smoke one_round_trip
+  cargo-test: -p tpt-crypto-field --test field_tests noncanonical_rejection

@@ -14,5 +14,5 @@ version `0.1.0` (unreleased) this pass.
 - Byte encoding / decoding (`encode`), CBD sampler (`sampler`).
 - FrodoKEM (`frodo`) and Classic McEliece (`mceliece`) module stubs
   (return `Error::Unsupported`).
-- `specs/ml_kem_decapsulate.telos`; `cargo-fuzz` decapsulation target.
+- `specs/ml_kem_decapsulate.spec`; `cargo-fuzz` decapsulation target.
 - FIPS 203 KAT coverage.

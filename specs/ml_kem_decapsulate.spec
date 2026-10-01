@@ -50,3 +50,8 @@ verification:
   // reject path (no panic, value differs, still 32 bytes). Timing independence
   // discharged structurally plus the underlying -ct / -field leakage harness.
   // ACVP known-answer vectors still pending.
+
+evidence:
+  cargo-test: -p tpt-crypto-kem --test props round_trip
+  cargo-test: -p tpt-crypto-kem --test props malformed_no_panic
+  cargo-test: -p tpt-crypto-kem --test ml_kem_kat kat_ml_kem

@@ -60,5 +60,5 @@ tpt-crypto  (facade) on everything
 - `examples/` — end-to-end usage samples (one per `spec.txt` §4 snippet).
 - `fuzz/` — `cargo-fuzz` libfuzzer targets for attacker-controlled decoders
   (AEAD decrypt, ML-KEM decaps, signature verify, point decompress).
-- `specs/` — `*.telos` formal contracts, verified by `cargo xtask verify`.
+- `specs/` — `*.spec` contracts bound to test evidence, checked by `cargo xtask verify`.
 - `benches/` — criterion benches; `BUDGET.md` records perf targets.

@@ -164,8 +164,6 @@ pub fn prove_range(
     let mut a_blind = zeros(m);
     let mut s_blind = zeros(m);
     let mut offset_zz = zeros(m);
-    let mut t1_blind = zeros(m);
-    let mut t2_blind = zeros(m);
 
     let mut a = Ristretto::identity();
     for j in 0..m {
@@ -239,20 +237,11 @@ pub fn prove_range(
         }
     }
 
-    let mut t1_commit = Ristretto::identity();
-    let mut t2_commit = Ristretto::identity();
-    let mut t1_blind_total = Ed25519Scalar::zero();
-    let mut t2_blind_total = Ed25519Scalar::zero();
-    for j in 0..m {
-        let b1 = rng.next_scalar();
-        let b2 = rng.next_scalar();
-        t1_commit = t1_commit.add(&pc.commit(&t1, &b1));
-        t2_commit = t2_commit.add(&pc.commit(&t2, &b2));
-        t1_blind_total = t1_blind_total.add(&b1);
-        t2_blind_total = t2_blind_total.add(&b2);
-        t1_blind[j] = b1;
-        t2_blind[j] = b2;
-    }
+    // T1 = t1·G + τ1·H and T2 = t2·G + τ2·H: one commitment each, regardless of m.
+    let t1_blind = rng.next_scalar();
+    let t2_blind = rng.next_scalar();
+    let t1_commit = pc.commit(&t1, &t1_blind);
+    let t2_commit = pc.commit(&t2, &t2_blind);
 
     transcript.append_point(b"T_1", &t1_commit);
     transcript.append_point(b"T_2", &t2_commit);
@@ -263,12 +252,10 @@ pub fn prove_range(
     let mut e_blinding = Ed25519Scalar::zero();
     let xx = x.mul(&x);
     for j in 0..m {
-        t_x_blinding = t_x_blinding
-            .add(&offset_zz[j].mul(&blindings[j]))
-            .add(&t1_blind[j].mul(&x))
-            .add(&t2_blind[j].mul(&xx));
+        t_x_blinding = t_x_blinding.add(&offset_zz[j].mul(&blindings[j]));
         e_blinding = e_blinding.add(&a_blind[j]).add(&s_blind[j].mul(&x));
     }
+    t_x_blinding = t_x_blinding.add(&t1_blind.mul(&x)).add(&t2_blind.mul(&xx));
 
     let mut l_vec = zeros(nm);
     let mut r_vec = zeros(nm);
@@ -292,7 +279,7 @@ pub fn prove_range(
     };
     let mut h_factors = Vec::with_capacity(nm);
     let y_inv = y.invert().unwrap();
-    let mut acc = y_inv;
+    let mut acc = Ed25519Scalar::one();
     for _ in 0..nm {
         h_factors.push(acc);
         acc = acc.mul(&y_inv);
@@ -414,7 +401,7 @@ pub fn verify_range(
     let y_inv = y.invert().unwrap();
     let concat = concat_z_and_2(n, m, &z);
     let s_inv: Vec<Ed25519Scalar> = s.iter().rev().copied().collect();
-    let mut acc = y_inv;
+    let mut acc = Ed25519Scalar::one();
     for i in 0..nm {
         let yi = acc;
         let zc = concat[i];
@@ -466,9 +453,9 @@ pub fn range_proof_to_bytes(proof: &RangeProof) -> Vec<u8> {
     buf.extend_from_slice(&proof.s);
     buf.extend_from_slice(&proof.t1);
     buf.extend_from_slice(&proof.t2);
-    buf.extend_from_slice(&proof.t_x.to_bytes()[16..48]);
-    buf.extend_from_slice(&proof.t_x_blinding.to_bytes()[16..48]);
-    buf.extend_from_slice(&proof.e_blinding.to_bytes()[16..48]);
+    buf.extend_from_slice(&crate::ipa::scalar_to_le_bytes(&proof.t_x));
+    buf.extend_from_slice(&crate::ipa::scalar_to_le_bytes(&proof.t_x_blinding));
+    buf.extend_from_slice(&crate::ipa::scalar_to_le_bytes(&proof.e_blinding));
     buf.extend_from_slice(&crate::ipa::InnerProductProof::to_bytes(&proof.ipp));
     buf
 }

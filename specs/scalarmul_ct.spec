@@ -55,3 +55,8 @@ verification:
   // side-channel: discharged structurally (fixed-length loop, `ct_select` per
   // bit, no secret-indexed memory) and by the `-ct` / `-field` leakage harness
   // covering the underlying `ct_select` and field multiply.
+
+evidence:
+  cargo-test: -p tpt-crypto-curve --test weierstrass rfc5903_ecdh
+  cargo-test: -p tpt-crypto-curve --test weierstrass generator_on_curve_and_order
+  cargo-test: -p tpt-crypto-curve --test weierstrass scalar_homomorphism

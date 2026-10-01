@@ -12,6 +12,7 @@
 //! lives in `tpt-crypto-ct`, per the layering rules.
 
 use crate::api::BlockCipher;
+#[cfg(target_arch = "x86_64")]
 use tpt_crypto_ct::arch;
 
 /// A portable / hardware AES block-cipher instance (the round-key schedule).

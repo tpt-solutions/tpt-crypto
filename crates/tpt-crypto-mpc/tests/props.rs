@@ -10,7 +10,7 @@
 use proptest::prelude::*;
 
 use tpt_crypto_core::{CryptoRng, Result};
-use tpt_crypto_field::{Field, FieldElement, P256ScalarParams};
+use tpt_crypto_field::{FieldElement, P256ScalarParams};
 
 use tpt_crypto_mpc::{
     multiply, reconstruct, share_secret, share_secret_2, transfer_1ofn, transfer_base_ot_1of2,
@@ -147,7 +147,7 @@ proptest! {
         let (z0, z1) = multiply(
             &(x0.value, x1.value),
             &(y0.value, y1.value),
-            &(t0.clone(), t1.clone()),
+            &(*t0, *t1),
         );
         prop_assert_eq!(z0.add(&z1), field_elem(x).mul(&field_elem(y)));
     }

@@ -28,7 +28,7 @@
 //! - The compiler optimizing away a wipe or introducing a branch — mitigated by
 //!   `volatile` writes / `compiler_fence` in [`zeroize`] and by branch-free
 //!   arithmetic in [`ct`].
-//! - Every constant-time primitive additionally carries a `tpt-telos`
+//! - Every constant-time primitive additionally carries a `.spec`
 //!   contract (under `specs/`) stating that its execution trace is independent
 //!   of the secret, and (where relevant) a `cargo xtask leakage` Welch t-test
 //!   class.
@@ -54,7 +54,7 @@
 //!    [`Zeroize`] and be wrapped in [`SecretBox`] or [`Zeroizing`].
 //! 4. **No leaky traits.** `SecretBox` must not derive `Debug`/`PartialEq`/
 //!    `Hash`. The `trybuild` compile-fail tests pin this.
-//! 5. **Telos + leakage.** Confirm a `specs/<primitive>.telos` contract exists
+//! 5. **Spec + leakage.** Confirm a `specs/<primitive>.spec` contract exists
 //!    and `cargo xtask verify` / `cargo xtask leakage` pass for it.
 //!
 //! See [`ct`] for the comparison/selection primitives and `tpt-crypto-ct` for the

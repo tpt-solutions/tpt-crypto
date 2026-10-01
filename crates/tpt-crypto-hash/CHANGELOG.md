@@ -15,4 +15,4 @@ version `0.1.0` (unreleased) this pass.
 - `HmacDrbg` (NIST SP 800-90A) implementing `DrbgCore`.
 - Streaming `Hasher` / `Xof` traits plus one-shot free functions per primitive.
 - Optional `digest` feature: `digest` 0.10 crate trait impls.
-- `specs/sha256.telos`, `specs/keccak_f.telos`.
+- `specs/sha256.spec`, `specs/keccak_f.spec`.

@@ -62,3 +62,8 @@ verification:
   // `tpt-crypto-field` scalar field, and `[k]G` is the `scalarmul_ct`
   // fixed-length double-and-add — plus the `-ct` / `-field` leakage harness.
   // NIST CAVP `.rsp` / Wycheproof JSON sets still to be added.
+
+evidence:
+  cargo-test: -p tpt-crypto-sig --test ecdsa rfc6979
+  cargo-test: -p tpt-crypto-sig --test ecdsa round_trip_and_tamper
+  cargo-test: -p tpt-crypto-sig --test ecdsa signatures_are_low_s
