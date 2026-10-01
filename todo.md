@@ -762,8 +762,9 @@ variant (feature-gated re-exports instead of steps 3–6).
       new primitives); criterion targets build (`cargo bench --no-run -p
       tpt-crypto-benches` clean). Targets still "pending" (not yet measured
       against the baselines).
-- [ ] `cargo-semver-checks` in CI (runs on tags)
-- [ ] SBOM artifact (`cargo xtask sbom`) uploaded by CI
+- [x] `cargo-semver-checks` in CI (runs on tags)
+- [x] SBOM artifact (`cargo xtask sbom`) uploaded by CI
+      (new `sbom` job in `ci.yml`)
 - [ ] Trait-compat feature impls (`digest`, `aead`, `signature`,
       `elliptic-curve`) + a `rustls` `CryptoProvider` example
 - [ ] `specs/`: keep the `spec.txt` §5 contract table in sync with real files;
@@ -779,16 +780,16 @@ variant (feature-gated re-exports instead of steps 3–6).
 
 `env: RUSTFLAGS: -D warnings`. Jobs:
 
-- [ ] `fmt` — `cargo fmt --check`
-- [ ] `clippy` — `cargo clippy --workspace --all-targets --all-features -- -D warnings`
-- [ ] `test` — `cargo nextest run --workspace --all-features` + `cargo test --workspace --all-features --doc`
-- [ ] `no_std` — matrix `thumbv6m-none-eabi` (no `alloc`) / `thumbv7em-none-eabihf` / `wasm32-unknown-unknown`, via `cargo xtask no-std`
-- [ ] `target-feature-matrix` — build+test `-aead`/`-hash` with and without `aes,sha,avx2,sse4.1` `-C target-feature`
-- [ ] `cargo-deny` — license + bans gate (**blocking**)
-- [ ] `miri` — `cargo +nightly miri test -p tpt-crypto-ct`
-- [ ] `leakage` — `cargo xtask leakage` (Welch t-test thresholds)
-- [ ] `feature-powerset` — `cargo hack test --feature-powerset -p tpt-crypto`
-- [ ] `telos-verify` — `cargo xtask verify` (non-blocking → blocking per primitive)
-- [ ] `bench-smoke` — `cargo bench --no-run`
-- [ ] `fuzz-smoke` — `cargo +nightly fuzz build`
-- [ ] `semver-checks` — on tags only
+- [x] `fmt` — `cargo fmt --check`
+- [x] `clippy` — `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- [x] `test` — `cargo nextest run --workspace --all-features` + `cargo test --workspace --all-features --doc`
+- [x] `no_std` — matrix `thumbv6m-none-eabi` (no `alloc`) / `thumbv7em-none-eabihf` / `wasm32-unknown-unknown`, via `cargo xtask no-std`
+- [x] `target-feature-matrix` — build+test `-aead`/`-hash` with and without `aes,sha,avx2,sse4.1` `-C target-feature`
+- [x] `cargo-deny` — license + bans gate (**blocking**)
+- [x] `miri` — `cargo +nightly miri test -p tpt-crypto-ct`
+- [x] `leakage` — `cargo xtask leakage` (Welch t-test thresholds)
+- [x] `feature-powerset` — `cargo hack test --feature-powerset -p tpt-crypto`
+- [x] `telos-verify` — `cargo xtask verify` (non-blocking → blocking per primitive)
+- [x] `bench-smoke` — `cargo bench --no-run`
+- [x] `fuzz-smoke` — `cargo +nightly fuzz build`
+- [x] `semver-checks` — on tags only
