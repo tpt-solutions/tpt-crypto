@@ -60,6 +60,8 @@ const POLYZ19_PACKED: usize = 640;
 const POLYW1_PACKED_MAX: usize = 192;
 /// Maximum hint packing length for any parameter set (ω + k ≤ 196 + 8).
 const MAX_HINT_PACKED: usize = 204;
+/// Maximum challenge-seed length for any parameter set (λ/4 ≤ 64).
+const MAX_CT_TILDE: usize = 64;
 
 /// An ML-DSA parameter set (one of the FIPS 204 rows).
 pub trait MlDsaParams: Copy + Clone {
@@ -81,6 +83,8 @@ pub trait MlDsaParams: Copy + Clone {
     const OMEGA: usize;
     /// Security strength in bits (`λ`).
     const LAMBDA: usize;
+    /// Byte length of the challenge seed `c̃` (`λ/4` per FIPS 204 — 32/48/64).
+    const CT_TILDE_LEN: usize = Self::LAMBDA / 4;
     /// Maximum context-string length (FIPS 204 §5.3).
     const CTX_MAX: usize = 255;
 
@@ -131,7 +135,7 @@ macro_rules! ml_dsa_params {
                     POLYETA4_PACKED
                 }
                 + $k * POLYT0_PACKED;
-            const SIGNATUREBYTES: usize = 32
+            const SIGNATUREBYTES: usize = $lambda / 4
                 + $l * if $g1 == (1 << 17) {
                     POLYZ17_PACKED
                 } else {
@@ -724,11 +728,11 @@ where
                 off += n;
             }
         }
-        let mut c_tilde = [0u8; 32];
-        shake256_concat(&[&mu, &w1_packed], &mut c_tilde);
+        let mut c_tilde = [0u8; MAX_CT_TILDE];
+        shake256_concat(&[&mu, &w1_packed], &mut c_tilde[..P::CT_TILDE_LEN]);
 
         // c = SampleInBall(c̃)
-        let c = crate::ml_dsa::sample::poly_challenge(&c_tilde, P::TAU);
+        let c = crate::ml_dsa::sample::poly_challenge(&c_tilde[..P::CT_TILDE_LEN], P::TAU);
         let mut chat = c;
         chat.ntt();
 
@@ -839,10 +843,10 @@ where
 
         // Encode: c̃ ‖ z ‖ h
         let mut sig_bytes = vec![0u8; P::SIGNATUREBYTES];
-        sig_bytes[..32].copy_from_slice(&c_tilde);
+        sig_bytes[..P::CT_TILDE_LEN].copy_from_slice(&c_tilde[..P::CT_TILDE_LEN]);
         {
             let z_slice = z.as_poly_slice();
-            let mut off = 32;
+            let mut off = P::CT_TILDE_LEN;
             for z_poly in z_slice.iter().take(P::L) {
                 let n = if P::GAMMA1 == (1 << 17) {
                     POLYZ17_PACKED
@@ -925,13 +929,14 @@ where
         }
     }
 
-    // Parse signature: c̃(32) ‖ z ‖ h
-    let mut c_tilde = [0u8; 32];
-    c_tilde.copy_from_slice(&sig.bytes[..32]);
+    // Parse signature: c̃(λ/4) ‖ z ‖ h
+    let ct_len = P::CT_TILDE_LEN;
+    let mut c_tilde = [0u8; MAX_CT_TILDE];
+    c_tilde[..ct_len].copy_from_slice(&sig.bytes[..ct_len]);
     let mut z = <P::VecL as PolyArray>::zeroed();
     let mut h = <P::VecK as PolyArray>::zeroed();
     {
-        let mut off = 32;
+        let mut off = P::CT_TILDE_LEN;
         let zs = z.as_poly_slice_mut();
         for z_poly in zs.iter_mut().take(P::L) {
             let n = if P::GAMMA1 == (1 << 17) {
@@ -961,7 +966,7 @@ where
     let mut mu = [0u8; 64];
     compute_mu(&tr, ctx, msg, &mut mu);
 
-    let c = crate::ml_dsa::sample::poly_challenge(&c_tilde, P::TAU);
+    let c = crate::ml_dsa::sample::poly_challenge(&c_tilde[..ct_len], P::TAU);
     let mut chat = c;
     chat.ntt();
 
@@ -1034,11 +1039,14 @@ where
             off += n;
         }
     }
-    let mut c_rec = [0u8; 32];
-    shake256_concat(&[&mu, &w1_packed], &mut c_rec);
+    let mut c_rec = [0u8; MAX_CT_TILDE];
+    shake256_concat(&[&mu, &w1_packed], &mut c_rec[..ct_len]);
 
     // Constant-time comparison of c̃.
-    if bool::from(tpt_crypto_ct::ct_eq_bytes(&c_rec, &c_tilde)) {
+    if bool::from(tpt_crypto_ct::ct_eq_bytes(
+        &c_rec[..ct_len],
+        &c_tilde[..ct_len],
+    )) {
         Ok(())
     } else {
         Err(Error::Verification)

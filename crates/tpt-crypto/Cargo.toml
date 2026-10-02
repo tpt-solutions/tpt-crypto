@@ -64,6 +64,9 @@ pq = [
 bls = ["tpt-crypto-curve"]
 zk = ["tpt-crypto-zk"]
 mpc = ["tpt-crypto-mpc"]
+# Trait-compat pass-through: ecosystem `signature::Signer`/`Verifier` impls
+# inside `-sig` (Ed25519, ECDSA, ML-DSA, BLS).
+signature = ["tpt-crypto-sig/signature"]
 full = ["classical", "pq", "bls", "zk", "mpc"]
 
 [lints.clippy]

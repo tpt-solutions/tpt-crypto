@@ -59,7 +59,6 @@ fn run_kg<P: MlDsaParams>(records: &[&Record]) {
     for r in records {
         let seed: [u8; 32] = unhex(f(r, "seed")).try_into().expect("32-byte seed");
         let (pk, sk) = keygen_from_seed::<P>(&seed);
-        // TEMP-DEBUG: sk first (s1/s2/t0 packing) to isolate the t1 path.
         assert_eq!(
             sk.bytes,
             unhex(f(r, "sk")),
@@ -94,12 +93,13 @@ fn run_sv<P: MlDsaParams>(records: &[&Record]) {
             }
             None => false,
         };
-        println!(
-            "SV ps {} count {} want {} got {} msglen {} ctxlen {}",
+        assert_eq!(
+            got,
+            want,
+            "[sv ps {} count {}] expected pass={} (msglen {}, ctxlen {})",
             f(r, "ps"),
             f(r, "count"),
             want,
-            got,
             f(r, "msg").len() / 2,
             f(r, "ctx").len() / 2
         );

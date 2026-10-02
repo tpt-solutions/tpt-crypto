@@ -19,6 +19,8 @@ tpt-crypto-ct = { workspace = true }
 tpt-crypto-hash = { workspace = true }
 tpt-crypto-field = { workspace = true }
 tpt-crypto-curve = { workspace = true }
+# MIT OR Apache-2.0 — ecosystem trait bridge (`signature::Signer`/`Verifier`)
+signature = { version = "2", optional = true, default-features = false }
 
 [features]
 default = ["std"]
@@ -29,7 +31,7 @@ alloc = [
     "tpt-crypto-field/alloc",
     "tpt-crypto-curve/alloc",
 ]
-signature = []
+signature = ["dep:signature", "alloc"]
 slh-dsa = ["alloc"]
 rand_core = ["tpt-crypto-core/rand_core"]
 
@@ -37,6 +39,9 @@ rand_core = ["tpt-crypto-core/rand_core"]
 tpt-crypto-core = { path = "../tpt-crypto-core", default-features = false, features = ["std"] }
 tpt-crypto-hash = { path = "../tpt-crypto-hash", default-features = false, features = ["std"] }
 hex = "0.4"
+# MIT OR Apache-2.0 — lets `src/signature_impls.rs` compile under `cfg(test)`
+# without enabling the `signature` feature
+signature = { version = "2", default-features = false }
 
 [[test]]
 name = "ml_dsa_kat"
@@ -49,6 +54,10 @@ required-features = []
 [[test]]
 name = "slh_dsa_kat"
 required-features = ["slh-dsa"]
+
+[[test]]
+name = "signature_compat"
+required-features = ["signature"]
 
 [[bench]]
 name = "sig_bench"

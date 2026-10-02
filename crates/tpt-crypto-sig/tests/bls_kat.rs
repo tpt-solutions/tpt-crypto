@@ -186,8 +186,8 @@ fn read_case(path: &Path) -> Case {
 fn matching_brace(text: &str, open: usize) -> usize {
     let chars: Vec<char> = text.chars().collect();
     let byte_to_char: Vec<usize> = text.char_indices().map(|(i, _)| i).collect();
-    let mut depth = 0usize;
-    let mut i = 0usize;
+    let mut depth = 1usize; // `open` is the byte index of the opening `{`
+    let mut i = text[..open].chars().count() + 1;
     while i < chars.len() {
         match chars[i] {
             '"' => {
@@ -396,7 +396,6 @@ fn output_object(text: &str) -> Vec<(String, Value)> {
 }
 
 #[test]
-#[test]
 fn kat_hash_to_g2() {
     for f in files("hash_to_G2") {
         let text = std::fs::read_to_string(&f).unwrap();
@@ -422,12 +421,15 @@ fn kat_hash_to_g2() {
     }
 }
 
+/// One Fp2 coordinate split into its (c0, c1) 32-byte big-endian limbs.
+type Fp2Limbs = ([u8; 32], [u8; 32]);
+
 /// Parse the corpus' `"0x<c0>,0x<c1>"` G2 coordinate strings into the raw
 /// 32-byte big-endian limb payloads (the vectors print 48-byte field elements
 /// with 16 leading zero bytes... actually 48-byte values; slice to the limb
 /// width used by `Fp::to_bytes`).
-fn parse_g2_coords(x: &str, y: &str) -> (([u8; 32], [u8; 32]), ([u8; 32], [u8; 32])) {
-    let split = |s: &str| -> ([u8; 32], [u8; 32]) {
+fn parse_g2_coords(x: &str, y: &str) -> (Fp2Limbs, Fp2Limbs) {
+    let split = |s: &str| -> Fp2Limbs {
         let parts: Vec<&str> = s.split(',').collect();
         assert_eq!(parts.len(), 2, "Fp2 tuple {s:?}");
         let lo = |h: &str| -> [u8; 32] {
