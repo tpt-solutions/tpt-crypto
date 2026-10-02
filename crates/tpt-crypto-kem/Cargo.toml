@@ -9,7 +9,7 @@ homepage.workspace = true
 repository.workspace = true
 description = "Constant-time ML-KEM (FIPS 203) key encapsulation: NTT polynomial core, K-PKE, FO transform. no_std, pure Rust. FrodoKEM / Classic McEliece gated."
 readme = "README.md"
-keywords = ["crypto", "kem", "ml-kem", "fips-203", "lattice", "no-std"]
+keywords = ["crypto", "kem", "ml-kem", "fips-203", "no-std"]
 categories = ["cryptography", "no-std"]
 documentation = "https://docs.rs/tpt-crypto-kem"
 

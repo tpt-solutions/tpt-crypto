@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/tpt-crypto-zk"
 readme = "README.md"
-keywords = ["cryptography", "zero-knowledge", "bulletproofs", "plonk", "no-std", "ristretto"]
+keywords = ["cryptography", "zero-knowledge", "bulletproofs", "plonk", "no-std"]
 categories = ["cryptography", "no-std"]
 
 [dependencies]

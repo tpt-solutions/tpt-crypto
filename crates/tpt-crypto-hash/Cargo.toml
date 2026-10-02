@@ -30,3 +30,7 @@ workspace = true
 [dev-dependencies]
 hex = "0.4"
 proptest = "1"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

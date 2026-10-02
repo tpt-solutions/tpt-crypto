@@ -31,3 +31,7 @@ alloc = ["tpt-crypto-core/alloc", "tpt-crypto-field/alloc", "tpt-crypto-hash/all
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

@@ -100,12 +100,33 @@ ct_select(cond, a, b)
 ensures: execution_trace is independent of cond
 FieldElement::mul(a, b)
 ensures: result == (a * b) mod P for all a, b < P
+FieldElement::reduce / Montgomery
+ensures: field_reduce contract (specs/field_reduce.spec)
 ml_kem::decapsulate(sk, ct)
 ensures: timing is independent of sk
+ml_kem::poly NTT
+ensures: ntt(inv_ntt(x)) == x (specs/ntt_roundtrip.spec)
 bulletproofs::verify(...)
 ensures: returns true iff proof is valid for commitment
 bls::aggregate(sigs)
 ensures: result is valid iff all input sigs are valid
+sha256 (streaming == one-shot)
+ensures: digest matches FIPS 180-4 for all inputs
+keccak_f[1600]
+ensures: permutation matches the FIPS 202 round function
+aead decrypt (tag verify)
+ensures: accepts iff tag valid; timing is independent of tag
+ecdsa nonce derivation
+ensures: nonce timing is independent of the signing key
+scalar mul (Weierstrass / Edwards)
+ensures: timing is independent of the scalar
+SecretBox / public types
+ensures: types encoding no secret-dependent branch
+mpc secret sharing
+ensures: reconstruct(share(x)) == x
+
+(The machine-checked versions live in `specs/*.spec`, each bound to test
+evidence and verified by `cargo xtask verify`.)
 The tpt-telos-uir-bridge additionally proves that stack usage is bounded for every function, ensuring no stack overflow on embedded targets—a property no other Rust crypto library can claim.
 6. Execution Roadmap
 Phase 1: The Constant-Time Foundation (Months 1-2)

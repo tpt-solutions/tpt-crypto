@@ -796,13 +796,22 @@ variant (feature-gated re-exports instead of steps 3–6).
 - [x] `cargo-semver-checks` in CI (runs on tags)
 - [x] SBOM artifact (`cargo xtask sbom`) uploaded by CI
       (new `sbom` job in `ci.yml`)
-- [ ] Trait-compat feature impls (`digest`, `aead`, `signature`,
+- [~] Trait-compat feature impls (`digest`, `aead`, `signature`,
       `elliptic-curve`) + a `rustls` `CryptoProvider` example
-- [ ] `specs/`: keep the `spec.txt` §5 contract table in sync with real files;
+      — `digest` (-hash), `aead` (-aead) and `signature` (-sig: Ed25519,
+      ECDSA, ML-DSA, BLS; facade pass-through feature) are done; remaining:
+      `elliptic-curve` compat and the rustls `CryptoProvider` example.
+- [x] `specs/`: keep the `spec.txt` §5 contract table in sync with real files;
       promote each `telos-verify` check from non-blocking → blocking as it lands
-- [ ] Final crates.io-prep audit: every crate has description/keywords/categories/
+      — §5 table now lists all 14 contracts; `cargo xtask verify`: 14 verified,
+      0 pending, 0 failed (all evidence-backed, no `pending:` entries left).
+- [x] Final crates.io-prep audit: every crate has description/keywords/categories/
       README/CHANGELOG/`docs.rs` metadata; `cargo package` lists no stray files;
       **do not publish** this pass
+      — audited 2026-10-03: fixed `-kem`/`-zk` 6→5 keywords and added the
+      missing `[package.metadata.docs.rs]` block to `-ct`/`-curve`/`-field`/
+      `-hash`/`-mpc`; package file lists are clean (sources + tests + KAT
+      data + README/CHANGELOG only).
 - [ ] Per-phase local commit; update this file's checkboxes as work lands
 
 ---

@@ -67,6 +67,7 @@ impl InnerProductProof {
     /// protocol. `G` and `H` are the generator vectors; `H_factors` weights the
     /// `H` vectors (`H'_i = H_factors[i] · H_i`). All vectors must have the same
     /// length, a power of two.
+    #[allow(clippy::too_many_arguments)] // prover input surface
     pub fn create(
         transcript: &mut Transcript,
         q: &Ristretto,
@@ -235,14 +236,7 @@ impl InnerProductProof {
         &self,
         n: usize,
         transcript: &mut Transcript,
-    ) -> Result<
-        (
-            alloc::vec::Vec<Ed25519Scalar>,
-            alloc::vec::Vec<Ed25519Scalar>,
-            alloc::vec::Vec<Ed25519Scalar>,
-        ),
-        ZkError,
-    > {
+    ) -> Result<VerificationScalars, ZkError> {
         let lg_n = self.l_vec.len();
         if lg_n >= 32 {
             return Err(ZkError::Verification);
@@ -284,6 +278,7 @@ impl InnerProductProof {
 
     /// Standalone verification of the inner-product relation for a commitment
     /// `p` (used by tests and direct callers).
+    #[allow(clippy::too_many_arguments)] // verifier input surface
     pub fn verify(
         &self,
         n: usize,
@@ -400,6 +395,13 @@ pub(crate) fn scalar_to_le_bytes(s: &Ed25519Scalar) -> [u8; 32] {
     le
 }
 
+/// The squared challenges and `s` vector for combined multiscalar
+/// verification: `(u_i², u_i^{-2}, s)`.
+type VerificationScalars = (
+    alloc::vec::Vec<Ed25519Scalar>,
+    alloc::vec::Vec<Ed25519Scalar>,
+    alloc::vec::Vec<Ed25519Scalar>,
+);
 /// Reconstruct a scalar from its 32-byte little-endian encoding, rejecting
 /// non-canonical values. Exposed for proof deserialization.
 pub(crate) fn bytes_to_scalar_checked(bytes: &[u8]) -> Option<Ed25519Scalar> {

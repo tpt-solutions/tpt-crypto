@@ -55,7 +55,6 @@ fn kem(c: &mut Criterion) {
     }
 
     {
-        let mut rng = BenchRng(0xDEAD_BEEF_CAFE_F00D);
         g.bench_function("ml-kem-1024/keygen", |b| {
             let mut r = BenchRng(3);
             b.iter(|| core::hint::black_box(keygen::<MlKem1024>(&mut r)))

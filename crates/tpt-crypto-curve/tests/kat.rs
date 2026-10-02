@@ -1,3 +1,5 @@
+//! RFC 8032 / RFC 7748 known-answer tests for the `-curve` primitives.
+
 use tpt_crypto_curve::{EdwardsPoint, X25519};
 
 /// RFC 8032 §7.1 Test 1.

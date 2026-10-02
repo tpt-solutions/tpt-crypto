@@ -170,7 +170,7 @@ pub fn prove_range(
         a_blind[j] = rng.next_scalar();
         a = a.add(&pc.h.scalar_mul(&a_blind[j]));
         for i in 0..n {
-            let vi = ((values[j] >> i) & 1) as u64;
+            let vi = (values[j] >> i) & 1;
             let gi = &g_vec[j * n + i];
             let hi = &h_vec[j * n + i];
             if vi == 1 {
@@ -195,9 +195,9 @@ pub fn prove_range(
         s = s.add(&g_vec[i].scalar_mul(&s_l[i]));
         s = s.add(&h_vec[i].scalar_mul(&s_r[i]));
     }
-    for j in 0..m {
-        s_blind[j] = rng.next_scalar();
-        s = s.add(&pc.h.scalar_mul(&s_blind[j]));
+    for sb in s_blind.iter_mut().take(m) {
+        *sb = rng.next_scalar();
+        s = s.add(&pc.h.scalar_mul(sb));
     }
 
     transcript.append_point(b"A", &a);
@@ -214,6 +214,7 @@ pub fn prove_range(
     let mut t1 = Ed25519Scalar::zero();
     let mut t2 = Ed25519Scalar::zero();
     let one = Ed25519Scalar::one();
+    #[allow(clippy::needless_range_loop)] // j indexes several parallel vectors
     for j in 0..m {
         let offset_y = y.pow_vartime(&[(j * n) as u64]);
         let offset_z = z.pow_vartime(&[j as u64]);
@@ -394,8 +395,8 @@ pub fn verify_range(
         .add(&c.mul(&delta_v.sub(&proof.t_x)));
     scalars.push(basepoint_scalar);
 
-    for i in 0..nm {
-        scalars.push(minus_z.sub(&a.mul(&s[i])));
+    for s_i in s.iter().take(nm) {
+        scalars.push(minus_z.sub(&a.mul(s_i)));
     }
 
     let y_inv = y.invert().unwrap();
