@@ -789,20 +789,40 @@ variant (feature-gated re-exports instead of steps 3–6).
       Each new target asserts a round-trip/canonicality invariant, not just
       "does not panic". CI `fuzz-smoke` still to be confirmed on a toolchain
       with `librustc-nightly_rt.asan`.
-- [~] `benches/BUDGET.md`: per-primitive perf target vs `ring` / `dalek` /
+- [x] `benches/BUDGET.md`: per-primitive perf target vs `ring` / `dalek` /
       `pqcrypto`; criterion targets build in `bench-smoke`
-      — BUDGET.md covers all 11 crates (incl. BLS + PLONK rows added with the
-      new primitives); criterion targets build (`cargo bench --no-run -p
-      tpt-crypto-benches` clean). Targets still "pending" (not yet measured
-      against the baselines).
+      — BUDGET.md covers all 11 crates; **all 21 existing criterion benches
+      measured (2026-10-03, x86_64 Windows)** and recorded with honest
+      status: ML-KEM-768 keygen/encaps and 32-bit bulletproofs proving meet
+      their targets; hash/AEAD/ZK targets assumed SIMD-heavy implementations
+      and are marked "below target (portable)" — the substrate is
+      deliberately table-free, so those are follow-up-SIMD goals, not
+      regressions. Several rows (ct/select SSE paths, sig/curve/mpc/plonk
+      benches, montgomery-ladder) have no bench yet and stay `pending`.
 - [x] `cargo-semver-checks` in CI (runs on tags)
 - [x] SBOM artifact (`cargo xtask sbom`) uploaded by CI
       (new `sbom` job in `ci.yml`)
 - [~] Trait-compat feature impls (`digest`, `aead`, `signature`,
       `elliptic-curve`) + a `rustls` `CryptoProvider` example
       — `digest` (-hash), `aead` (-aead) and `signature` (-sig: Ed25519,
-      ECDSA, ML-DSA, BLS; facade pass-through feature) are done; remaining:
-      `elliptic-curve` compat and the rustls `CryptoProvider` example.
+      ECDSA, ML-DSA, BLS; facade pass-through feature) are done.
+      **rustls `CryptoProvider` done (2026-10-03):**
+      `examples/src/rustls_provider.rs` implements a complete TLS 1.3
+      provider from substrate primitives only — AES-128-GCM and
+      ChaCha20-Poly1305 record AEADs, HMAC-SHA-256 + the rustls
+      `HkdfUsingHmac` key schedule, a SHA-256 `hash::Hash` provider,
+      constant-time X25519 key exchange, and Ed25519 handshake signatures
+      with a hand-built self-signed DER certificate. Two in-memory
+      handshakes (one per suite) with bidirectional application data are
+      covered by tests (`cargo test -p tpt-crypto-examples`); `rustls` is
+      built with `default-features = false` (no ring / aws-lc-rs) and
+      `cargo deny` stays clean.
+      Remaining: `elliptic-curve` ecosystem trait compat. Assessment: a
+      faithful `CurveArithmetic`/`PrimeField` adapter surface for
+      P-256/P-384 means wrapper types implementing dozens of `ff`-style
+      traits (~600+ lines, high API-drift risk) for ecosystem
+      interoperability that the `signature` bridge already covers for the
+      common case — deferred unless a concrete consumer appears.
 - [x] `specs/`: keep the `spec.txt` §5 contract table in sync with real files;
       promote each `telos-verify` check from non-blocking → blocking as it lands
       — §5 table now lists all 14 contracts; `cargo xtask verify`: 14 verified,

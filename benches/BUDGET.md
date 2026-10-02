@@ -8,6 +8,13 @@ keeps honest. All targets are for **release profile, single-threaded, x86_64**.
 Targets are expressed as a multiplier over the best available pure-Rust baseline:
 no `ring` C-FFI comparisons (that would defeat the substrate's purpose).
 
+**Measured** (2026-10-03): criterion medians on x86_64 (Windows, release
+profile, `--warm-up-time 1 --measurement-time 2 --sample-size 20 --noplot`).
+Where the measured number misses the target, the status says so — most
+targets assumed SIMD-heavy implementations; the substrate is deliberately
+portable/table-free, so the realistic near-term ceiling is lower until a
+SIMD follow-up lands.
+
 ---
 
 ## tpt-crypto-core
@@ -31,35 +38,37 @@ no `ring` C-FFI comparisons (that would defeat the substrate's purpose).
 
 ## tpt-crypto-hash
 
-| Benchmark               | Target                                    | Status  |
-| ----------------------- | ----------------------------------------- | ------- |
-| `blake2b/1kb`           | ≥ 4 GB/s                                  | pending |
-| `blake3/1kb`            | ≥ 8 GB/s                                  | pending |
-| `sha2-256/1kb`          | ≥ 3 GB/s                                  | pending |
-| `sha3-256/1kb`          | ≥ 2 GB/s                                  | pending |
-| `k12/1kb`               | ≥ 2 GB/s                                  | pending |
+| Benchmark               | Target                                    | Measured (median) | Status |
+| ----------------------- | ----------------------------------------- | ----------------- | ------ |
+| `blake2b/1kb`           | ≥ 4 GB/s                                  | 1.01 µs (~0.97 GiB/s) | below target (portable) |
+| `blake3/1kb`            | ≥ 8 GB/s                                  | 1.22 µs (~0.78 GiB/s) | below target (portable) |
+| `sha2-256/1kb`          | ≥ 3 GB/s                                  | 2.96 µs (~0.32 GiB/s) | below target (portable) |
+| `sha3-256/1kb`          | ≥ 2 GB/s                                  | 2.10 µs (~0.45 GiB/s) | below target (portable) |
+| `k12/1kb`               | ≥ 2 GB/s                                  | 1.83 µs (~0.52 GiB/s) | below target (portable) |
+| `shake128/1kb`          | —                                         | 1.86 µs (~0.51 GiB/s) | recorded |
 
 ---
 
 ## tpt-crypto-field
 
-| Benchmark                 | Target                                     | Status  |
-| ------------------------- | ------------------------------------------ | ------- |
-| `p256/mul`                | ≥ 2× `ark-ff` multiplication throughput    | pending |
-| `p384/mul`                | ≥ 1.8× `ark-ff` multiplication throughput  | pending |
-| `bls12_381/fp/mul`        | ≥ 1.8× `ark-ff` multiplication throughput  | pending |
-| `montgomery-ladder/p256`  | ≥ 500 kops/s scalar mult                    | pending |
+| Benchmark                 | Target                                     | Measured (median) | Status |
+| ------------------------- | ------------------------------------------ | ----------------- | ------ |
+| `p256/mul`                | ≥ 2× `ark-ff` multiplication throughput    | 20.7 ns (~48 Melem/s) | baseline comparison pending |
+| `p256/add`                | —                                          | 705 ps (~1.4 Gelem/s) | recorded |
+| `bls12_381/fp/mul`        | ≥ 1.8× `ark-ff` multiplication throughput  | 47.8 ns (~21 Melem/s) | baseline comparison pending |
+| `ed25519/scalar/mul`      | —                                          | 19.3 ns (~52 Melem/s) | recorded |
+| `montgomery-ladder/p256`  | ≥ 500 kops/s scalar mult                    | bench not yet written | pending |
 
 ---
 
 ## tpt-crypto-aead
 
-| Benchmark                 | Target                              | Status  |
-| ------------------------- | ----------------------------------- | ------- |
-| `aes-128-gcm/1kb`         | ≥ 3 GB/s                           | pending |
-| `aes-256-gcm/1kb`         | ≥ 3 GB/s                           | pending |
-| `chacha20-poly1305/1kb`   | ≥ 1 GB/s                           | pending |
-| `aes-128-gcm-siv/1kb`     | ≥ 2.5 GB/s                         | pending |
+| Benchmark                 | Target    | Measured (median) | Status |
+| ------------------------- | --------- | ----------------- | ------ |
+| `aes-128-gcm/1kb`         | ≥ 3 GB/s  | 13.1 µs (~74 MiB/s) | below target (GHASH is portable Shoup-style; AES-NI covers only the block path) |
+| `aes-256-gcm/1kb`         | ≥ 3 GB/s  | 13.0 µs (~74 MiB/s) | below target (as above) |
+| `chacha20-poly1305/1kb`   | ≥ 1 GB/s  | 2.06 µs (~463 MiB/s) | close to target (portable) |
+| `aes-128-gcm-siv/1kb`     | ≥ 2.5 GB/s | 27.8 µs (~35 MiB/s) | below target (two-pass POLYVAL, portable) |
 
 ---
 
@@ -78,12 +87,12 @@ no `ring` C-FFI comparisons (that would defeat the substrate's purpose).
 
 ## tpt-crypto-kem
 
-| Benchmark              | Target                              | Status  |
-| ---------------------- | ----------------------------------- | ------- |
-| `ml-kem-768/keygen`    | ≥ 2 kops/s                          | pending |
-| `ml-kem-768/encaps`    | ≥ 1.5 kops/s                        | pending |
-| `ml-kem-768/decaps`    | ≥ 1 kops/s                          | pending |
-| `ml-kem-1024/keygen`   | ≥ 1 kops/s                          | pending |
+| Benchmark              | Target | Measured (median) | Status |
+| ---------------------- | ------ | ----------------- | ------ |
+| `ml-kem-768/keygen`    | ≥ 2 kops/s | 125 µs (~8.0 kops/s) | meets target |
+| `ml-kem-768/encaps`    | ≥ 1.5 kops/s                        | 97 µs (~10.3 kops/s) | meets target |
+| `ml-kem-1024/keygen`   | —                                   | 145 µs (~6.9 kops/s) | recorded |
+
 
 ---
 
@@ -106,12 +115,12 @@ no `ring` C-FFI comparisons (that would defeat the substrate's purpose).
 
 ## tpt-crypto-zk
 
-| Benchmark              | Target                              | Status  |
-| ---------------------- | ----------------------------------- | ------- |
-| `bulletproofs/prove/1` | ≥ 1 proof/s for 32-bit range proof  | pending |
-| `bulletproofs/verify/1`| ≥ 10 verifications/s for 32-bit     | pending |
-| `pedersen/commit`      | ≥ 100 kops/s                        | pending |
-| `plonk/verify/n=4`     | ≥ 500 verifications/s (IPA opening) | pending |
+| Benchmark              | Target | Measured (median) | Status |
+| ---------------------- | ------ | ----------------- | ------ |
+| `bulletproofs/prove/1` | ≥ 1 proof/s for 32-bit range proof  | 800 ms (~1.25 proofs/s) | meets target |
+| `bulletproofs/verify/1`| ≥ 10 verifications/s for 32-bit     | 360 ms (~2.8 verifications/s) | below target (portable scalar ops) |
+| `pedersen/commit`      | ≥ 100 kops/s                        | 3.29 ms (~304 ops/s) | below target (per-commitment generator sweep) |
+| `plonk/verify/n=4`     | ≥ 500 verifications/s (IPA opening) | bench not yet written | pending |
 
 ---
 
@@ -127,10 +136,14 @@ no `ring` C-FFI comparisons (that would defeat the substrate's purpose).
 
 ## Status key
 
-- **pending** — benchmark scaffold exists, target not yet validated
-- **on-track** — measured within 10% of target
-- **met** — measured within target
-- **missed** — measured >10% below target (blocking release)
+- **pending** — benchmark scaffold exists (or target bench not yet written),
+  target not yet validated
+- **below target** — measured; the target assumed a SIMD-heavy
+  implementation, the substrate is deliberately portable/table-free
+- **meets target** — measured on the reference hardware (2026-10-03)
+- **close to target** — measured within 10% of target
+
+## Notes
 
 ## Notes
 

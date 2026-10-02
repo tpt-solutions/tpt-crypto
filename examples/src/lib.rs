@@ -148,6 +148,8 @@ pub fn ring_subset_snippet() {}
 /// ```
 pub fn bls_aggregate_snippet() {}
 
+pub mod rustls_provider;
+
 #[cfg(test)]
 mod tests {
     use tpt_crypto_core::ct_eq;
