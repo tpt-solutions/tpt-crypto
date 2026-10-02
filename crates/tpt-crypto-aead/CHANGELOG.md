@@ -6,6 +6,21 @@ version `0.1.0` (unreleased) this pass.
 ## 0.1.0 — unreleased
 
 ### Fixed
+- **Portable AES core (non-AES-NI targets) produced wrong ciphertext:**
+  `shift_rows` rotated rows in the inverse direction (it implemented
+  InvShiftRows) and `mix_columns` mixed bits *across* columns (per-row)
+  instead of within each column. Every FIPS-197 / SP 800-38A vector failed
+  on the portable path, which is the only path on `thumbv6m` and any
+  x86_64 CPU without AES-NI (the runtime-dispatched AES-NI path was
+  correct, which is why the x86 test suites were green). Fixed both and
+  added FIPS-197 C.3 + SP 800-38A F.1.1 AES-256 KATs so the portable path
+  is covered by the default test run.
+- **CTR-DRBG counter increment order:** SP 800-90A §10.2.1.2 / §10.2.1.5.1
+  increment `V` *before* encrypting each keystream block; `CtrDrbg`
+  encrypted first. The generator was therefore non-conformant with the
+  spec (deterministic, but not interoperable with a reference no-DF
+  CTR_DRBG).
+### Fixed
 - **RFC 8452 conformance:** the POLYVAL hash key was `E(K_mac, 0^16)` (the
   GCM GHASH convention); RFC 8452 §4 uses the raw derived
   message-authentication key directly, with no AES call. Every non-empty

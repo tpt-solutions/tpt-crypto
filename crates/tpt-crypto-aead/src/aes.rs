@@ -237,10 +237,11 @@ fn shift_rows(state: &mut [u32; 4]) {
             b[4 * col + row] = w[row];
         }
     }
+    // ShiftRows: B'[r][c] = B[r][(c + r) mod 4]
     for r in 1..4 {
         let row: [u8; 4] = [b[r], b[4 + r], b[8 + r], b[12 + r]];
         for col in 0..4 {
-            b[4 * col + r] = row[(col + 4 - r) % 4];
+            b[4 * col + r] = row[(col + r) % 4];
         }
     }
     for col in 0..4 {
@@ -252,24 +253,17 @@ fn shift_rows(state: &mut [u32; 4]) {
 
 #[inline]
 fn mix_columns(state: &mut [u32; 4]) {
-    let bytes: [[u8; 4]; 4] = [
-        state[0].to_be_bytes(),
-        state[1].to_be_bytes(),
-        state[2].to_be_bytes(),
-        state[3].to_be_bytes(),
-    ];
-    for c in 0..4 {
-        let s0 = bytes[0][c];
-        let s1 = bytes[1][c];
-        let s2 = bytes[2][c];
-        let s3 = bytes[3][c];
-        let out = [
+    // MixColumns operates within each column (each `u32` is one column,
+    // big-endian bytes = rows).
+    for col in state.iter_mut() {
+        let s = col.to_be_bytes();
+        let (s0, s1, s2, s3) = (s[0], s[1], s[2], s[3]);
+        *col = u32::from_be_bytes([
             gf8_mul(s0, 2) ^ gf8_mul(s1, 3) ^ s2 ^ s3,
             s0 ^ gf8_mul(s1, 2) ^ gf8_mul(s2, 3) ^ s3,
             s0 ^ s1 ^ gf8_mul(s2, 2) ^ gf8_mul(s3, 3),
             gf8_mul(s0, 3) ^ s1 ^ s2 ^ gf8_mul(s3, 2),
-        ];
-        state[c] = u32::from_be_bytes(out);
+        ]);
     }
 }
 
@@ -337,6 +331,26 @@ mod tests {
 
     fn ecb(core: &Aes, pt: &[u8; 16]) -> [u8; 16] {
         core.encrypt_block(pt)
+    }
+
+    #[test]
+    fn aes256_fips197_c3() {
+        // FIPS-197 Appendix C.3 (AES-256)
+        let key = hex::decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+            .unwrap();
+        let pt = hex::decode("00112233445566778899aabbccddeeff").unwrap();
+        let ct = Aes::new_256(&key).encrypt_block(pt.as_slice().try_into().unwrap());
+        assert_eq!(hex::encode(ct), "8ea2b7ca516745bfeafc49904b496089");
+    }
+
+    #[test]
+    fn aes256_sp800_38a_ecb() {
+        // SP 800-38A F.1.1 block 1 (cross-checked against OpenSSL)
+        let key = hex::decode("603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4")
+            .unwrap();
+        let pt = hex::decode("6bc1bee22ee409f67e2213b237b0b3d2").unwrap();
+        let ct = Aes::new_256(&key).encrypt_block(pt.as_slice().try_into().unwrap());
+        assert_eq!(hex::encode(ct), "a6552cbbba08754cd273bf93c6107241");
     }
 
     #[test]

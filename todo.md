@@ -379,12 +379,14 @@ variant (feature-gated re-exports instead of steps 3–6).
 - [~] `CtrDrbg` (SP 800-90A) implementing `DrbgCore`
       — `src/ctr_drbg.rs`: AES-256 CTR-DRBG (no DF), `update` (key rebuilt into
       fresh `Zeroizing` buffer), instantiate/reseed/generate, inline tests.
-      Wired to `DrbgCore`; behavioural tests only. ACVP no-DF vectors were
-      distilled (tgIds 11/23) but the seed-material/counter convention could
-      not be reproduced this pass (~360 instantiate/reseed/flow/counter-width
-      variants tried against the expected `returnedBits`; the ACVP spec pins
-      entropy = seedlen, nonce = 0, counterFieldLen = 64 but not the combine
-      rule) — left for a future pass with the ACVP reference client.
+      Wired to `DrbgCore`; behavioural tests only. SP-literal reading
+      verified against the extracted SP 800-90A §10.2.1 text (XOR combine in
+      Instantiate/Reseed, inc-first counter) — **fixed 2026-10-03: the
+      counter now increments before encrypting** (§10.2.1.5.1). The NIST
+      demo-server sample answers (AWS-LC acvptool test bz2) still could not
+      be reproduced under any instantiate/reseed/flow/counter-width
+      combination (~6k variants, two independent implementations); left for
+      a future pass with the NIST ACVP reference server.
 - [x] API: `Aead` trait (`encrypt`/`decrypt` in-place + detached tag), AAD,
       ct tag comparison (`ct_eq`), `Nonce`/`Tag` newtypes
       — `src/api.rs`: const-generic `Aead<NONCE_LEN, TAG_LEN>`, detached +

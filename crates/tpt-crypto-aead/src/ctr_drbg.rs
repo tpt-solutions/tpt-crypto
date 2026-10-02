@@ -1,12 +1,12 @@
 //! `CtrDrbg` — NIST SP 800-90A deterministic random bit generator based on
 //! AES-256 in counter mode, without the optional derivation function.
 //!
-//! The construction follows SP 800-90A §10.2.1: the generator maintains a
-//! 256-bit key and a 128-bit counter block. [`DrbgCore::generate`] produces
-//! keystream by encrypting successive counter values and then reseeds the
-//! internal state; [`DrbgCore::reseed`] folds fresh entropy (and additional
-//! input) into the state via the same update function. All operations are
-//! constant-time and the secret key is zeroized on drop.
+//! The construction follows SP 800-90A §10.2.1 (no-DF): instantiation and
+//! reseed XOR the (zero-padded) seed material into a 48-byte block and feed
+//! it through [`CtrDrbg::update`]; [`DrbgCore::generate`] produces keystream
+//! by incrementing `V` (§10.2.1.5.1 increments *before* encrypting) and then
+//! runs the mandatory post-generation update for backtracking resistance.
+//! All operations are constant-time and the secret key is zeroized on drop.
 
 use crate::aes::Aes;
 use tpt_crypto_core::{DrbgCore, Result, Zeroizing};
@@ -37,13 +37,16 @@ impl CtrDrbg {
         drbg
     }
 
-    /// One AES-256-CTR keystream block: encrypt the counter `v` and increment it.
+    /// One AES-256-CTR keystream block.
+    ///
+    /// SP 800-90A §10.2.1.2 / §10.2.1.5.1 increment `V` (rightmost 32 bits,
+    /// big-endian) *before* encrypting, so the first keystream block is
+    /// `E(K, V+1)`, not `E(K, V)`.
     #[inline]
     fn block(&mut self) -> [u8; 16] {
-        let cipher = Aes::new_256(&self.key[..]);
-        let out = cipher.encrypt_block(&self.v);
         inc32(&mut self.v);
-        out
+        let cipher = Aes::new_256(&self.key[..]);
+        cipher.encrypt_block(&self.v)
     }
 
     /// SP 800-90A `Update`: mix `provided_data` (seedlen bytes) into key and V.
