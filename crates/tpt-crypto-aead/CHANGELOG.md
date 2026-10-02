@@ -5,6 +5,18 @@ version `0.1.0` (unreleased) this pass.
 
 ## 0.1.0 — unreleased
 
+### Fixed
+- **RFC 8452 conformance:** the POLYVAL hash key was `E(K_mac, 0^16)` (the
+  GCM GHASH convention); RFC 8452 §4 uses the raw derived
+  message-authentication key directly, with no AES call. Every non-empty
+  message encrypted to a non-standard ciphertext/tag (self-consistent, so
+  round-trip tests passed — the old inline KAT only covered the
+  empty-plaintext vector, where the hash key is never touched). The full
+  RFC 8452 Appendix C corpus (`tests/kat/rfc8452.txt`, 50 vectors incl. the
+  C.3 counter-wrap tests, driven by `tests/rfc8452.rs`) now passes in both
+  directions.
+
+### Added
 ### Added
 - Const-generic `Aead<NONCE_LEN, TAG_LEN>` trait: in-place and detached-tag
   encrypt/decrypt, AAD, constant-time `Tag::ct_eq`, `Nonce` / `Tag` newtypes

@@ -78,10 +78,24 @@ impl VerifyingKey {
         self.0
     }
 
-    /// Verify `sig` over `msg`. Rejects a non-canonical `S` (RFC 8032 §5.1.7).
+    /// Verify `sig` over `msg`.
+    ///
+    /// Strict policy: rejects a non-canonical `S` (RFC 8032 §5.1.7) *and* a
+    /// signature whose `R` decodes to the identity point (Project Wycheproof
+    /// flags identity-`R` forgeries as `InvalidEncoding`; the group equation
+    /// alone accepts them because the cofactored check cannot distinguish the
+    /// small-order component).
     pub fn verify(&self, msg: &[u8], sig: &Signature) -> Result<()> {
+        let r_bytes: [u8; 32] = sig.0[..32].try_into().expect("32 bytes");
         let s_bytes: [u8; 32] = sig.0[32..].try_into().expect("32 bytes");
         if !scalar::is_canonical_le32(&s_bytes) {
+            return Err(Error::Verification);
+        }
+        let r_pt = EdwardsPoint::decompress(&r_bytes);
+        if r_pt.is_none().into_bool() {
+            return Err(Error::Verification);
+        }
+        if r_pt.unwrap().ct_eq(&EdwardsPoint::identity()).into_bool() {
             return Err(Error::Verification);
         }
         if EdwardsPoint::verify(&self.0, msg, &sig.0) {
@@ -157,6 +171,11 @@ pub fn verify_batch<R: CryptoRng>(entries: &[BatchEntry<'_>], rng: &mut R) -> Re
         }
         let a_pt = a_pt.unwrap();
         let r_pt = r_pt.unwrap();
+        // Strict policy (matches `VerifyingKey::verify`): an identity `R`
+        // would let a forged entry cancel out of the batch MSM.
+        if r_pt.ct_eq(&EdwardsPoint::identity()).into_bool() {
+            return Err(Error::Verification);
+        }
 
         // Random 128-bit weight.
         let mut zb = [0u8; 32];

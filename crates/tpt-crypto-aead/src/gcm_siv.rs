@@ -124,15 +124,11 @@ fn gcm_siv_inner(
     let mut enc_key = [0u8; 32];
     derive_keys(cipher, &nonce.0, &mut mac_key, &mut enc_key);
 
-    // POLYVAL key H = E(K_mac, 0^16). For AES-128-GCM-SIV K_mac/K_enc are
-    // 128-bit; for AES-256-GCM-SIV they are 256-bit (RFC 8452 §4).
+    // POLYVAL hash key = the raw message-authentication key (RFC 8452 §4:
+    // `POLYVAL(key = message_authentication_key, ...)` — unlike GCM there is
+    // no `E(K_mac, 0)` step). K_mac is 128-bit in both parametrizations.
     let is_aes256 = cipher.rounds() == 14;
-    let mac_cipher = if is_aes256 {
-        Aes::new_256(&mac_key)
-    } else {
-        Aes::new_128(&mac_key[..16])
-    };
-    let auth_key = mac_cipher.encrypt_block(&[0u8; 16]);
+    let auth_key: [u8; 16] = mac_key[..16].try_into().expect("16-byte mac key");
 
     let enc_cipher = if is_aes256 {
         Aes::new_256(&enc_key)
