@@ -6,6 +6,11 @@ version `0.1.0` (unreleased) this pass.
 ## 0.1.0 — unreleased
 
 ### Added
+- HMAC-DRBG (SP 800-90A) ACVP known-answer corpus (`tests/kat/hmac_drbg_acvp.txt`,
+  16 SHA2-256 records with prediction-resistance and non-PR flows) driven by
+  `tests/drbg_kat.rs`; all records pass byte-for-byte. First CAVP-grade
+  cross-check of `HmacDrbg`.
+### Added
 - Keccak-f[1600] sponge core (branch-free): SHA3-224/256/384/512,
   SHAKE128/256, cSHAKE, KMAC.
 - Merkle–Damgård SHA-2: SHA-224/256/384/512, SHA-512/224, SHA-512/256.

@@ -360,19 +360,31 @@ variant (feature-gated re-exports instead of steps 3–6).
       buffering; the AEAD length block now uses byte counts (RFC 8439), not
       bit counts. `poly1305_rfc8439` now checks the real §2.5.2 vector (plus a
       7-byte-chunked feed). RFC 8439 §2.3.2/§2.4.2 KATs still pass.
-- [~] AES-GCM-SIV (RFC 8452) — nonce-misuse resistant; POLYVAL
+- [x] AES-GCM-SIV (RFC 8452) — nonce-misuse resistant; POLYVAL
       — `src/gcm_siv.rs`: POLYVAL (left-shift multiply, correct
       `x¹²⁸+x¹²⁷+x¹²⁶+x¹²¹+1` reduction constant, branch-free), key-derivation,
       `Aes128GcmSiv`/`Aes256GcmSiv`. **FIXED:** `decrypt` recomputed POLYVAL over
       the *ciphertext* — GCM-SIV authenticates the plaintext, so it now decrypts
       first (CTR keyed by the provided tag), then hashes the recovered plaintext,
-      then compares (restoring the buffer on a tag mismatch). RFC 8452 C.1 KAT +
-      POLYVAL identity + rand round-trip/bitflip props all pass. Still needs the
-      full C.1–C.6 vector set.
+      then compares (restoring the buffer on a tag mismatch).
+      **FIXED (2026-10-03, conformance):** the POLYVAL hash key was
+      `E(K_mac, 0^16)` (the GCM GHASH convention); RFC 8452 §4 uses the raw
+      derived message-authentication key with no AES call, so every non-empty
+      message was non-standard (self-consistent — invisible to round-trip
+      props; the old inline KAT only covered the empty-plaintext vector where
+      `S = dot(0, H) = 0`). Full RFC 8452 Appendix C corpus landed:
+      `tests/kat/rfc8452.txt` (50 vectors: C.1 AES-128, C.2 AES-256, C.3
+      counter wrap) + `tests/rfc8452.rs` (encrypt byte-equality + decrypt
+      round trip per record) + PROVENANCE.
 - [~] `CtrDrbg` (SP 800-90A) implementing `DrbgCore`
-      — `src/ctr_drbg.rs`: AES-256 CTR-DRBG, `update` (key rebuilt into fresh
-      `Zeroizing` buffer), instantiate/reseed/generate, inline tests. Not yet
-      confirmed wired to the `DrbgCore` trait / CAVP vectors.
+      — `src/ctr_drbg.rs`: AES-256 CTR-DRBG (no DF), `update` (key rebuilt into
+      fresh `Zeroizing` buffer), instantiate/reseed/generate, inline tests.
+      Wired to `DrbgCore`; behavioural tests only. ACVP no-DF vectors were
+      distilled (tgIds 11/23) but the seed-material/counter convention could
+      not be reproduced this pass (~360 instantiate/reseed/flow/counter-width
+      variants tried against the expected `returnedBits`; the ACVP spec pins
+      entropy = seedlen, nonce = 0, counterFieldLen = 64 but not the combine
+      rule) — left for a future pass with the ACVP reference client.
 - [x] API: `Aead` trait (`encrypt`/`decrypt` in-place + detached tag), AAD,
       ct tag comparison (`ct_eq`), `Nonce`/`Tag` newtypes
       — `src/api.rs`: const-generic `Aead<NONCE_LEN, TAG_LEN>`, detached +
@@ -382,9 +394,11 @@ variant (feature-gated re-exports instead of steps 3–6).
       — `src/aead_compat.rs` behind the `aead-trait` feature (`aead` 0.6);
       `cargo test -p tpt-crypto-aead --all-features` builds and passes.
 - [~] KATs: NIST GCM/CAVP, RFC 8439, RFC 8452, Wycheproof (AES-GCM, ChaCha20Poly1305)
-      — inline per-module vectors only (FIPS-197 AES, RFC 8439 ChaCha/Poly1305,
-      RFC 8452 GCM-SIV C.1, NIST GCM Appendix B TC1/TC2); all 15 lib tests green.
-      No `tests/` dir, no NIST CAVP / Wycheproof JSON, no PROVENANCE.
+      — inline per-module vectors (FIPS-197 AES, RFC 8439 ChaCha/Poly1305,
+      NIST GCM Appendix B TC1/TC2) + `tests/kat/rfc8452.txt` (full RFC 8452
+      Appendix C, 50 records) with PROVENANCE and `tests/props.rs` round-trip/
+      bitflip props. Still missing: NIST CAVP GCM `.rsp` / Wycheproof AEAD
+      JSON corpora.
 - [x] proptest: `decrypt(encrypt(m)) == m`; any ciphertext/tag/AAD bitflip → error
       — `tests/props.rs` (rand-based): round-trip + single-bit-flip rejection for
       AES-128/256-GCM, ChaCha20/XChaCha20-Poly1305, AES-128/256-GCM-SIV. All
@@ -551,8 +565,16 @@ variant (feature-gated re-exports instead of steps 3–6).
       `ExpandA` output (with the matching `mat_vec_mul` Montgomery bookkeeping
       fix); (c) the parameter table's `ω` was 120/196 for ML-DSA-65/87 instead
       of 55/75 — pack/unpack agreed with each other, so round-trips passed
-      while every real signature verify failed. NIST CAVP
-      `.rsp` / Wycheproof JSON sets still to add.
+      while every real signature verify failed.
+      Wycheproof **done**: `tests/wycheproof.rs` +
+      `tests/kat/wycheproof.txt` (all 1139 testvectors_v1 verify records:
+      ECDSA P-256/SHA-256 ×484, P-384/SHA-384 ×504, Ed25519 ×151; accept iff
+      `valid` and low-s). **Exposed + fixed:** Ed25519 `verify` accepted
+      signatures whose `R` decodes to the identity point (tcId 151); the
+      wrapper and `verify_batch` now reject identity-`R`. The ACVP sigVer
+      harness also asserted nothing until now (`run_sv` printed but never
+      checked) — it asserts `got == want` since 2026-10-03. NIST CAVP `.rsp`
+      sets not added (Wycheproof + RFC 6979 + RFC 8032 cover the surface).
 - [~] proptest: `verify(pk, m, sign(sk, m))` ok; wrong key/msg/ctx → `Verification`;
       `verify_aggregate` iff all inputs valid
       — `tests/ml_dsa_props.rs` now real (rand-based, all 3 param sets): honest

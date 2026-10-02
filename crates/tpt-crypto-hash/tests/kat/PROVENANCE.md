@@ -26,3 +26,31 @@ against an independent reference implementation while wiring up the tests.
   currently pins behavioural properties only.
 - NIST CAVP long-message / Monte-Carlo vectors for SHA-2 / SHA-3.
 - RFC 7693 keyed BLAKE2b full vector file; additional BLAKE3 / K12 lengths.
+
+
+# HMAC-DRBG KAT vectors — PROVENANCE
+
+## `hmac_drbg_acvp.txt` — NIST ACVP (SP 800-90A), VERIFIED
+
+- Source: <https://github.com/usnistgov/ACVP-Server>
+  `gen-val/json-files/hmacDRBG-SP800-90Ar1` (prompt + expectedResults),
+  downloaded 2026-10-03. NIST material, public domain.
+- Distillation: the four SHA2-256 groups (tgIds 5/6 prediction-resistance,
+  27/28 non-PR), first 4 tests of each — 16 records (`entropy`/`nonce`/
+  `pers` + the ordered `opN_(reseed|generate)` list + `returned`).
+- ACVP flow semantics (pinned empirically against the expected results —
+  see `tests/drbg_kat.rs`): PR groups reseed with `(op.entropy, op.ai)`
+  before every Generate and the Generate call itself takes NO additional
+  input; non-PR groups reseed once from the explicit `reSeed` op and every
+  Generate carries its OWN `op.ai`; `returned` is the LAST Generate's full
+  `ret_len` output.
+
+**Result (2026-10-03):** all 16 records pass with no implementation
+changes — the first CAVP-grade cross-check of `HmacDrbg` (the crate's
+previous `tests/drbg.rs` only pinned behavioural properties).
+
+Checksums (sha256, relative to `crates/tpt-crypto-hash/tests/kat/`):
+
+| File | Sha256 |
+| --- | --- |
+| `hmac_drbg_acvp.txt` | `8483d6d501d7e1ef4b287cdb463069abe1764e1e3f5eec485f6e732082f73d74` |
