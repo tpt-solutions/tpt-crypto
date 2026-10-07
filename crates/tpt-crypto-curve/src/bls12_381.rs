@@ -24,7 +24,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use tpt_crypto_field::{
-    bls12381_final_exp_exponent, bls12381_final_exp_split, Bls12381Fp as Fp, Choice, CtEq,
+    bls12381_final_exp_exponent, bls12381_frobenius_exponent, Bls12381Fp as Fp, Choice, CtEq,
     CtOption, Field, Fp12, Fp2, Fp6,
 };
 
@@ -579,14 +579,112 @@ impl CtEq for Gt {
     }
 }
 
-/// Final exponentiation `f^((p^12-1)/r)`, split as
-/// `(p^6-1)` (conjugate over inverse) · `(p^2+1)` · `h = (p^4-p^2+1)/r`.
+/// Frobenius constants for `Fp12`: `γ^k` for `k = 0..6` with `γ = ξ^((p-1)/6)`.
+struct Frob {
+    g: [Fp2; 6],
+}
+
+impl Frob {
+    fn new() -> Self {
+        let xi = fp2(Fp::one(), Fp::one());
+        let gamma = xi.pow_vartime(&bls12381_frobenius_exponent());
+        let mut g = [Fp2::one(); 6];
+        for k in 1..6 {
+            g[k] = g[k - 1].mul(&gamma);
+        }
+        Frob { g }
+    }
+
+    /// The `p`-power Frobenius. With `f = Σ a_k·w^k` (`a_k ∈ Fp²`, `w^6 = ξ`):
+    /// `f^p = Σ conj(a_k)·γ^k·w^k`.
+    fn frob(&self, f: &Fp12) -> Fp12 {
+        let a = |x: &Fp2, k: usize| x.conjugate().mul(&self.g[k]);
+        Fp12::new(
+            Fp6::new(a(&f.c0.c0, 0), a(&f.c0.c1, 2), a(&f.c0.c2, 4)),
+            Fp6::new(a(&f.c1.c0, 1), a(&f.c1.c1, 3), a(&f.c1.c2, 5)),
+        )
+    }
+
+    /// The `p²`-power Frobenius (`f ↦ (f^p)^p`).
+    fn frob2(&self, f: &Fp12) -> Fp12 {
+        self.frob(&self.frob(f))
+    }
+}
+
+/// Square in the cyclotomic subgroup `GΦ₆(p²)` (Granger–Scott). Only valid for
+/// elements with `f^(p⁶+1) = 1`, which holds after the easy part.
+fn cyclotomic_square(f: &Fp12) -> Fp12 {
+    fn fp4_square(a: &Fp2, b: &Fp2) -> (Fp2, Fp2) {
+        let t0 = a.square();
+        let t1 = b.square();
+        let c0 = t1.mul_by_nonresidue().add(&t0);
+        let c1 = a.add(b).square().sub(&t0).sub(&t1);
+        (c0, c1)
+    }
+    let (z0, z4, z3) = (f.c0.c0, f.c0.c1, f.c0.c2);
+    let (z2, z1, z5) = (f.c1.c0, f.c1.c1, f.c1.c2);
+
+    let (t0, t1) = fp4_square(&z0, &z1);
+    let z0 = t0.sub(&z0).double().add(&t0);
+    let z1 = t1.add(&z1).double().add(&t1);
+
+    let (t0, t1) = fp4_square(&z2, &z3);
+    let (t2, t3) = fp4_square(&z4, &z5);
+    let z4 = t0.sub(&z4).double().add(&t0);
+    let z5 = t1.add(&z5).double().add(&t1);
+
+    let t0 = t3.mul_by_nonresidue();
+    let z2 = t0.add(&z2).double().add(&t0);
+    let z3 = t2.sub(&z3).double().add(&t2);
+
+    Fp12::new(Fp6::new(z0, z4, z3), Fp6::new(z2, z1, z5))
+}
+
+/// `f^e` in the cyclotomic subgroup for a little-endian `u64` exponent.
+fn cyclotomic_pow(f: &Fp12, exp: &[u64]) -> Fp12 {
+    let mut r = Fp12::one();
+    for &limb in exp.iter().rev() {
+        for bit in (0..64).rev() {
+            r = cyclotomic_square(&r);
+            if (limb >> bit) & 1 == 1 {
+                r = r.mul(f);
+            }
+        }
+    }
+    r
+}
+
+/// `f^x` for the (negative) BLS parameter `x = -BLS_X`, in the cyclotomic
+/// subgroup, where inversion is conjugation.
+fn cyclotomic_exp_x(f: &Fp12) -> Fp12 {
+    let r = cyclotomic_pow(f, &[BLS_X]);
+    if BLS_X_NEG {
+        r.conjugate()
+    } else {
+        r
+    }
+}
+
+/// `(|x|+1)² / 3` as little-endian words (`(x-1)²/3`, since `x < 0`).
+const XM1_SQ_OVER_3: [u64; 2] = [0x8c00_aaab_0000_aaab, 0x396c_8c00_5555_e156];
+
+/// Final exponentiation `f^((p^12-1)/r)`.
+///
+/// Easy part `(p^6-1)(p^2+1)` via conjugation, one inversion and `p²`-Frobenius;
+/// hard part `(p^4-p^2+1)/r = (x-1)²/3·(x+p)·(x²+p²-1) + 1` with cyclotomic
+/// squarings and Frobenius maps.
 fn final_exp(f: &Fp12) -> Fp12 {
-    let (p2, h) = bls12381_final_exp_split();
-    // Easy part. `f` is a nonzero Miller output, so the inversion succeeds.
+    let fr = Frob::new();
+    // `f` is a nonzero Miller output, so the inversion succeeds.
     let g = f.conjugate().mul(&f.invert().unwrap_or_default());
-    let g = g.pow_vartime(&p2).mul(&g);
-    g.pow_vartime(&h)
+    let g = fr.frob2(&g).mul(&g);
+
+    let t0 = cyclotomic_pow(&g, &XM1_SQ_OVER_3);
+    let t1 = cyclotomic_exp_x(&t0).mul(&fr.frob(&t0));
+    let t2 = cyclotomic_exp_x(&cyclotomic_exp_x(&t1))
+        .mul(&fr.frob2(&t1))
+        .mul(&t1.conjugate());
+    t2.mul(&g)
 }
 
 /// The optimal-ate pairing `e(P, Q)`.
@@ -814,11 +912,29 @@ fn _exp_owned() -> Vec<u64> {
 #[cfg(test)]
 mod final_exp_tests {
     use super::*;
+    use tpt_crypto_field::bls12381_final_exp_split;
 
     #[test]
     fn split_final_exp_matches_full_exponent() {
         let m = miller(&G1::generator(), &G2::generator());
         let full = m.pow_vartime(&bls12381_final_exp_exponent());
         assert_eq!(final_exp(&m), full);
+    }
+
+    #[test]
+    fn frobenius_and_cyclotomic_square() {
+        let m = miller(&G1::generator(), &G2::generator());
+        let fr = Frob::new();
+        // f^p via the exponent definition.
+        let p_exp = {
+            let (p2, _) = bls12381_final_exp_split();
+            // p = sqrt(p²) is not available; check p² instead.
+            p2
+        };
+        assert_eq!(fr.frob2(&m), m.pow_vartime(&p_exp));
+        // Cyclotomic square agrees with the generic square after the easy part.
+        let g = m.conjugate().mul(&m.invert().unwrap());
+        let g = fr.frob2(&g).mul(&g);
+        assert_eq!(cyclotomic_square(&g), g.square());
     }
 }

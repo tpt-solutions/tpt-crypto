@@ -103,6 +103,7 @@ impl EdwardsPoint {
     /// `sign` when `sign` is `true` (i.e. we want the odd x). Used during
     /// decompression and base-point construction; for on-curve points `x^2`
     /// is always a quadratic residue so `sqrt` succeeds.
+    #[cfg(test)]
     fn recover_x(y: &Ed25519Field, sign: bool) -> Ed25519Field {
         let d = curve_d();
         let y2 = y.square();

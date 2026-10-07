@@ -390,6 +390,17 @@ pub fn bls12381_final_exp_split() -> (Vec<u64>, Vec<u64>) {
     (p2.to_vec(), h.to_vec())
 }
 
+/// `(p - 1) / 6` for the BLS12-381 base field, little-endian `u64` words: the
+/// exponent of `ξ` giving the `Fp12` Frobenius constant `γ = ξ^((p-1)/6)`.
+#[must_use]
+pub fn bls12381_frobenius_exponent() -> Vec<u64> {
+    use crate::params::Bls12381FpParams;
+    let p = Big::from_limbs(&Bls12381FpParams::MODULUS);
+    let (q, rem) = p.dec().divmod(&Big::from_u64(6));
+    debug_assert!(rem.is_zero(), "6 must divide p - 1");
+    q.to_vec()
+}
+
 /// Smallest quadratic non-residue `z >= 2` in a tower field, via Euler's criterion.
 pub(crate) fn find_nonresidue_field<F: crate::field::Field + crate::ct::CtEq>(half: &[u64]) -> F {
     let minus_one = F::one().neg();
