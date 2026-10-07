@@ -13,11 +13,42 @@ fn fe_ct_select(a: &Ed25519Field, b: &Ed25519Field, choice: Choice) -> Ed25519Fi
     <Ed25519Field as Field>::ct_select(a, b, choice)
 }
 
+/// `d = -121665 / 121666 mod p` as little-endian 64-bit limbs.
+const CURVE_D_LIMBS: [u64; 4] = [
+    0x75eb_4dca_1359_78a3,
+    0x0070_0a4d_4141_d8ab,
+    0x8cc7_4079_7779_e898,
+    0x5203_6cee_2b6f_fe73,
+];
+
 /// Edwards25519 curve parameter `d = -121665 / 121666 mod p`.
+///
+/// A literal rather than a computed value: deriving it costs a field
+/// inversion (~30 µs), which the group law would otherwise pay per addition.
 fn curve_d() -> Ed25519Field {
-    Ed25519Field::from_u64(121665)
-        .mul(&Ed25519Field::from_u64(121666).invert().unwrap())
-        .neg()
+    fe_from_limbs(CURVE_D_LIMBS)
+}
+
+/// Base point `x` (RFC 8032 §5.1), little-endian limbs.
+const BASE_X_LIMBS: [u64; 4] = [
+    0xc956_2d60_8f25_d51a,
+    0x692c_c760_9525_a7b2,
+    0xc0a4_e231_fdd6_dc5c,
+    0x2169_36d3_cd6e_53fe,
+];
+
+/// Base point `y = 4/5`, little-endian limbs.
+const BASE_Y_LIMBS: [u64; 4] = [
+    0x6666_6666_6666_6658,
+    0x6666_6666_6666_6666,
+    0x6666_6666_6666_6666,
+    0x6666_6666_6666_6666,
+];
+
+fn fe_from_limbs(l: [u64; 4]) -> Ed25519Field {
+    let mut limbs = [0u64; MAX_LIMBS];
+    limbs[..4].copy_from_slice(&l);
+    Ed25519Field::from_limbs(limbs)
 }
 
 /// Edwards25519 point in extended homogeneous coordinates (X:Y:Z:T).
@@ -53,10 +84,11 @@ impl EdwardsPoint {
         }
     }
 
-    /// Ed25519 base point (RFC 8032 §5.1).
+    /// Ed25519 base point (RFC 8032 §5.1), from its literal affine coordinates
+    /// (deriving it costs an inversion and a square root per call).
     pub fn basepoint() -> Self {
-        let y = Ed25519Field::from_u64(4).mul(&Ed25519Field::from_u64(5).invert().unwrap());
-        let x = Self::recover_x(&y, false);
+        let x = fe_from_limbs(BASE_X_LIMBS);
+        let y = fe_from_limbs(BASE_Y_LIMBS);
         EdwardsPoint {
             x,
             y,
@@ -305,7 +337,7 @@ impl EdwardsPoint {
         let r_point = Self::basepoint().mul(&scalar_to_le32(r)).compress();
 
         // k = SHA512(R || A || msg) mod L.
-        let a_point = Self::public_key(seed);
+        let a_point = Self::basepoint().mul(&a).compress();
         let k_digest = sha512_concat(&[&r_point, &a_point, msg]);
         let k = reduce_wide(&k_digest);
 
@@ -455,4 +487,26 @@ fn sha512_concat(parts: &[&[u8]]) -> [u8; 64] {
         h.update(p);
     }
     h.finalize()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn curve_d_literal_matches_definition() {
+        let computed = Ed25519Field::from_u64(121_665)
+            .mul(&Ed25519Field::from_u64(121_666).invert().unwrap())
+            .neg();
+        assert!(curve_d().ct_eq(&computed).into_bool());
+    }
+
+    #[test]
+    fn basepoint_literal_matches_definition() {
+        let y = Ed25519Field::from_u64(4).mul(&Ed25519Field::from_u64(5).invert().unwrap());
+        let x = EdwardsPoint::recover_x(&y, false);
+        let b = EdwardsPoint::basepoint();
+        assert!(b.x.ct_eq(&x).into_bool());
+        assert!(b.y.ct_eq(&y).into_bool());
+    }
 }

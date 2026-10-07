@@ -370,6 +370,26 @@ pub fn bls12381_final_exp_exponent() -> Vec<u64> {
     quot.to_vec()
 }
 
+/// The BLS12-381 final exponentiation split `(p^12-1)/r = (p^6-1)·(p^2+1)·h`
+/// with `h = (p^4 - p^2 + 1)/r`. Returns `(p^2, h)`, little-endian `u64` words.
+///
+/// The `p^6 - 1` factor is applied as `conj(f)/f` by the caller, `p^2 + 1` as
+/// `f^(p^2)·f`, and `h` is the (much shorter) hard-part exponent.
+#[must_use]
+pub fn bls12381_final_exp_split() -> (Vec<u64>, Vec<u64>) {
+    use crate::params::{Bls12381FpParams, Bls12381FrParams};
+    let p = Big::from_limbs(&Bls12381FpParams::MODULUS);
+    let p2 = p.mul(&p);
+    let p4 = p2.mul(&p2);
+    let (num, borrow) = p4.sub(&p2);
+    debug_assert_eq!(borrow, 0);
+    let num = num.add(&Big::from_u64(1));
+    let r = Big::from_limbs(&Bls12381FrParams::MODULUS);
+    let (h, rem) = num.divmod(&r);
+    debug_assert!(rem.is_zero(), "r must divide p^4 - p^2 + 1");
+    (p2.to_vec(), h.to_vec())
+}
+
 /// Smallest quadratic non-residue `z >= 2` in a tower field, via Euler's criterion.
 pub(crate) fn find_nonresidue_field<F: crate::field::Field + crate::ct::CtEq>(half: &[u64]) -> F {
     let minus_one = F::one().neg();

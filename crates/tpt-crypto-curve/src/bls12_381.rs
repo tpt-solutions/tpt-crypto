@@ -24,7 +24,8 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use tpt_crypto_field::{
-    bls12381_final_exp_exponent, Bls12381Fp as Fp, Choice, CtEq, CtOption, Field, Fp12, Fp2, Fp6,
+    bls12381_final_exp_exponent, bls12381_final_exp_split, Bls12381Fp as Fp, Choice, CtEq,
+    CtOption, Field, Fp12, Fp2, Fp6,
 };
 
 /// BLS parameter `|x|` (the seed `x = -0xd201_0000_0001_0000` is negative).
@@ -567,8 +568,14 @@ impl CtEq for Gt {
     }
 }
 
-fn final_exp(f: &Fp12, exp: &[u64]) -> Fp12 {
-    f.pow_vartime(exp)
+/// Final exponentiation `f^((p^12-1)/r)`, split as
+/// `(p^6-1)` (conjugate over inverse) · `(p^2+1)` · `h = (p^4-p^2+1)/r`.
+fn final_exp(f: &Fp12) -> Fp12 {
+    let (p2, h) = bls12381_final_exp_split();
+    // Easy part. `f` is a nonzero Miller output, so the inversion succeeds.
+    let g = f.conjugate().mul(&f.invert().unwrap_or_default());
+    let g = g.pow_vartime(&p2).mul(&g);
+    g.pow_vartime(&h)
 }
 
 /// The optimal-ate pairing `e(P, Q)`.
@@ -580,7 +587,7 @@ pub fn pairing(p: &G1, q: &G2) -> Gt {
         return Gt::one();
     }
     let m = miller(p, q);
-    Gt(final_exp(&m, &bls12381_final_exp_exponent()))
+    Gt(final_exp(&m))
 }
 
 /// The product pairing `∏ e(Pᵢ, Qᵢ)` with a single final exponentiation.
@@ -600,7 +607,7 @@ pub fn multi_pairing(terms: &[(G1, G2)]) -> Gt {
     if !any {
         return Gt::one();
     }
-    Gt(final_exp(&acc, &bls12381_final_exp_exponent()))
+    Gt(final_exp(&acc))
 }
 
 /// The scalar-field modulus `r`, big-endian.
@@ -791,4 +798,16 @@ impl G2 {
 #[allow(dead_code)]
 fn _exp_owned() -> Vec<u64> {
     bls12381_final_exp_exponent()
+}
+
+#[cfg(test)]
+mod final_exp_tests {
+    use super::*;
+
+    #[test]
+    fn split_final_exp_matches_full_exponent() {
+        let m = miller(&G1::generator(), &G2::generator());
+        let full = m.pow_vartime(&bls12381_final_exp_exponent());
+        assert_eq!(final_exp(&m), full);
+    }
 }

@@ -103,13 +103,13 @@ SIMD follow-up lands.
 | `ml-dsa-65/sign`       | ≥ 2 kops/s                          | pending |
 | `ml-dsa-65/verify`     | ≥ 1 kops/s                          | pending |
 | `ml-dsa-44/sign`       | ≥ 4 kops/s                          | pending |
-| `ed25519/sign`         | ≥ 10 kops/s                         | 6.19 ms (~162 ops/s) — below target (table-free scalar mult) |
-| `ed25519/verify`       | ≥ 5 kops/s                          | 9.11 ms (~110 ops/s) — below target |
+| `ed25519/sign`         | ≥ 10 kops/s                         | 486 µs (~2.1 kops/s) — below target (was 6.2 ms before caching curve `d` / base point) |
+| `ed25519/verify`       | ≥ 5 kops/s                          | 7.6 ms (~130 ops/s) — below target (two inversions + sqrt in decompress, unprofiled) |
 | `ecdsa-p256/sign`      | ≥ 3 kops/s                          | 339 µs (~2.9 kops/s) — close to target |
 | `ecdsa-p384/sign`      | ≥ 1.5 kops/s                        | 1.83 ms (~548 ops/s) — below target |
 | `bls12-381/sign`       | ≥ 1 kops/s (pairing-dominated)      | 8.0 ms (~125 ops/s) — below target |
-| `bls12-381/verify`     | ≥ 500 ops/s                         | 185 ms (~5.4 ops/s) — below target |
-| `bls12-381/verify-agg` | ≥ 300 aggregate-verifications/s (n=64) | 187 ms (~5.4/s) — below target |
+| `bls12-381/verify`     | ≥ 500 ops/s                         | 114 ms (~8.8 ops/s) — below target (final exp split into easy/hard parts; affine Fp12 Miller loop dominates) |
+| `bls12-381/verify-agg` | ≥ 300 aggregate-verifications/s (n=64) | 111 ms (~9/s) — below target |
 
 ---
 
