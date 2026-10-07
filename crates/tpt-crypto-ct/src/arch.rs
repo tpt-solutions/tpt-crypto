@@ -160,6 +160,8 @@ impl Block128 {
         Block128::from_le_bytes(b)
     }
 
+    // Only referenced from the `target_feature`-gated AES-NI / PCLMUL paths.
+    #[allow(dead_code)]
     #[inline]
     fn from_m128i(v: core::arch::x86_64::__m128i) -> Self {
         // SAFETY: `__m128i` is always 16 bytes; `v` is initialized by the
@@ -168,6 +170,8 @@ impl Block128 {
         unsafe { core::mem::transmute_copy(&v) }
     }
 
+    // Only referenced from the `target_feature`-gated AES-NI / PCLMUL paths.
+    #[allow(dead_code)]
     #[inline]
     fn to_m128i(self) -> core::arch::x86_64::__m128i {
         // SAFETY: `Block128` is a two-`u64` struct; the transmute copies only the
