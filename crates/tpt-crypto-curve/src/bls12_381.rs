@@ -453,84 +453,95 @@ impl CtEq for G2 {
     }
 }
 
-// --- Fp12 embedding / untwist ---------------------------------------------
+// --- Miller loop --------------------------------------------------------------
+//
+// `T` lives on the twist `E'(Fp²)` in Jacobian coordinates `(X, Y, Z)`
+// (`x = X/Z²`, `y = Y/Z³`), so no inversion is needed per step. With the
+// untwist `ψ(x', y') = (x'·w⁻², y'·w⁻³)` (`w² = v`, `v³ = ξ`), a line through
+// twist points of slope `λ'` evaluated at `P = (xP, yP)` is
+//
+//   l = yP + w·[(λ'·x_T − y_T)·v − λ'·xP·v²] / ξ.
+//
+// Each line below is scaled by `ξ` and by an `Fp²` factor from clearing the
+// Jacobian denominators; `Fp² ⊂ Fp⁶` is annihilated by the `p⁶ − 1` factor of
+// the final exponentiation, so the pairing value is unchanged.
 
-#[inline]
-fn fp6_zero() -> Fp6 {
-    Fp6::new(Fp2::zero(), Fp2::zero(), Fp2::zero())
-}
+type Jac2 = (Fp2, Fp2, Fp2);
 
-/// Embed `a ∈ Fp` into `Fp¹²` as a constant term.
+/// Build the sparse line `c·ξ·yP·1 + w·(a·v + b·v²)` as an `Fp12`.
 #[inline]
-fn fp_in_fp12(a: Fp) -> Fp12 {
+fn line_elt(y_term: Fp2, a: Fp2, b: Fp2) -> Fp12 {
     Fp12::new(
-        Fp6::new(fp2(a, Fp::zero()), Fp2::zero(), Fp2::zero()),
-        fp6_zero(),
+        Fp6::new(y_term, Fp2::zero(), Fp2::zero()),
+        Fp6::new(Fp2::zero(), a, b),
     )
 }
 
-/// `ξ⁻¹` where `ξ = u + 1` (the Fp6/Fp12 non-residue).
-#[inline]
-fn xi_inv() -> Fp2 {
-    fp2(Fp::one(), Fp::one()).invert().unwrap_or_default()
+/// Double `t` and return the tangent line at `P` (scaled).
+fn double_step(t: &Jac2, xp: &Fp2, yp_xi: &Fp2) -> (Fp12, Jac2) {
+    let (x, y, z) = *t;
+    let a = x.square();
+    let b = y.square();
+    let c = b.square();
+    let d = x.add(&b).square().sub(&a).sub(&c).double();
+    let e = a.double().add(&a);
+    let f = e.square();
+    let x3 = f.sub(&d.double());
+    let c8 = c.double().double().double();
+    let y3 = e.mul(&d.sub(&x3)).sub(&c8);
+    let z3 = y.mul(&z).double();
+
+    let zz = z.square();
+    let l = line_elt(
+        yp_xi.mul(&z3).mul(&zz),
+        e.mul(&x).sub(&b.double()),
+        e.mul(&zz).mul(xp).neg(),
+    );
+    (l, (x3, y3, z3))
 }
 
-/// The untwisting isomorphism `ψ : E'(Fp²) → E(Fp¹²)`,
-/// `(x', y') ↦ (x'·w⁻², y'·w⁻³)` with `w² = v`, `v³ = ξ`. Returns the affine
-/// `Fp¹²` coordinates. `q` must not be the identity.
-fn untwist(q: &G2) -> (Fp12, Fp12) {
-    let (xp, yp) = q.to_affine().expect("untwist of identity");
-    let xi = xi_inv();
-    // x = x'·ξ⁻¹ · v²   (lives in the v² slot of the lower Fp6)
-    let x = Fp12::new(Fp6::new(Fp2::zero(), Fp2::zero(), xp.mul(&xi)), fp6_zero());
-    // y = y'·ξ⁻¹ · v · w   (v slot of the upper Fp6)
-    let y = Fp12::new(fp6_zero(), Fp6::new(Fp2::zero(), yp.mul(&xi), Fp2::zero()));
-    (x, y)
-}
-
-// --- Miller loop --------------------------------------------------------------
-
-/// Tangent line at `t` evaluated at `P = (xp, yp)` (numerator only), plus `2t`.
-fn double_line(t: &(Fp12, Fp12), xp: &Fp12, yp: &Fp12) -> (Fp12, (Fp12, Fp12)) {
-    let (x1, y1) = *t;
-    let two = Fp12::one().double();
-    let three = two.add(&Fp12::one());
-    let lam = three
-        .mul(&x1.square())
-        .mul(&two.mul(&y1).invert().unwrap_or_default());
-    let l = yp.sub(&y1).sub(&lam.mul(&xp.sub(&x1)));
-    let x3 = lam.square().sub(&x1.double());
-    let y3 = lam.mul(&x1.sub(&x3)).sub(&y1);
-    (l, (x3, y3))
-}
-
-/// Chord line through `t` and `q` evaluated at `P` (numerator only), plus `t+q`.
-fn add_line(t: &(Fp12, Fp12), q: &(Fp12, Fp12), xp: &Fp12, yp: &Fp12) -> (Fp12, (Fp12, Fp12)) {
-    let (x1, y1) = *t;
+/// Add affine `q` to `t` and return the chord line at `P` (scaled).
+fn add_step(t: &Jac2, q: &(Fp2, Fp2), xp: &Fp2, yp_xi: &Fp2) -> (Fp12, Jac2) {
+    let (x, y, z) = *t;
     let (x2, y2) = *q;
-    let lam = y2.sub(&y1).mul(&x2.sub(&x1).invert().unwrap_or_default());
-    let l = yp.sub(&y1).sub(&lam.mul(&xp.sub(&x1)));
-    let x3 = lam.square().sub(&x1).sub(&x2);
-    let y3 = lam.mul(&x1.sub(&x3)).sub(&y1);
-    (l, (x3, y3))
+    let z1z1 = z.square();
+    let u2 = x2.mul(&z1z1);
+    let s2 = y2.mul(&z).mul(&z1z1);
+    let h = u2.sub(&x);
+    let r = s2.sub(&y);
+    let hh = h.square();
+    let hhh = h.mul(&hh);
+    let v = x.mul(&hh);
+    let x3 = r.square().sub(&hhh).sub(&v.double());
+    let y3 = r.mul(&v.sub(&x3)).sub(&y.mul(&hhh));
+    let z3 = z.mul(&h);
+
+    let l = line_elt(
+        yp_xi.mul(&z3),
+        r.mul(&x2).sub(&y2.mul(&z3)),
+        r.mul(xp).neg(),
+    );
+    (l, (x3, y3, z3))
 }
 
 /// The Miller function `f_{x, ψ(Q)}(P)` (before final exponentiation).
 fn miller(p: &G1, q: &G2) -> Fp12 {
     let (px, py) = p.to_affine().expect("miller of identity");
-    let (xp, yp) = (fp_in_fp12(px), fp_in_fp12(py));
-    let qxy = untwist(q);
+    let qa = q.to_affine().expect("miller of identity");
+    let xi = fp2(Fp::one(), Fp::one());
+    let xp = fp2(px, Fp::zero());
+    let yp_xi = fp2(py, Fp::zero()).mul(&xi);
 
-    let mut t = qxy;
+    let mut t: Jac2 = (qa.0, qa.1, Fp2::one());
     let mut f = Fp12::one();
     let mut i = 62i32;
     while i >= 0 {
         f = f.square();
-        let (l, nt) = double_line(&t, &xp, &yp);
+        let (l, nt) = double_step(&t, &xp, &yp_xi);
         f = f.mul(&l);
         t = nt;
         if (BLS_X >> i) & 1 == 1 {
-            let (l, nt) = add_line(&t, &qxy, &xp, &yp);
+            let (l, nt) = add_step(&t, &qa, &xp, &yp_xi);
             f = f.mul(&l);
             t = nt;
         }

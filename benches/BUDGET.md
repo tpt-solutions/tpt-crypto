@@ -107,9 +107,9 @@ SIMD follow-up lands.
 | `ed25519/verify`       | ≥ 5 kops/s                          | 7.6 ms (~130 ops/s) — below target (two inversions + sqrt in decompress, unprofiled) |
 | `ecdsa-p256/sign`      | ≥ 3 kops/s                          | 339 µs (~2.9 kops/s) — close to target |
 | `ecdsa-p384/sign`      | ≥ 1.5 kops/s                        | 1.83 ms (~548 ops/s) — below target |
-| `bls12-381/sign`       | ≥ 1 kops/s (pairing-dominated)      | 8.0 ms (~125 ops/s) — below target |
-| `bls12-381/verify`     | ≥ 500 ops/s                         | 114 ms (~8.8 ops/s) — below target (final exp split into easy/hard parts; affine Fp12 Miller loop dominates) |
-| `bls12-381/verify-agg` | ≥ 300 aggregate-verifications/s (n=64) | 111 ms (~9/s) — below target |
+| `bls12-381/sign`       | ≥ 1 kops/s (pairing-dominated)      | 4.8 ms (~208 ops/s) — below target |
+| `bls12-381/verify`     | ≥ 500 ops/s                         | 49 ms (~20 ops/s) — below target (projective Miller loop + split final exp; final exp pow now dominates) |
+| `bls12-381/verify-agg` | ≥ 300 aggregate-verifications/s (n=64) | 48.5 ms (~21/s) — below target |
 
 ---
 
