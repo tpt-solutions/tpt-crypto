@@ -129,23 +129,31 @@ fn w_ct_eq<F: Field + CtEq>(a: &(F, F, F), b: &(F, F, F)) -> Choice {
     x.and(y)
 }
 
-/// Fixed-length double-and-add over a big-endian scalar, constant-time in the
-/// scalar bits.
+/// Fixed 4-bit-window multiplication by a big-endian scalar, constant-time in
+/// the scalar: every nibble does four doublings, one addition, and a table
+/// lookup that scans all 16 entries with `ct_select`.
 fn w_mul<F: Field>(p: &(F, F, F), scalar: &[u8], b3: &F) -> (F, F, F) {
     let id = (F::zero(), F::one(), F::zero());
+    let mut table = [id; 16];
+    for i in 1..16 {
+        table[i] = w_add(table[i - 1], *p, b3);
+    }
     let mut acc = id;
     for &byte in scalar {
-        let mut bit = 8;
-        while bit > 0 {
-            bit -= 1;
-            acc = w_add(acc, acc, b3);
-            let sum = w_add(acc, *p, b3);
-            let set = Choice::from_bool(((byte >> bit) & 1) == 1);
-            acc = (
-                F::ct_select(&acc.0, &sum.0, set),
-                F::ct_select(&acc.1, &sum.1, set),
-                F::ct_select(&acc.2, &sum.2, set),
-            );
+        for nibble in [byte >> 4, byte & 0x0F] {
+            for _ in 0..4 {
+                acc = w_add(acc, acc, b3);
+            }
+            let mut sel = id;
+            for (i, t) in table.iter().enumerate() {
+                let hit = Choice::from_bool(nibble as usize == i);
+                sel = (
+                    F::ct_select(&sel.0, &t.0, hit),
+                    F::ct_select(&sel.1, &t.1, hit),
+                    F::ct_select(&sel.2, &t.2, hit),
+                );
+            }
+            acc = w_add(acc, sel, b3);
         }
     }
     acc
@@ -982,5 +990,42 @@ mod final_exp_tests {
         let g = m.conjugate().mul(&m.invert().unwrap());
         let g = fr.frob2(&g).mul(&g);
         assert_eq!(cyclotomic_square(&g), g.square());
+    }
+}
+
+#[cfg(test)]
+mod window_mul_tests {
+    use super::*;
+
+    /// Reference: plain MSB-first double-and-add.
+    fn naive_g2(p: &G2, scalar: &[u8]) -> G2 {
+        let mut acc = G2::identity();
+        for &byte in scalar {
+            for bit in (0..8).rev() {
+                acc = acc.add(&acc);
+                if (byte >> bit) & 1 == 1 {
+                    acc = acc.add(p);
+                }
+            }
+        }
+        acc
+    }
+
+    #[test]
+    fn windowed_mul_matches_double_and_add() {
+        let g = G2::generator();
+        for sc in [
+            &[0u8][..],
+            &[1],
+            &[0x0F, 0xF0, 0x01],
+            &[0xAB; 32],
+            &[0x00, 0x00, 0x7E, 0x12],
+        ] {
+            assert!(g.mul(sc).ct_eq(&naive_g2(&g, sc)).into_bool());
+        }
+        let g1 = G1::generator();
+        let a = g1.mul(&[0x12, 0x34]);
+        let b = g1.mul(&[0x12, 0x00]).add(&g1.mul(&[0x34]));
+        assert!(a.ct_eq(&b).into_bool());
     }
 }
