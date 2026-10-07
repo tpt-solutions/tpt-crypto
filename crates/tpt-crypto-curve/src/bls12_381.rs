@@ -24,8 +24,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use tpt_crypto_field::{
-    bls12381_final_exp_exponent, bls12381_frobenius_exponent, Bls12381Fp as Fp, Choice, CtEq,
-    CtOption, Field, Fp12, Fp2, Fp6,
+    bls12381_final_exp_exponent, Bls12381Fp as Fp, Choice, CtEq, CtOption, Field, Fp12, Fp2, Fp6,
 };
 
 /// BLS parameter `|x|` (the seed `x = -0xd201_0000_0001_0000` is negative).
@@ -147,6 +146,23 @@ fn w_mul<F: Field>(p: &(F, F, F), scalar: &[u8], b3: &F) -> (F, F, F) {
                 F::ct_select(&acc.1, &sum.1, set),
                 F::ct_select(&acc.2, &sum.2, set),
             );
+        }
+    }
+    acc
+}
+
+/// Double-and-add by a *public* 64-bit constant (branches on the scalar bits,
+/// never on the point). Used only for the fixed BLS parameter `|x|`.
+fn w_mul_public_u64<F: Field>(p: &(F, F, F), k: u64, b3: &F) -> (F, F, F) {
+    let mut acc = (F::zero(), F::one(), F::zero());
+    let mut started = false;
+    for bit in (0..64).rev() {
+        if started {
+            acc = w_add(acc, acc, b3);
+        }
+        if (k >> bit) & 1 == 1 {
+            acc = if started { w_add(acc, *p, b3) } else { *p };
+            started = true;
         }
     }
     acc
@@ -379,8 +395,10 @@ impl G2 {
     pub fn clear_cofactor(&self) -> Self {
         // BLS_X is the magnitude |x|; the seed x itself is negative, so
         // `[x]Q == -[|x|]Q`.
-        let xabs: [u8; 8] = BLS_X.to_be_bytes();
-        let x_mul = |q: &G2| q.mul(&xabs).neg();
+        let x_mul = |q: &G2| {
+            let (x, y, z) = w_mul_public_u64(&(q.x, q.y, q.z), BLS_X, &g2_b3());
+            G2 { x, y, z }.neg()
+        };
 
         let t1 = x_mul(self); // [x]P
         let t2 = g2_psi(self); // ψ(P)
@@ -393,58 +411,46 @@ impl G2 {
     }
 }
 
-/// `1 / ξ` with `ξ = u + 1` — the Frobenius base for `ψ` (RFC 9380 §8.8.2).
-#[inline]
-fn psi_base() -> Fp2 {
-    fp2(Fp::one(), Fp::one()).invert().unwrap_or_default()
+// Frobenius constants as literals (`base = 1/ξ`, `ξ = u + 1`); the tests below
+// re-derive each from its defining exponent.
+/// `PSI_X = base^((p−1)/3)` (RFC 9380 §8.8.2): `(c0, c1)`.
+const PSI_X: ([u8; 48], [u8; 48]) = (
+    dh(b"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+    dh(b"1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaad"),
+);
+/// `PSI_Y = base^((p−1)/2)`.
+const PSI_Y: ([u8; 48], [u8; 48]) = (
+    dh(b"135203e60180a68ee2e9c448d77a2cd91c3dedd930b1cf60ef396489f61eb45e304466cf3e67fa0af1ee7b04121bdea2"),
+    dh(b"06af0e0437ff400b6831e36d6bd17ffe48395dabc2d3435e77f76e17009241c5ee67992f72ec05f4c81084fbede3cc09"),
+);
+/// `PSI2_X = base^((p²−1)/3)`.
+const PSI2_X: ([u8; 48], [u8; 48]) = (
+    dh(b"1a0111ea397fe699ec02408663d4de85aa0d857d89759ad4897d29650fb85f9b409427eb4f49fffd8bfd00000000aaac"),
+    dh(b"000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+);
+/// `γ = ξ^((p−1)/6)`, the `Fp¹²` Frobenius base.
+const FROB_GAMMA: ([u8; 48], [u8; 48]) = (
+    dh(b"1904d3bf02bb0667c231beb4202c0d1f0fd603fd3cbd5f4f7b2443d784bab9c4f67ea53d63e7813d8d0775ed92235fb8"),
+    dh(b"00fc3e2b36c4e03288e9e902231f9fb854a14787b6c7b36fec0c8ec971f63c5f282d5ac14d6c7ec22cf78a126ddc4af3"),
+);
+
+fn fp2_const(c: &([u8; 48], [u8; 48])) -> Fp2 {
+    fp2(fp(&c.0), fp(&c.1))
 }
 
-/// `ψ`: `(x, y) ↦ (x^p · PSI_X, y^p · PSI_Y)` where `x^p` on `Fp²` is
-/// conjugation, `PSI_X = base^((p−1)/3)`, `PSI_Y = base^((p−1)/2)`.
+/// `ψ`: `(x, y) ↦ (x^p · PSI_X, y^p · PSI_Y)` where `x^p` on `Fp²` is conjugation.
 fn g2_psi(q: &G2) -> G2 {
-    // (p - 1) / 3 and (p - 1) / 2, little-endian u64 words.
-    const P_M1_D3: [u64; 6] = [
-        0x9354_ffff_ffff_e38e,
-        0x0a39_5554_e5c6_aaaa,
-        0xcd10_4635_a790_520c,
-        0xcc27_c3d6_fbd7_063f,
-        0x1909_37e7_6bc3_e447,
-        0x08ab_05f8_bdd5_4cde,
-    ];
-    const P_M1_D2: [u64; 6] = [
-        0xdcff_7fff_ffff_d555,
-        0x0f55_ffff_58a9_ffff,
-        0xb398_6950_7b58_7b12,
-        0xb23b_a5c2_79c2_895f,
-        0x258d_d3db_21a5_d66b,
-        0x0d00_88f5_1cbf_f34d,
-    ];
-    let base = psi_base();
-    let psi_x = base.pow_vartime(&P_M1_D3);
-    let psi_y = base.pow_vartime(&P_M1_D2);
     let (x, y) = q.to_affine().expect("psi of identity");
-    G2::from_affine_unchecked(x.conjugate().mul(&psi_x), y.conjugate().mul(&psi_y))
+    G2::from_affine_unchecked(
+        x.conjugate().mul(&fp2_const(&PSI_X)),
+        y.conjugate().mul(&fp2_const(&PSI_Y)),
+    )
 }
 
-/// `ψ²`: `(x, y) ↦ (x · PSI2_X, −y)` with `PSI2_X = base^((p²−1)/3)`.
+/// `ψ²`: `(x, y) ↦ (x · PSI2_X, −y)`.
 fn g2_psi2(q: &G2) -> G2 {
-    const P2_M1_D3: [u64; 12] = [
-        0xb78e_0000_097b_2f68,
-        0xd44f_23b4_7cbd_64e3,
-        0x5cb9_6681_20b0_69a9,
-        0xccea_85f9_bf7b_3d16,
-        0x0dba_2c8d_7adb_356d,
-        0x09cd_75de_d75d_7429,
-        0xfc65_c311_0328_4fab,
-        0xc58c_b9a9_b249_ee24,
-        0xccf7_34c3_118a_2e9a,
-        0xa0f4_304c_5a25_6ce6,
-        0xc3f0_d2f8_e0ba_61f8,
-        0x00e1_67e1_92eb_ca97,
-    ];
-    let psi2_x = psi_base().pow_vartime(&P2_M1_D3);
     let (x, y) = q.to_affine().expect("psi2 of identity");
-    G2::from_affine_unchecked(x.mul(&psi2_x), y.neg())
+    G2::from_affine_unchecked(x.mul(&fp2_const(&PSI2_X)), y.neg())
 }
 
 impl CtEq for G2 {
@@ -606,8 +612,7 @@ struct Frob {
 
 impl Frob {
     fn new() -> Self {
-        let xi = fp2(Fp::one(), Fp::one());
-        let gamma = xi.pow_vartime(&bls12381_frobenius_exponent());
+        let gamma = fp2_const(&FROB_GAMMA);
         let mut g = [Fp2::one(); 6];
         for k in 1..6 {
             g[k] = g[k - 1].mul(&gamma);
@@ -939,6 +944,27 @@ mod final_exp_tests {
         let m = miller(&G1::generator(), &G2::generator());
         let full = m.pow_vartime(&bls12381_final_exp_exponent());
         assert_eq!(final_exp(&m), full);
+    }
+
+    #[test]
+    fn frobenius_literals_match_definitions() {
+        let xi = fp2(Fp::one(), Fp::one());
+        let base = xi.invert().unwrap();
+        let p_m1 = tpt_crypto_field::bls12381_frobenius_exponent(); // (p-1)/6
+                                                                    // (p-1)/3 = 2·((p-1)/6), (p-1)/2 = 3·((p-1)/6); build via repeated pow.
+        let sq = |f: Fp2| f.square();
+        let g6 = xi.pow_vartime(&p_m1);
+        assert_eq!(fp2_const(&FROB_GAMMA), g6);
+        let b6 = base.pow_vartime(&p_m1);
+        let b3 = sq(b6);
+        let b2 = b6.mul(&b6).mul(&b6);
+        assert_eq!(fp2_const(&PSI_X), b3);
+        assert_eq!(fp2_const(&PSI_Y), b2);
+        // PSI2_X = base^((p²−1)/3) = PSI_X^(p+1) = PSI_X · conj(PSI_X).
+        assert_eq!(
+            fp2_const(&PSI2_X),
+            fp2_const(&PSI_X).mul(&fp2_const(&PSI_X).conjugate())
+        );
     }
 
     #[test]

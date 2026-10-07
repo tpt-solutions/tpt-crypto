@@ -107,8 +107,8 @@ SIMD follow-up lands.
 | `ed25519/verify`       | ≥ 5 kops/s                          | 0.61 ms (~1.6 kops/s) — below target (was 9.1 ms; Tonelli–Shanks no longer searches for a non-residue per sqrt) |
 | `ecdsa-p256/sign`      | ≥ 3 kops/s                          | 339 µs (~2.9 kops/s) — close to target |
 | `ecdsa-p384/sign`      | ≥ 1.5 kops/s                        | 1.83 ms (~548 ops/s) — below target |
-| `bls12-381/sign`       | ≥ 1 kops/s (pairing-dominated)      | 3.9 ms (~254 ops/s) — below target (hash-to-curve G2 + G2 scalar mult) |
-| `bls12-381/verify`     | ≥ 500 ops/s                         | 4.3 ms (~232 ops/s) — below target (projective Miller loop, sparse lines, Karatsuba tower, Frobenius + cyclotomic final exp) |
+| `bls12-381/sign`       | ≥ 1 kops/s (pairing-dominated)      | 3.4 ms (~290 ops/s) — below target (G2 hash-to-curve 1.4 ms + constant-time G2 scalar mult) |
+| `bls12-381/verify`     | ≥ 500 ops/s                         | ~4.2 ms (~240 ops/s) — below target (projective Miller loop, sparse lines, Karatsuba tower, Frobenius + cyclotomic final exp) |
 | `bls12-381/verify-agg` | ≥ 300 aggregate-verifications/s (n=64) | 4.8 ms (~210/s) — below target (single shared final exponentiation; hash-to-curve ~2 ms is now a major share) |
 
 ---
