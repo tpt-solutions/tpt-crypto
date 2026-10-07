@@ -103,8 +103,8 @@ SIMD follow-up lands.
 | `ml-dsa-65/sign`       | ≥ 2 kops/s                          | pending |
 | `ml-dsa-65/verify`     | ≥ 1 kops/s                          | pending |
 | `ml-dsa-44/sign`       | ≥ 4 kops/s                          | pending |
-| `ed25519/sign`         | ≥ 10 kops/s                         | 486 µs (~2.1 kops/s) — below target (was 6.2 ms before caching curve `d` / base point) |
-| `ed25519/verify`       | ≥ 5 kops/s                          | 7.6 ms (~130 ops/s) — below target (two inversions + sqrt in decompress, unprofiled) |
+| `ed25519/sign`         | ≥ 10 kops/s                         | 255 µs (~3.9 kops/s) — below target (was 6.2 ms before caching curve `d` / base point) |
+| `ed25519/verify`       | ≥ 5 kops/s                          | 0.61 ms (~1.6 kops/s) — below target (was 9.1 ms; Tonelli–Shanks no longer searches for a non-residue per sqrt) |
 | `ecdsa-p256/sign`      | ≥ 3 kops/s                          | 339 µs (~2.9 kops/s) — close to target |
 | `ecdsa-p384/sign`      | ≥ 1.5 kops/s                        | 1.83 ms (~548 ops/s) — below target |
 | `bls12-381/sign`       | ≥ 1 kops/s (pairing-dominated)      | 3.9 ms (~254 ops/s) — below target (hash-to-curve G2 + G2 scalar mult) |

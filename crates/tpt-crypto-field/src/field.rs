@@ -452,7 +452,13 @@ impl<P: FieldParams> FieldElement<P> {
     }
 
     fn tonelli_shanks(&self) -> CtOption<Self> {
-        let z = Self::from_integer(&consts::find_nonresidue(&P::MODULUS));
+        // For `p ≡ 5 (mod 8)` (`S = 2`) the number 2 is always a non-residue, so
+        // skip the (slow, non-Montgomery) runtime search.
+        let z = if P::S == 2 {
+            Self::from_u64(2)
+        } else {
+            Self::from_integer(&consts::find_nonresidue(&P::MODULUS))
+        };
         let mut c = z.pow(&Self::T); // order 2^S
         let mut x = self.pow(&Self::T_PLUS_1_OVER_2);
         let mut b = self.pow(&Self::T);
