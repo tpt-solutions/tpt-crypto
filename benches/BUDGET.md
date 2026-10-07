@@ -107,9 +107,9 @@ SIMD follow-up lands.
 | `ed25519/verify`       | ≥ 5 kops/s                          | 7.6 ms (~130 ops/s) — below target (two inversions + sqrt in decompress, unprofiled) |
 | `ecdsa-p256/sign`      | ≥ 3 kops/s                          | 339 µs (~2.9 kops/s) — close to target |
 | `ecdsa-p384/sign`      | ≥ 1.5 kops/s                        | 1.83 ms (~548 ops/s) — below target |
-| `bls12-381/sign`       | ≥ 1 kops/s (pairing-dominated)      | 4.8 ms (~208 ops/s) — below target |
-| `bls12-381/verify`     | ≥ 500 ops/s                         | 15.0 ms (~67 ops/s) — below target (projective Miller loop, Frobenius + cyclotomic final exp; generic Fp12 mul for lines remains) |
-| `bls12-381/verify-agg` | ≥ 300 aggregate-verifications/s (n=64) | 15.2 ms (~66/s) — below target (n pairings still use separate Miller loops) |
+| `bls12-381/sign`       | ≥ 1 kops/s (pairing-dominated)      | 3.9 ms (~254 ops/s) — below target (hash-to-curve G2 + G2 scalar mult) |
+| `bls12-381/verify`     | ≥ 500 ops/s                         | 4.3 ms (~232 ops/s) — below target (projective Miller loop, sparse lines, Karatsuba tower, Frobenius + cyclotomic final exp) |
+| `bls12-381/verify-agg` | ≥ 300 aggregate-verifications/s (n=64) | 4.8 ms (~210/s) — below target (single shared final exponentiation; hash-to-curve ~2 ms is now a major share) |
 
 ---
 

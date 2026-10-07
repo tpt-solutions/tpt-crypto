@@ -468,17 +468,40 @@ impl CtEq for G2 {
 
 type Jac2 = (Fp2, Fp2, Fp2);
 
-/// Build the sparse line `c·ξ·yP·1 + w·(a·v + b·v²)` as an `Fp12`.
+/// `x · s` for `s ∈ Fp` (2 base-field multiplications).
 #[inline]
-fn line_elt(y_term: Fp2, a: Fp2, b: Fp2) -> Fp12 {
-    Fp12::new(
-        Fp6::new(y_term, Fp2::zero(), Fp2::zero()),
-        Fp6::new(Fp2::zero(), a, b),
-    )
+fn fp2_scale(x: &Fp2, s: &Fp) -> Fp2 {
+    Fp2::new(x.c0.mul(s), x.c1.mul(s))
+}
+
+/// A sparse line `y + w·(a·v + b·v²)` (three nonzero `Fp²` coefficients).
+struct Line {
+    y: Fp2,
+    a: Fp2,
+    b: Fp2,
+}
+
+/// `f · line` exploiting the line's sparsity (15 `Fp²` multiplications
+/// against 18 for a general `Fp12` product).
+fn mul_by_line(f: &Fp12, l: &Line) -> Fp12 {
+    let scale = |x: &Fp6| Fp6::new(x.c0.mul(&l.y), x.c1.mul(&l.y), x.c2.mul(&l.y));
+    // `x · (a·v + b·v²)` for `x ∈ Fp⁶`, `v³ = ξ`.
+    let by_ab = |x: &Fp6| {
+        Fp6::new(
+            x.c1.mul(&l.b).add(&x.c2.mul(&l.a)).mul_by_nonresidue(),
+            x.c0.mul(&l.a).add(&x.c2.mul(&l.b).mul_by_nonresidue()),
+            x.c0.mul(&l.b).add(&x.c1.mul(&l.a)),
+        )
+    };
+    let t0 = scale(&f.c0);
+    let t1 = by_ab(&f.c1);
+    // (f0 + f1)·(y + a·v + b·v²), a general (Karatsuba) Fp6 product.
+    let cross = f.c0.add(&f.c1).mul(&Fp6::new(l.y, l.a, l.b));
+    Fp12::new(t0.add(&t1.mul_by_v()), cross.sub(&t0).sub(&t1))
 }
 
 /// Double `t` and return the tangent line at `P` (scaled).
-fn double_step(t: &Jac2, xp: &Fp2, yp_xi: &Fp2) -> (Fp12, Jac2) {
+fn double_step(t: &Jac2, xp: &Fp, yp: &Fp) -> (Line, Jac2) {
     let (x, y, z) = *t;
     let a = x.square();
     let b = y.square();
@@ -492,16 +515,16 @@ fn double_step(t: &Jac2, xp: &Fp2, yp_xi: &Fp2) -> (Fp12, Jac2) {
     let z3 = y.mul(&z).double();
 
     let zz = z.square();
-    let l = line_elt(
-        yp_xi.mul(&z3).mul(&zz),
-        e.mul(&x).sub(&b.double()),
-        e.mul(&zz).mul(xp).neg(),
-    );
+    let l = Line {
+        y: fp2_scale(&z3.mul(&zz).mul_by_nonresidue(), yp),
+        a: e.mul(&x).sub(&b.double()),
+        b: fp2_scale(&e.mul(&zz), xp).neg(),
+    };
     (l, (x3, y3, z3))
 }
 
 /// Add affine `q` to `t` and return the chord line at `P` (scaled).
-fn add_step(t: &Jac2, q: &(Fp2, Fp2), xp: &Fp2, yp_xi: &Fp2) -> (Fp12, Jac2) {
+fn add_step(t: &Jac2, q: &(Fp2, Fp2), xp: &Fp, yp: &Fp) -> (Line, Jac2) {
     let (x, y, z) = *t;
     let (x2, y2) = *q;
     let z1z1 = z.square();
@@ -516,11 +539,11 @@ fn add_step(t: &Jac2, q: &(Fp2, Fp2), xp: &Fp2, yp_xi: &Fp2) -> (Fp12, Jac2) {
     let y3 = r.mul(&v.sub(&x3)).sub(&y.mul(&hhh));
     let z3 = z.mul(&h);
 
-    let l = line_elt(
-        yp_xi.mul(&z3),
-        r.mul(&x2).sub(&y2.mul(&z3)),
-        r.mul(xp).neg(),
-    );
+    let l = Line {
+        y: fp2_scale(&z3.mul_by_nonresidue(), yp),
+        a: r.mul(&x2).sub(&y2.mul(&z3)),
+        b: fp2_scale(&r, xp).neg(),
+    };
     (l, (x3, y3, z3))
 }
 
@@ -528,21 +551,18 @@ fn add_step(t: &Jac2, q: &(Fp2, Fp2), xp: &Fp2, yp_xi: &Fp2) -> (Fp12, Jac2) {
 fn miller(p: &G1, q: &G2) -> Fp12 {
     let (px, py) = p.to_affine().expect("miller of identity");
     let qa = q.to_affine().expect("miller of identity");
-    let xi = fp2(Fp::one(), Fp::one());
-    let xp = fp2(px, Fp::zero());
-    let yp_xi = fp2(py, Fp::zero()).mul(&xi);
 
     let mut t: Jac2 = (qa.0, qa.1, Fp2::one());
     let mut f = Fp12::one();
     let mut i = 62i32;
     while i >= 0 {
         f = f.square();
-        let (l, nt) = double_step(&t, &xp, &yp_xi);
-        f = f.mul(&l);
+        let (l, nt) = double_step(&t, &px, &py);
+        f = mul_by_line(&f, &l);
         t = nt;
         if (BLS_X >> i) & 1 == 1 {
-            let (l, nt) = add_step(&t, &qa, &xp, &yp_xi);
-            f = f.mul(&l);
+            let (l, nt) = add_step(&t, &qa, &px, &py);
+            f = mul_by_line(&f, &l);
             t = nt;
         }
         i -= 1;

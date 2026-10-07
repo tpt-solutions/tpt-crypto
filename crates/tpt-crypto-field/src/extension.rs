@@ -115,11 +115,18 @@ impl Field for Fp2 {
     #[inline]
     fn mul(&self, o: &Self) -> Self {
         // (a0 + a1 u)(b0 + b1 u) = (a0 b0 - a1 b1, a0 b1 + a1 b0), u^2 = -1.
+        // Karatsuba: 3 base-field multiplications.
         let a0b0 = self.c0.mul(&o.c0);
         let a1b1 = self.c1.mul(&o.c1);
-        let a0b1 = self.c0.mul(&o.c1);
-        let a1b0 = self.c1.mul(&o.c0);
-        Fp2::new(a0b0.sub(&a1b1), a0b1.add(&a1b0))
+        let cross = self.c0.add(&self.c1).mul(&o.c0.add(&o.c1));
+        Fp2::new(a0b0.sub(&a1b1), cross.sub(&a0b0).sub(&a1b1))
+    }
+    #[inline]
+    fn square(&self) -> Self {
+        // (a0 + a1 u)^2 = (a0 + a1)(a0 - a1) + 2 a0 a1 u.
+        let c0 = self.c0.add(&self.c1).mul(&self.c0.sub(&self.c1));
+        let c1 = self.c0.mul(&self.c1).double();
+        Fp2::new(c0, c1)
     }
     #[inline]
     fn invert(&self) -> CtOption<Self> {
@@ -184,10 +191,11 @@ impl Fp6 {
         Fp6 { c0, c1, c2 }
     }
 
-    /// The `ξ = u + 1` non-residue (built once).
+    /// Multiply by `v` (`(c0, c1, c2) ↦ (ξ·c2, c0, c1)`), with no full multiplication.
     #[inline]
-    fn xi() -> Fp2 {
-        Fp2::new(Fp::one(), Fp::one())
+    #[must_use]
+    pub fn mul_by_v(&self) -> Fp6 {
+        Fp6::new(self.c2.mul_by_nonresidue(), self.c0, self.c1)
     }
 }
 
@@ -253,20 +261,33 @@ impl Field for Fp6 {
     }
     #[inline]
     fn mul(&self, o: &Self) -> Self {
-        let xi = Self::xi();
-        let a0b0 = self.c0.mul(&o.c0);
-        let a1b1 = self.c1.mul(&o.c1);
-        let a2b2 = self.c2.mul(&o.c2);
-        let a0b1 = self.c0.mul(&o.c1);
-        let a1b0 = self.c1.mul(&o.c0);
-        let a0b2 = self.c0.mul(&o.c2);
-        let a2b0 = self.c2.mul(&o.c0);
-        let a1b2 = self.c1.mul(&o.c2);
-        let a2b1 = self.c2.mul(&o.c1);
-        let c0 = a0b0.add(&xi.mul(&a1b2.add(&a2b1)));
-        let c1 = a0b1.add(&a1b0).add(&xi.mul(&a2b2));
-        let c2 = a0b2.add(&a2b0).add(&a1b1);
-        Fp6::new(c0, c1, c2)
+        // Karatsuba over Fp2: 6 multiplications, `v^3 = ξ`.
+        let v0 = self.c0.mul(&o.c0);
+        let v1 = self.c1.mul(&o.c1);
+        let v2 = self.c2.mul(&o.c2);
+        let t12 = self
+            .c1
+            .add(&self.c2)
+            .mul(&o.c1.add(&o.c2))
+            .sub(&v1)
+            .sub(&v2);
+        let t01 = self
+            .c0
+            .add(&self.c1)
+            .mul(&o.c0.add(&o.c1))
+            .sub(&v0)
+            .sub(&v1);
+        let t02 = self
+            .c0
+            .add(&self.c2)
+            .mul(&o.c0.add(&o.c2))
+            .sub(&v0)
+            .sub(&v2);
+        Fp6::new(
+            v0.add(&t12.mul_by_nonresidue()),
+            t01.add(&v2.mul_by_nonresidue()),
+            t02.add(&v1),
+        )
     }
     #[inline]
     fn invert(&self) -> CtOption<Self> {
@@ -397,14 +418,18 @@ impl Field for Fp12 {
     }
     #[inline]
     fn mul(&self, o: &Self) -> Self {
-        let v = Self::v();
+        // Karatsuba over Fp6: 3 multiplications, `w^2 = v`.
         let a0b0 = self.c0.mul(&o.c0);
         let a1b1 = self.c1.mul(&o.c1);
-        let a0b1 = self.c0.mul(&o.c1);
-        let a1b0 = self.c1.mul(&o.c0);
-        let c0 = a0b0.add(&v.mul(&a1b1));
-        let c1 = a0b1.add(&a1b0);
-        Fp12::new(c0, c1)
+        let cross = self.c0.add(&self.c1).mul(&o.c0.add(&o.c1));
+        Fp12::new(a0b0.add(&a1b1.mul_by_v()), cross.sub(&a0b0).sub(&a1b1))
+    }
+    #[inline]
+    fn square(&self) -> Self {
+        // Complex squaring: 2 Fp6 multiplications.
+        let ab = self.c0.mul(&self.c1);
+        let t = self.c0.add(&self.c1).mul(&self.c0.add(&self.c1.mul_by_v()));
+        Fp12::new(t.sub(&ab).sub(&ab.mul_by_v()), ab.double())
     }
     #[inline]
     fn invert(&self) -> CtOption<Self> {
