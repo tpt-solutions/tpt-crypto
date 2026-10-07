@@ -327,7 +327,7 @@ pub fn hash_to_curve_edwards25519(msg: &[u8], dst: &[u8]) -> EdwardsPoint {
 mod bls {
     use super::{expand_message_xmd, fe_sqrt, inv0, inv0f, os2ip_mod, sgn0, sswu_affine};
     use crate::bls12_381::{G1, G2};
-    use tpt_crypto_field::{Bls12381Fp as Fp, Bls12381FpParams, CtEq, Field, Fp2};
+    use tpt_crypto_field::{Bls12381Fp as Fp, Bls12381FpParams, Choice, CtEq, Field, Fp2};
     use tpt_crypto_hash::sha2::Sha256;
 
     // Isogenous-curve parameters E': y² = x³ + A'x + B'  (RFC 9380 §8.8.1), Z = 11.
@@ -391,6 +391,7 @@ mod bls {
     }
 
     // (p − 3) / 4 and (p − 1) / 2 for the BLS12-381 base prime, LE u64 words.
+    #[cfg(test)]
     const P_M3_D4: [u64; 6] = [
         0xee7f_bfff_ffff_eaaa,
         0x07aa_ffff_ac54_ffff,
@@ -399,6 +400,7 @@ mod bls {
         0x92c6_e9ed_90d2_eb35,
         0x0680_447a_8e5f_f9a6,
     ];
+    #[cfg(test)]
     const P_M1_D2: [u64; 6] = [
         0xdcff_7fff_ffff_d555,
         0x0f55_ffff_58a9_ffff,
@@ -408,6 +410,7 @@ mod bls {
         0x0d00_88f5_1cbf_f34d,
     ];
 
+    #[cfg(test)]
     /// Fp2 square root (Adj–Rodríguez, eprint 2012/685 Alg. 9; base prime
     /// `p ≡ 3 (mod 4)`). Returns `(root, is_square)`.
     fn fp2_sqrt(a: &Fp2) -> (Fp2, bool) {
@@ -464,6 +467,7 @@ mod bls {
         acc
     }
 
+    #[cfg(test)]
     /// 3-isogeny E' → E on affine `(x', y')` over Fp2.
     fn iso3(xp: &Fp2, yp: &Fp2) -> (Fp2, Fp2) {
         let x = poly2(&ISO3_XNUM, xp).mul(&inv0f(&poly2(&ISO3_XDEN, xp)));
@@ -473,8 +477,147 @@ mod bls {
         (x, y)
     }
 
-    fn map_to_g2(u: &Fp2, a: &Fp2, b: &Fp2, z: &Fp2) -> G2 {
-        let (xp, yp) = sswu_affine(u, a, b, z, sgn0_fp2, fp2_sqrt);
+    // (q + 7) / 16 for q = p², little-endian words (RFC 9380 sqrt for q ≡ 9 mod 16).
+    const Q_P7_D16: [u64; 12] = [
+        0xb26aa00001c718e4,
+        0xd7ced6b1d76382ea,
+        0x3162c338362113cf,
+        0x966bf91ed3e71b74,
+        0xb292e85a87091a04,
+        0x11d68619c86185c7,
+        0xef53149330978ef0,
+        0x050a62cfd16ddca6,
+        0x466e59e49349e8bd,
+        0x9e2dc90e50e7046b,
+        0x74bd278eaa22f25e,
+        0x002a437a4b8c35fc,
+    ];
+    /// `(√i, √−i)` and `√(Z³/ζᵏ)` for the four primitive 8th roots `ζᵏ`.
+    const SQRT_I: (&str, &str) = ("135203e60180a68ee2e9c448d77a2cd91c3dedd930b1cf60ef396489f61eb45e304466cf3e67fa0af1ee7b04121bdea2", "06af0e0437ff400b6831e36d6bd17ffe48395dabc2d3435e77f76e17009241c5ee67992f72ec05f4c81084fbede3cc09");
+    const SQRT_NEG_I: (&str, &str) = ("135203e60180a68ee2e9c448d77a2cd91c3dedd930b1cf60ef396489f61eb45e304466cf3e67fa0af1ee7b04121bdea2", "135203e60180a68ee2e9c448d77a2cd91c3dedd930b1cf60ef396489f61eb45e304466cf3e67fa0af1ee7b04121bdea2");
+    const SQRT_Z3_OVER_ZETA: [(&str, &str); 4] = [
+        ("0f5d0d63d2797471e6d39f306cc0dc0ab85de3bd9f39ce46f3649ac0de9e844417cc8de88716c1fd323fa68040801aea", "0ab1c2ffdd6c253ca155231eb3e71ba044fd562f6f72bc5bad5ec46a0b7a3b0247cf08ce6c6317f40edbc653a72dee17"),
+        ("0699be3b8c6870965e5bf892ad5d2cc7b0e85a117402dfd83b7f4a947e02d978498255a2aaec0ac627b5afbdf1bf1c90", "08157cd83046453f5dd0972b6e3949e4288020b5b8a9cc99ca07e27089a2ce2436d965026adad3ef7baba37f2183e9b5"),
+        ("0ab1c2ffdd6c253ca155231eb3e71ba044fd562f6f72bc5bad5ec46a0b7a3b0247cf08ce6c6317f40edbc653a72dee17", "0aa404866706722864480885d68ad0ccac1967c7544b447873cc37e0181271e006df72162a3d3e0287bf597fbf7f8fc1"),
+        ("11eb95120939a15aed4b108ad51262f33bf72acf3adb46259d28f0306d0e27ffe7d29afc46792c103e535c80de7bc0f6", "0699be3b8c6870965e5bf892ad5d2cc7b0e85a117402dfd83b7f4a947e02d978498255a2aaec0ac627b5afbdf1bf1c90"),
+    ];
+
+    /// Per-call SSWU constants for `E'` over `Fp²`.
+    struct SswuG2 {
+        a: Fp2,
+        b: Fp2,
+        z: Fp2,
+        /// `-B/A`.
+        nb_over_a: Fp2,
+        /// `B/(Z·A)`.
+        b_over_za: Fp2,
+    }
+
+    impl SswuG2 {
+        fn new() -> Self {
+            // E': A' = 240·u, B' = 1012·(1 + u), Z = -(2 + u).
+            let a = Fp2::new(Fp::zero(), Fp::from_u64(240));
+            let b = Fp2::new(Fp::from_u64(1012), Fp::from_u64(1012));
+            let z = Fp2::new(Fp::from_u64(2), Fp::from_u64(1)).neg();
+            let a_inv = inv0f(&a);
+            SswuG2 {
+                nb_over_a: b.neg().mul(&a_inv),
+                b_over_za: b.mul(&inv0f(&z.mul(&a))),
+                a,
+                b,
+                z,
+            }
+        }
+
+        fn g(&self, x: &Fp2) -> Fp2 {
+            x.square().mul(x).add(&self.a.mul(x)).add(&self.b)
+        }
+    }
+
+    /// Simplified SWU onto `E'` with a single `Fp²` exponentiation.
+    ///
+    /// `g(x2) = Z³u⁶·g(x1)`, so one `r = g(x1)^((q+7)/16)` yields the square
+    /// root of whichever of `g(x1)`, `g(x2)` is a square, after fixing it up
+    /// with a root of unity (RFC 9380 Appendix I.3 / F.2.1.2).
+    fn sswu_g2(u: &Fp2, k: &SswuG2) -> (Fp2, Fp2) {
+        let one = Fp2::one();
+        let u2 = u.square();
+        let zu2 = k.z.mul(&u2);
+        let den = zu2.square().add(&zu2);
+        let den_zero = den.is_zero();
+        let x1a = k.nb_over_a.mul(&one.add(&inv0f(&den)));
+        let x1 = Fp2::ct_select(&x1a, &k.b_over_za, den_zero);
+        let x2 = zu2.mul(&x1);
+        let gx1 = k.g(&x1);
+        let gx2 = k.g(&x2);
+
+        let r = gx1.pow_vartime(&Q_P7_D16);
+
+        // sqrt(gx1) if it is a square: r·c with c ∈ {1, i, √i, √−i}.
+        let cands1 = [
+            r,
+            r.mul(&Fp2::new(Fp::zero(), Fp::one())),
+            r.mul(&fp2_hex(SQRT_I.0, SQRT_I.1)),
+            r.mul(&fp2_hex(SQRT_NEG_I.0, SQRT_NEG_I.1)),
+        ];
+        let mut y1 = cands1[0];
+        let mut ok1 = Choice::FALSE;
+        for c in &cands1 {
+            let hit = c.square().ct_eq(&gx1);
+            y1 = Fp2::ct_select(&y1, c, hit.and(ok1.invert()));
+            ok1 = ok1.or(hit);
+        }
+
+        // Otherwise sqrt(gx2) = u³·r·t with t ∈ √(Z³/ζᵏ).
+        let u3 = u2.mul(u);
+        let base = r.mul(&u3);
+        let mut y2 = base;
+        let mut ok2 = Choice::FALSE;
+        for (c0, c1) in &SQRT_Z3_OVER_ZETA {
+            let c = base.mul(&fp2_hex(c0, c1));
+            let hit = c.square().ct_eq(&gx2);
+            y2 = Fp2::ct_select(&y2, &c, hit.and(ok2.invert()));
+            ok2 = ok2.or(hit);
+        }
+
+        let x = Fp2::ct_select(&x2, &x1, ok1);
+        let y0 = Fp2::ct_select(&y2, &y1, ok1);
+        let flip = Choice::from_u8(sgn0_fp2(u) ^ sgn0_fp2(&y0));
+        let y = Fp2::ct_select(&y0, &y0.neg(), flip);
+        (x, y)
+    }
+
+    /// 3-isogeny with the two denominators inverted together.
+    fn iso3_shared(xp: &Fp2, yp: &Fp2) -> (Fp2, Fp2) {
+        let xden = poly2(&ISO3_XDEN, xp);
+        let yden = poly2(&ISO3_YDEN, xp);
+        let prod = xden.mul(&yden);
+        let inv = prod.invert();
+        let (xden_inv, yden_inv) = if inv.is_some().into_bool() {
+            let i = inv.unwrap_or_default();
+            (i.mul(&yden), i.mul(&xden))
+        } else {
+            // A zero denominator is the (negligible-probability) exceptional case.
+            (inv0f(&xden), inv0f(&yden))
+        };
+        let x = poly2(&ISO3_XNUM, xp).mul(&xden_inv);
+        let y = yp.mul(&poly2(&ISO3_YNUM, xp)).mul(&yden_inv);
+        (x, y)
+    }
+
+    fn map_to_g2(u: &Fp2, k: &SswuG2) -> G2 {
+        let (xp, yp) = sswu_g2(u, k);
+        let (x, y) = iso3_shared(&xp, &yp);
+        G2::from_affine_unchecked(x, y)
+    }
+
+    /// Reference path (generic SSWU + `fp2_sqrt`), used to cross-check the fast one.
+    #[cfg(test)]
+    fn map_to_g2_reference(u: &Fp2) -> G2 {
+        let a = Fp2::new(Fp::zero(), Fp::from_u64(240));
+        let b = Fp2::new(Fp::from_u64(1012), Fp::from_u64(1012));
+        let z = Fp2::new(Fp::from_u64(2), Fp::from_u64(1)).neg();
+        let (xp, yp) = sswu_affine(u, &a, &b, &z, sgn0_fp2, fp2_sqrt);
         let (x, y) = iso3(&xp, &yp);
         G2::from_affine_unchecked(x, y)
     }
@@ -482,20 +625,45 @@ mod bls {
     /// `hash_to_curve` (random oracle) into `G2`.
     #[must_use]
     pub fn hash_to_curve_bls12381_g2(msg: &[u8], dst: &[u8]) -> G2 {
-        // E': A' = 240·u, B' = 1012·(1 + u), Z = -(2 + u).
-        let a = Fp2::new(Fp::zero(), Fp::from_u64(240));
-        let b = Fp2::new(Fp::from_u64(1012), Fp::from_u64(1012));
-        let z = Fp2::new(Fp::from_u64(2), Fp::from_u64(1)).neg();
-
+        let k = SswuG2::new();
         let mut uni = [0u8; 256];
         expand_message_xmd::<32, Sha256>(msg, dst, &mut uni, 64);
         let e = |i: usize| os2ip_mod::<Bls12381FpParams>(&uni[i * 64..(i + 1) * 64]);
         let u0 = Fp2::new(e(0), e(1));
         let u1 = Fp2::new(e(2), e(3));
 
-        map_to_g2(&u0, &a, &b, &z)
-            .add(&map_to_g2(&u1, &a, &b, &z))
-            .clear_cofactor()
+        map_to_g2(&u0, &k).add(&map_to_g2(&u1, &k)).clear_cofactor()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn fast_g2_map_matches_reference() {
+            let k = SswuG2::new();
+            let mut seen = [false; 2];
+            for i in 0u64..64 {
+                let u = Fp2::new(
+                    Fp::from_u64(i.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ i),
+                    Fp::from_u64(i * 7 + 1),
+                );
+                let fast = map_to_g2(&u, &k);
+                let slow = map_to_g2_reference(&u);
+                assert!(fast.ct_eq(&slow).into_bool(), "mismatch at {i}");
+                let gx1_square = {
+                    let zu2 = k.z.mul(&u.square());
+                    let den = zu2.square().add(&zu2);
+                    let x1 = k.nb_over_a.mul(&Fp2::one().add(&inv0f(&den)));
+                    fp2_sqrt(&k.g(&x1)).1
+                };
+                seen[usize::from(gx1_square)] = true;
+            }
+            assert!(
+                seen[0] && seen[1],
+                "both gx1/gx2 branches must be exercised"
+            );
+        }
     }
 }
 
