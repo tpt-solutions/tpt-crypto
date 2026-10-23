@@ -97,3 +97,20 @@ fn batch_verifies_and_catches_a_bad_entry() {
     // Empty batch is vacuously valid.
     verify_batch(&[], &mut rng).unwrap();
 }
+
+/// Regression: the all-zero key and signature used to verify for every message,
+/// because the cofactored equation vanishes on small-order points.
+#[test]
+fn small_order_key_and_commitment_are_rejected() {
+    let zero_key = VerifyingKey::from_bytes(&[0u8; 32]);
+    if let Ok(key) = zero_key {
+        assert!(key.verify(b"any message", &Signature::from_bytes([0u8; 64])).is_err());
+    }
+    // A genuine key with an identity commitment must also fail.
+    let seed = [7u8; 32];
+    let sk = SigningKey::from_seed(seed);
+    let vk = sk.verifying_key();
+    let mut identity_r = [0u8; 64];
+    identity_r[0] = 1; // encodes the identity point (y = 1)
+    assert!(vk.verify(b"msg", &Signature::from_bytes(identity_r)).is_err());
+}

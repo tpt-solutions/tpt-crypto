@@ -80,22 +80,27 @@ impl VerifyingKey {
 
     /// Verify `sig` over `msg`.
     ///
-    /// Strict policy: rejects a non-canonical `S` (RFC 8032 §5.1.7) *and* a
-    /// signature whose `R` decodes to the identity point (Project Wycheproof
-    /// flags identity-`R` forgeries as `InvalidEncoding`; the group equation
-    /// alone accepts them because the cofactored check cannot distinguish the
-    /// small-order component).
+    /// Strict policy: rejects a non-canonical `S` (RFC 8032 §5.1.7), a
+    /// signature whose `R` has small order (including the identity, which
+    /// Project Wycheproof flags as `InvalidEncoding`), and a public key of
+    /// small order.
+    ///
+    /// The small-order key check is required. The cofactored equation
+    /// `8·S·B = 8·R + 8·k·A` vanishes on torsion points, so with a small-order
+    /// `A` an all-zero `R` and `S = 0` satisfy it for every message. That makes
+    /// the all-zero key and signature a universal forgery.
     pub fn verify(&self, msg: &[u8], sig: &Signature) -> Result<()> {
         let r_bytes: [u8; 32] = sig.0[..32].try_into().expect("32 bytes");
         let s_bytes: [u8; 32] = sig.0[32..].try_into().expect("32 bytes");
         if !scalar::is_canonical_le32(&s_bytes) {
             return Err(Error::Verification);
         }
-        let r_pt = EdwardsPoint::decompress(&r_bytes);
-        if r_pt.is_none().into_bool() {
-            return Err(Error::Verification);
+        let key_pt = EdwardsPoint::decompress(&self.0);
+        if key_pt.is_none().into_bool() || is_small_order(&key_pt.unwrap()) {
+            return Err(Error::InvalidEncoding);
         }
-        if r_pt.unwrap().ct_eq(&EdwardsPoint::identity()).into_bool() {
+        let r_pt = EdwardsPoint::decompress(&r_bytes);
+        if r_pt.is_none().into_bool() || is_small_order(&r_pt.unwrap()) {
             return Err(Error::Verification);
         }
         if EdwardsPoint::verify(&self.0, msg, &sig.0) {
@@ -104,6 +109,14 @@ impl VerifyingKey {
             Err(Error::Verification)
         }
     }
+}
+
+/// Whether `point` has order dividing 8: multiplying by the cofactor reaches the identity.
+fn is_small_order(point: &EdwardsPoint) -> bool {
+    point
+        .mul_by_cofactor()
+        .ct_eq(&EdwardsPoint::identity())
+        .into_bool()
 }
 
 /// An Ed25519 signature (`R || S`, 64 bytes).
