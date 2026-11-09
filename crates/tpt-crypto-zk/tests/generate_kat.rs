@@ -146,7 +146,11 @@ fn plonk_vector() -> String {
     )
 }
 
+/// Rewrites the committed `tests/kat/VECTORS.txt`. Ignored by default so a
+/// normal `cargo test` never modifies a fixture; run it explicitly with
+/// `cargo test -p tpt-crypto-zk --test generate_kat -- --ignored`.
 #[test]
+#[ignore = "regenerates committed KAT fixtures; run explicitly"]
 fn generate_kat() {
     let text = format!(
         "# tpt-crypto-zk known-answer vectors (see PROVENANCE.md)\n\n{}{}{}{}",
