@@ -38,10 +38,10 @@ document and localize every `unsafe` block with a `// SAFETY:` comment.
 | `tpt-crypto-ct` | Constant-time arithmetic: `Choice`, `ct_eq`/`ct_select`, masked ops, `ct_lookup`. |
 | `tpt-crypto-hash` | SHA-2, SHA-3/SHAKE, BLAKE2b/BLAKE3, K12, HMAC, HKDF, `HmacDrbg`. |
 | `tpt-crypto-field` | Prime field arithmetic over `tpt-math-exact` / `tpt-math-linalg-fixed`. |
-| `tpt-crypto-curve` | Ed25519, X25519, P-256/384 (complete). BLS12-381 + pairing and RFC 9380 hash-to-curve in progress. |
+| `tpt-crypto-curve` | Ed25519, X25519, P-256/384, BLS12-381 G1/G2 + pairing, RFC 9380 hash-to-curve. |
 | `tpt-crypto-aead` | AES-GCM, ChaCha20-Poly1305, AES-GCM-SIV, `CtrDrbg`. |
 | `tpt-crypto-kem` | ML-KEM (FIPS 203), FrodoKEM, Classic McEliece. |
-| `tpt-crypto-sig` | ML-DSA (FIPS 204), SLH-DSA, Ed25519, ECDSA (P-256/384); BLS12-381 pending pairing. |
+| `tpt-crypto-sig` | ML-DSA (FIPS 204), SLH-DSA, Ed25519, ECDSA (P-256/384), RSA verify (PKCS#1 v1.5 / PSS), BLS12-381. |
 | `tpt-crypto-zk` | Bulletproofs, minimal PLONK verifier, Pedersen commitments. |
 | `tpt-crypto-mpc` | Additive secret sharing, Beaver triples, OT primitives. |
 | `tpt-crypto` | Facade re-exporting the substrate behind feature gates. |
@@ -54,7 +54,7 @@ Pick a subset or take everything with `full`:
 | --- | --- |
 | `classical` | `hash`, `aead`, `field`, `curve`, `sig` (Ed25519 / ECDSA / ML-DSA) |
 | `pq` | `kem` + `ml_kem` (needs `alloc`), `sig` + `ml_dsa` |
-| `bls` | BLS12-381 signatures (stub until `-curve` lands pairing) |
+| `bls` | BLS12-381 signatures (aggregation, proof-of-possession) |
 | `zk` | Bulletproofs, Pedersen commitments |
 | `mpc` | secret sharing, Beaver triples, OT |
 | `full` | all of the above |

@@ -888,9 +888,9 @@ Source: project review (see plan `review-project-fix-any-abstract-valiant.md`).
 Each item is its own commit so any can be dropped.
 
 ### A. Stubs, stale docs, hygiene
-- [ ] Remove stale "BLS stub / in progress" wording in `crates/tpt-crypto/src/lib.rs`
+- [x] Remove stale "BLS stub / in progress" wording in `crates/tpt-crypto/src/lib.rs`
       (lines ~13, ~87) and `README.md` (BLS, pairing and h2c are done).
-- [ ] Fix stale `tr placeholder` comment in `crates/tpt-crypto-sig/src/ml_dsa/mod.rs:462`
+- [x] Fix stale `tr placeholder` comment in `crates/tpt-crypto-sig/src/ml_dsa/mod.rs:462`
       (`tr` is filled later in keygen).
 - [ ] Replace placeholder `crates/tpt-crypto-sig/benches/sig_bench.rs` with real criterion
       benches (Ed25519, ECDSA P-256, ML-DSA-44/65/87, BLS, RSA verify); update `benches/BUDGET.md`.

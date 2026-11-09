@@ -10,7 +10,7 @@
 //! |---------|-----------|
 //! | `classical` | `hash`, `aead`, `field`, `curve`, `sig`, `ml_dsa` |
 //! | `pq` | `kem`, `ml_kem` (with `alloc`), `sig`, `ml_dsa` |
-//! | `bls` | `bls` (BLS12-381 signatures, stub until `-curve` lands it) |
+//! | `bls` | `bls` (BLS12-381 signatures, aggregation, proof-of-possession) |
 //! | `zk` | `bulletproofs` |
 //! | `mpc` | `mpc` |
 //! | `full` | all of the above |
@@ -84,7 +84,7 @@ pub mod ml_dsa {
 }
 
 #[cfg(feature = "bls")]
-#[doc = "BLS12-381 signatures (stub until `-curve` lands pairing support)."]
+#[doc = "BLS12-381 signatures (minimal-pubkey-size; POP ciphersuite by default)."]
 #[cfg_attr(docsrs, doc(cfg(feature = "bls")))]
 pub mod bls;
 

@@ -459,7 +459,8 @@ where
         off += 32;
         sk_bytes[off..off + 32].copy_from_slice(&k_seed);
         off += 32;
-        sk_bytes[off..off + 64].copy_from_slice(&[0u8; 64]); // tr placeholder
+        // tr = H(pk) is written below, once pk is packed (FIPS 204 Alg 6 line 7).
+        sk_bytes[off..off + 64].copy_from_slice(&[0u8; 64]);
         off += 64;
         let s1_slice = s1.as_poly_slice();
         for s1_poly in s1_slice.iter().take(P::L) {
