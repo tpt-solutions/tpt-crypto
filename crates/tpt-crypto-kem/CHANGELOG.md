@@ -12,7 +12,10 @@ version `0.1.0` (unreleased) this pass.
 - K-PKE and the Fujisaki–Okamoto transform; branch-free implicit-reject path.
 - Parameter sets `MlKem512`, `MlKem768`, `MlKem1024`.
 - Byte encoding / decoding (`encode`), CBD sampler (`sampler`).
-- FrodoKEM (`frodo`) and Classic McEliece (`mceliece`) module stubs
-  (return `Error::Unsupported`).
 - `specs/ml_kem_decapsulate.spec`; `cargo-fuzz` decapsulation target.
 - FIPS 203 KAT coverage.
+
+### Removed (pre-release)
+- FrodoKEM (`frodo`) and Classic McEliece (`mceliece`) placeholder modules and
+  their features. They only returned `Error::Unsupported`, and `--all-features`
+  enabled them. Both remain planned work in the workspace `todo.md`.

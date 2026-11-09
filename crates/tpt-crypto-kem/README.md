@@ -15,9 +15,8 @@ Layer: `kem` on `field + curve + hash` (uses `core + ct + hash`). Pure Rust,
   - K-PKE + Fujisaki–Okamoto transform; all data flow is branch-free so
     timing does not depend on secret polynomials or the implicit-reject path.
   - Parameter sets [`MlKem512`], [`MlKem768`], [`MlKem1024`].
-- **FrodoKEM** (`frodo`) and **Classic McEliece** (`mceliece`) — gated,
-  reserved for a later pass; modules expose the surface but return
-  `Error::Unsupported`.
+- FrodoKEM and Classic McEliece are not implemented in this crate yet (tracked
+  in the workspace `todo.md`).
 
 ## Example
 
@@ -36,7 +35,6 @@ assert_eq!(ss_a, ss_b);
 | --- | --- |
 | `std` | default |
 | `alloc` | enables the `ml_kem` / `pke` high-level API |
-| `frodo` / `mceliece` | gated larger lattice / code-based constructions (stubs) |
 
 ## Status
 

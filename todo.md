@@ -448,10 +448,9 @@ variant (feature-gated re-exports instead of steps 3–6).
       `XOF(ρ, j, i)` index order (no double forward-NTT). `tests/props.rs`
       round-trips now really assert and pass for 512/768/1024; doctest un-ignored.
 - [x] Spec API: `ml_kem::keygen::<MlKem768>(rng)`, `encapsulate`, `decapsulate`
-- [~] FrodoKEM (feature `frodo`) and Classic McEliece (feature `mceliece`,
-      long-term secrets) — gated, larger
-      — `src/frodo.rs` / `src/mceliece.rs` are feature-gated stubs returning
-      `Error::Unsupported`; API surface only.
+- [ ] FrodoKEM and Classic McEliece (long-term secrets) — not implemented.
+      The placeholder modules and `frodo`/`mceliece` features were removed
+      (they only returned `Error::Unsupported`). Re-add when the implementations land.
 - [x] KATs: FIPS 203 ACVP vectors + NIST `.rsp` KAT files (all param sets)
       — `tests/kat/fips203_{512,768,1024}.rsp` (1000 records each) validated by
       `tests/ml_kem_kat.rs` (keygen/encaps/decaps/implicit-reject, full byte
@@ -894,14 +893,15 @@ Each item is its own commit so any can be dropped.
       (`tr` is filled later in keygen).
 - [ ] Replace placeholder `crates/tpt-crypto-sig/benches/sig_bench.rs` with real criterion
       benches (Ed25519, ECDSA P-256, ML-DSA-44/65/87, BLS, RSA verify); update `benches/BUDGET.md`.
-- [ ] Make FrodoKEM / Classic McEliece stubs honest: gate behind an explicit
-      `unstable-unimplemented` feature (or `compile_error!`) so enabling them cannot silently
-      return `Unsupported`. Stretch: implement FrodoKEM-640/976/1344. McEliece stays deferred.
+- [x] Remove FrodoKEM / Classic McEliece placeholder modules and features (they only returned
+      `Unsupported`; `--all-features` enabled them). Implementations tracked separately:
+      - [ ] FrodoKEM-640/976/1344 (SHAKE + sampler reuse).
+      - [ ] Classic McEliece (deferred).
 - [ ] Delete stray `__pycache__/ctr_drbg_ref*.pyc`; add `__pycache__/` to `.gitignore`.
 - [ ] Annotate every `[~]` item with its remaining gap; fix the stale zk header note
       ("untested") in the Phase 4 section.
 - [ ] Add missing KAT corpora to the list of open gaps: NIST CAVP GCM `.rsp`, Wycheproof AEAD JSON.
-- [ ] Replace "local git only this pass" status line in `README.md` with the true state.
+- [x] Replace "local git only this pass" status line in `README.md` with the true state.
 
 ### B. Ease-of-use & innovation
 - [ ] `os-rng` feature: `OsRng: CryptoRng` via `getrandom` (std). Record the license note in

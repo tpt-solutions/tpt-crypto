@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = "Constant-time ML-KEM (FIPS 203) key encapsulation: NTT polynomial core, K-PKE, FO transform. no_std, pure Rust. FrodoKEM / Classic McEliece gated."
+description = "Constant-time ML-KEM (FIPS 203) key encapsulation: NTT polynomial core, K-PKE, FO transform. no_std, pure Rust."
 readme = "README.md"
 keywords = ["crypto", "kem", "ml-kem", "fips-203", "no-std"]
 categories = ["cryptography", "no-std"]
@@ -22,9 +22,6 @@ tpt-crypto-hash = { workspace = true }
 default = ["std"]
 std = ["alloc", "tpt-crypto-core/std", "tpt-crypto-ct/std", "tpt-crypto-hash/std"]
 alloc = ["tpt-crypto-core/alloc", "tpt-crypto-hash/alloc"]
-# Gated, larger lattice constructions (reserved for a later pass).
-frodo = []
-mceliece = []
 
 [dev-dependencies]
 hex = "0.4"

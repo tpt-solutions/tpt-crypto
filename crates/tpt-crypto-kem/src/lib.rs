@@ -28,9 +28,6 @@
 //!
 //! Parameter sets [`MlKem512`], [`MlKem768`], and [`MlKem1024`] are provided.
 //!
-//! FrodoKEM (`frodo` feature) and Classic McEliece (`mceliece` feature) are
-//! gated, larger constructions reserved for a later pass; their modules expose
-//! the API surface but currently return [`tpt_crypto_core::Error::Unsupported`].
 
 #![no_std]
 #![forbid(unsafe_code)]
@@ -48,11 +45,5 @@ pub mod params;
 pub mod pke;
 pub mod poly;
 pub mod sampler;
-
-#[cfg(feature = "frodo")]
-pub mod frodo;
-
-#[cfg(feature = "mceliece")]
-pub mod mceliece;
 
 pub use params::{MlKem1024, MlKem512, MlKem768};

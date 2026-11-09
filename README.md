@@ -3,8 +3,8 @@
 Pure Rust, `no_std`-first, hand-rolled primitives with a 100% MIT/Apache
 compatible dependency chain. No OpenSSL, no `ring`, no `*-sys` C-FFI.
 
-> **Status (this pass):** local `git` only — no GitHub remote, no
-> `cargo publish`. Metadata is prepped so publishing is a later one-step.
+> **Status:** pre-release `0.1.0`. Not yet published to crates.io; crates.io
+> metadata is prepared so publishing is a one-step follow-up.
 
 > **⚠️ Not audited — reference material only.** This project has **not** been
 > independently security-audited or formally verified end-to-end. It is offered
@@ -40,7 +40,7 @@ document and localize every `unsafe` block with a `// SAFETY:` comment.
 | `tpt-crypto-field` | Prime field arithmetic over `tpt-math-exact` / `tpt-math-linalg-fixed`. |
 | `tpt-crypto-curve` | Ed25519, X25519, P-256/384, BLS12-381 G1/G2 + pairing, RFC 9380 hash-to-curve. |
 | `tpt-crypto-aead` | AES-GCM, ChaCha20-Poly1305, AES-GCM-SIV, `CtrDrbg`. |
-| `tpt-crypto-kem` | ML-KEM (FIPS 203), FrodoKEM, Classic McEliece. |
+| `tpt-crypto-kem` | ML-KEM (FIPS 203). FrodoKEM and Classic McEliece are planned. |
 | `tpt-crypto-sig` | ML-DSA (FIPS 204), SLH-DSA, Ed25519, ECDSA (P-256/384), RSA verify (PKCS#1 v1.5 / PSS), BLS12-381. |
 | `tpt-crypto-zk` | Bulletproofs, minimal PLONK verifier, Pedersen commitments. |
 | `tpt-crypto-mpc` | Additive secret sharing, Beaver triples, OT primitives. |
