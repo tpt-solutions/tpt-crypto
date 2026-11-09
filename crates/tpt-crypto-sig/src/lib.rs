@@ -22,6 +22,8 @@ pub mod ecdsa;
 pub mod ed25519;
 pub mod ml_dsa;
 pub mod poly;
+#[cfg(feature = "alloc")]
+pub mod rsa;
 pub mod test_rng;
 
 #[cfg(feature = "slh-dsa")]
