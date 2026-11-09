@@ -12,7 +12,7 @@
 //! lives in `tpt-crypto-ct`, per the layering rules.
 
 use crate::api::BlockCipher;
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", feature = "std"))]
 use tpt_crypto_ct::arch;
 
 /// A portable / hardware AES block-cipher instance (the round-key schedule).
@@ -269,7 +269,9 @@ fn mix_columns(state: &mut [u32; 4]) {
 
 // ----- AES-NI path (x86_64, routed through tpt-crypto-ct::arch) -----------
 
-#[cfg(target_arch = "x86_64")]
+// The AES-NI helper in `tpt-crypto-ct::arch` is only compiled with `std`
+// (runtime CPU detection), so the hardware path needs both gates.
+#[cfg(all(target_arch = "x86_64", feature = "std"))]
 #[inline(always)]
 fn aesni_encrypt(core: &Aes, block: &[u8; 16]) -> [u8; 16] {
     let mut rk: [arch::Block128; 15] = [arch::Block128 { lo: 0, hi: 0 }; 15];
@@ -290,7 +292,7 @@ fn aesni_encrypt(core: &Aes, block: &[u8; 16]) -> [u8; 16] {
 }
 
 impl Aes {
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", feature = "std"))]
     #[inline(always)]
     fn dispatch_encrypt(&self, block: &[u8; 16]) -> [u8; 16] {
         #[cfg(target_feature = "aes")]
@@ -307,7 +309,7 @@ impl Aes {
         }
     }
 
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(not(all(target_arch = "x86_64", feature = "std")))]
     #[inline(always)]
     fn dispatch_encrypt(&self, block: &[u8; 16]) -> [u8; 16] {
         self.encrypt_core(block)
