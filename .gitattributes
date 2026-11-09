@@ -1,0 +1,2 @@
+# Known-answer fixtures are checksummed in PROVENANCE.md; keep their bytes exactly as committed (no EOL conversion).
+crates/*/tests/kat/** -text

@@ -125,4 +125,4 @@ Checksums (sha256, relative to `crates/tpt-crypto-sig/tests/kat/`):
 
 | File | Sha256 |
 | --- | --- |
-| `wycheproof.txt` | `df10efc615edf64c54549c0383aacf4668c587b36b43b00d5032802f3109e61a` |
+| `wycheproof.txt` | `9507075c83cecb301bb186aec6c1d9f32dd390fbe61f8ef430155a6db0a1548f` |
