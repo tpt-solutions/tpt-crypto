@@ -59,11 +59,6 @@ required-features = ["slh-dsa"]
 name = "signature_compat"
 required-features = ["signature"]
 
-[[bench]]
-name = "sig_bench"
-harness = false
-required-features = ["std"]
-
 [lib]
 path = "src/lib.rs"
 

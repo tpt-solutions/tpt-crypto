@@ -1,8 +1,12 @@
 //! Signature benchmarks, tracking the `tpt-crypto-sig` rows of
-//! `benches/BUDGET.md` (Ed25519, ECDSA P-256/P-384, BLS12-381).
+//! `benches/BUDGET.md` (Ed25519, ECDSA P-256/P-384, BLS12-381, ML-DSA-44/65/87).
+//!
+//! RSA verification is not benchmarked yet: its KAT key is 2048-bit and needs
+//! a fixed vector before a bench can use it.
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use tpt_crypto_sig::ecdsa::{self, SigningKey, P256, P384};
+use tpt_crypto_sig::ml_dsa::{self, MlDsa44, MlDsa65, MlDsa87};
 use tpt_crypto_sig::{bls, ed25519};
 
 const MSG: &[u8] = b"tpt-crypto signature benchmark message";
@@ -69,5 +73,39 @@ fn bls_bench(c: &mut Criterion) {
     g.finish();
 }
 
-criterion_group!(benches, eddsa, ecdsa_bench, bls_bench);
+fn mldsa_bench(c: &mut Criterion) {
+    let mut g = c.benchmark_group("sig");
+    g.throughput(Throughput::Elements(1));
+
+    let seed = [0x33u8; 32];
+    let (pk, sk) = ml_dsa::keygen_from_seed::<MlDsa44>(&seed);
+    let sig = ml_dsa::sign(&sk, MSG, &[]).unwrap();
+    g.bench_function("ml-dsa-44/sign", |b| {
+        b.iter(|| ml_dsa::sign(&sk, MSG, &[]).unwrap());
+    });
+    g.bench_function("ml-dsa-44/verify", |b| {
+        b.iter(|| ml_dsa::verify(&pk, MSG, &sig, &[]).unwrap());
+    });
+
+    let (pk, sk) = ml_dsa::keygen_from_seed::<MlDsa65>(&seed);
+    let sig = ml_dsa::sign(&sk, MSG, &[]).unwrap();
+    g.bench_function("ml-dsa-65/sign", |b| {
+        b.iter(|| ml_dsa::sign(&sk, MSG, &[]).unwrap());
+    });
+    g.bench_function("ml-dsa-65/verify", |b| {
+        b.iter(|| ml_dsa::verify(&pk, MSG, &sig, &[]).unwrap());
+    });
+
+    let (pk, sk) = ml_dsa::keygen_from_seed::<MlDsa87>(&seed);
+    let sig = ml_dsa::sign(&sk, MSG, &[]).unwrap();
+    g.bench_function("ml-dsa-87/sign", |b| {
+        b.iter(|| ml_dsa::sign(&sk, MSG, &[]).unwrap());
+    });
+    g.bench_function("ml-dsa-87/verify", |b| {
+        b.iter(|| ml_dsa::verify(&pk, MSG, &sig, &[]).unwrap());
+    });
+    g.finish();
+}
+
+criterion_group!(benches, eddsa, ecdsa_bench, bls_bench, mldsa_bench);
 criterion_main!(benches);

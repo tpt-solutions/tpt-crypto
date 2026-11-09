@@ -891,8 +891,10 @@ Each item is its own commit so any can be dropped.
       (lines ~13, ~87) and `README.md` (BLS, pairing and h2c are done).
 - [x] Fix stale `tr placeholder` comment in `crates/tpt-crypto-sig/src/ml_dsa/mod.rs:462`
       (`tr` is filled later in keygen).
-- [ ] Replace placeholder `crates/tpt-crypto-sig/benches/sig_bench.rs` with real criterion
-      benches (Ed25519, ECDSA P-256, ML-DSA-44/65/87, BLS, RSA verify); update `benches/BUDGET.md`.
+- [x] Replace placeholder `crates/tpt-crypto-sig/benches/sig_bench.rs` with real criterion
+      benches. Removed the placeholder; `benches/benches/sig.rs` now covers Ed25519, ECDSA,
+      BLS and ML-DSA-44/65/87, with measured rows in `benches/BUDGET.md`.
+      - [ ] RSA verify bench (needs a fixed 2048-bit vector).
 - [x] Remove FrodoKEM / Classic McEliece placeholder modules and features (they only returned
       `Unsupported`; `--all-features` enabled them). Implementations tracked separately:
       - [ ] FrodoKEM-640/976/1344 (SHAKE + sampler reuse).

@@ -100,9 +100,12 @@ SIMD follow-up lands.
 
 | Benchmark              | Target                              | Status  |
 | ---------------------- | ----------------------------------- | ------- |
-| `ml-dsa-65/sign`       | ≥ 2 kops/s                          | pending |
-| `ml-dsa-65/verify`     | ≥ 1 kops/s                          | pending |
-| `ml-dsa-44/sign`       | ≥ 4 kops/s                          | pending |
+| `ml-dsa-65/sign`       | ≥ 2 kops/s                          | 336 µs (~3.0 kops/s) — meets target |
+| `ml-dsa-65/verify`     | ≥ 1 kops/s                          | 102 µs (~9.8 kops/s) — meets target |
+| `ml-dsa-44/sign`       | ≥ 4 kops/s                          | 333 µs (~3.0 kops/s) — below target |
+| `ml-dsa-44/verify`     | —                                   | 153 µs (~6.5 kops/s) — recorded |
+| `ml-dsa-87/sign`       | —                                   | 473 µs (~2.1 kops/s) — recorded |
+| `ml-dsa-87/verify`     | —                                   | 168 µs (~5.9 kops/s) — recorded |
 | `ed25519/sign`         | ≥ 10 kops/s                         | 255 µs (~3.9 kops/s) — below target (was 6.2 ms before caching curve `d` / base point) |
 | `ed25519/verify`       | ≥ 5 kops/s                          | 0.61 ms (~1.6 kops/s) — below target (was 9.1 ms; Tonelli–Shanks no longer searches for a non-residue per sqrt) |
 | `ecdsa-p256/sign`      | ≥ 3 kops/s                          | 339 µs (~2.9 kops/s) — close to target |
