@@ -115,3 +115,8 @@ pub mod prelude;
 #[doc = "One-call recipes with misuse-resistant defaults: `seal` / `open` (XChaCha20-Poly1305, random nonce)."]
 #[cfg_attr(docsrs, doc(cfg(all(feature = "classical", feature = "os-rng"))))]
 pub mod easy;
+
+/// Power-on known-answer self-test () over the classical primitives.
+#[cfg(feature = "classical")]
+#[cfg_attr(docsrs, doc(cfg(feature = "classical")))]
+pub mod selftest;
