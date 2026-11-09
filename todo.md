@@ -902,7 +902,7 @@ Each item is its own commit so any can be dropped.
       `Unsupported`; `--all-features` enabled them). Implementations tracked separately:
       - [ ] FrodoKEM-640/976/1344 (SHAKE + sampler reuse).
       - [ ] Classic McEliece (deferred).
-- [ ] Delete stray `__pycache__/ctr_drbg_ref*.pyc`; add `__pycache__/` to `.gitignore`.
+- [x] Delete stray `__pycache__/ctr_drbg_ref*.pyc`; add `__pycache__/` to `.gitignore`.
 - [ ] Annotate every `[~]` item with its remaining gap; fix the stale zk header note
       ("untested") in the Phase 4 section.
 - [ ] Add missing KAT corpora to the list of open gaps: NIST CAVP GCM `.rsp`, Wycheproof AEAD JSON.
@@ -952,7 +952,7 @@ Each item is its own commit so any can be dropped.
       `aws-lc-rs`.
 - [ ] `wasm32` bindings crate (wasm-bindgen) with npm package. C-ABI crate only if a
       consumer asks.
-- [ ] `cargo xtask doctor` (toolchain, targets, nightly/miri, deny/fuzz present).
+- [x] `cargo xtask doctor` (toolchain, targets, nightly/miri, deny/fuzz present).
 - [ ] `cargo xtask wycheproof-fetch` (download + sha256 into `tests/kat/` PROVENANCE).
 - [ ] `cargo xtask new-primitive` (scaffold a crate per AGENTS.md rules).
 - [ ] `cargo xtask coverage`.
