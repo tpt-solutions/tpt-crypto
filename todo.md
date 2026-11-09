@@ -926,7 +926,10 @@ Each item is its own commit so any can be dropped.
 - [ ] HPKE (RFC 9180) over X25519 and the hybrid KEM, with RFC test vectors.
 - [ ] Key encoding module: DER / PEM / SPKI / PKCS#8 for Ed25519, P-256/384 and RSA public
       keys (closes the RSA SPKI gap); optional JWK. Strict minimal DER; fuzz targets added.
-- [ ] Argon2id (RFC 9106) in `tpt-crypto-hash`, with RFC test vectors.
+- [x] Argon2id (RFC 9106) in `tpt-crypto-hash::argon2` (feature `alloc`). Matches the
+      RFC §5.3 tag and H_0 digest; provenance in `tests/kat/PROVENANCE.md`. Only
+      Argon2id v0x13 is provided (no d/i variants). `blake2b_var` adds runtime-length BLAKE2b.
+      - [ ] Fuzz target for parameter / length inputs; benchmark row in `benches/BUDGET.md`.
 - [ ] `tpt_crypto::selftest::run()` power-on KATs reusing existing vector files.
 - [ ] Policy profile features `profile-cnsa2` / `profile-modern` that compile out
       non-approved algorithms (e.g. SHA-1-class, RSA < 3072).

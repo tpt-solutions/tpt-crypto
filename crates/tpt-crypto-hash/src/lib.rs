@@ -33,6 +33,10 @@ extern crate alloc;
 
 pub mod blake2b;
 pub mod blake3;
+
+/// Argon2id (RFC 9106) password hashing and key derivation.
+#[cfg(feature = "alloc")]
+pub mod argon2;
 pub mod k12;
 pub mod kdf;
 pub mod mac;

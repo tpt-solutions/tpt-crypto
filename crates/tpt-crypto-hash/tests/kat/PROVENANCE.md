@@ -54,3 +54,16 @@ Checksums (sha256, relative to `crates/tpt-crypto-hash/tests/kat/`):
 | File | Sha256 |
 | --- | --- |
 | `hmac_drbg_acvp.txt` | `8483d6d501d7e1ef4b287cdb463069abe1764e1e3f5eec485f6e732082f73d74` |
+
+## Argon2id — RFC 9106 §5.3 (inline in `src/argon2.rs`)
+
+- Source: RFC 9106 (Biryukov, Dinu, Khovratovich, Josefsson, 2021),
+  <https://www.rfc-editor.org/rfc/rfc9106.txt>, §5.3 "Argon2id Test Vectors".
+  Retrieved 2026-11-10 as the raw RFC text. Public IETF document.
+- Vectors checked: the full 32-byte tag (version 0x13, m = 32 KiB, t = 3,
+  p = 4, password 32×0x01, salt 16×0x02, secret 8×0x03, AD 12×0x04) and the
+  pre-hashing digest H_0 for the same inputs.
+- Intermediate block values from §5.3 are not asserted; the tag depends on
+  every block, so a wrong block fails the tag test.
+- The tests in `src/argon2.rs` pass against these values. Changing the
+  vector values requires updating this entry.
