@@ -37,6 +37,8 @@ mod ctr_drbg;
 mod gcm;
 mod gcm_siv;
 mod nonce_seq;
+#[cfg(feature = "alloc")]
+mod stream;
 
 pub use api::{Aead, BlockCipher, Nonce, Tag};
 
@@ -46,6 +48,10 @@ pub use ctr_drbg::CtrDrbg;
 pub use gcm::{Aes128Gcm, Aes256Gcm};
 pub use gcm_siv::{Aes128GcmSiv, Aes256GcmSiv};
 pub use nonce_seq::NonceSequence;
+#[cfg(feature = "alloc")]
+pub use stream::{
+    open as stream_open, seal as stream_seal, DEFAULT_CHUNK_SIZE as STREAM_DEFAULT_CHUNK_SIZE,
+};
 
 #[cfg(feature = "aead-trait")]
 mod aead_compat;
