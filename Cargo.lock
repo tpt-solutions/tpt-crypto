@@ -984,6 +984,7 @@ name = "tpt-crypto-core"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "getrandom 0.3.4",
  "proptest",
  "rand_core 0.6.4",
  "serde",

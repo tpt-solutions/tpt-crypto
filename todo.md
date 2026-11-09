@@ -909,8 +909,12 @@ Each item is its own commit so any can be dropped.
 - [x] Replace "local git only this pass" status line in `README.md` with the true state.
 
 ### B. Ease-of-use & innovation
-- [ ] `os-rng` feature: `OsRng: CryptoRng` via `getrandom` (std). Record the license note in
-      `deny.toml` / `CONTRIBUTING.md`.
+- [x] `os-rng` feature: `OsRng: CryptoRng` via `getrandom` 0.3 (std, opt-in; no new
+      download — already in `Cargo.lock`). Re-exported from `tpt_crypto_core` and the
+      facade prelude. `cargo deny check licenses bans` passes (getrandom is MIT/Apache).
+- [x] Fix: `tpt-crypto-aead` failed to build with `--no-default-features` on x86_64
+      (AES-NI helper is `std`-only in `-ct`, but the caller was gated on arch alone).
+      Hardware path is now gated on `all(x86_64, std)`.
 - [ ] `tpt_crypto::easy` recipes module: `seal` / `open` (XChaCha20-Poly1305, random nonce
       prepended), `hash`, `hmac`, `hkdf_derive`, Ed25519 `sign` / `verify`, `random_bytes`.
 - [ ] `NonceSequence` counter-nonce type for protocols that need explicit nonces.

@@ -40,6 +40,8 @@ std = [
     "tpt-crypto-sig/std",
     "tpt-crypto-mpc/std",
 ]
+# Operating-system CSPRNG: `tpt_crypto::core::OsRng` (requires std).
+os-rng = ["std", "tpt-crypto-core/os-rng"]
 alloc = [
     "tpt-crypto-core/alloc",
     "tpt-crypto-hash/alloc",

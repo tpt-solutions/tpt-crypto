@@ -50,6 +50,9 @@ pub mod zeroize;
 #[cfg(feature = "rand_core")]
 pub mod rand_core_bridge;
 
+#[cfg(feature = "os-rng")]
+pub mod os_rng;
+
 /// Convenience re-exports of the most-used items.
 pub use choice::Choice;
 pub use error::{Error, Result};
@@ -60,3 +63,6 @@ pub use zeroize::{Zeroize, Zeroizing};
 
 #[cfg(feature = "rand_core")]
 pub use rand_core_bridge::{CoreRng, RandCoreRng};
+
+#[cfg(feature = "os-rng")]
+pub use os_rng::OsRng;

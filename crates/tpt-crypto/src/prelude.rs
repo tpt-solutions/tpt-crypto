@@ -10,3 +10,7 @@ pub use tpt_crypto_core::{
     Zeroizing,
 };
 pub use tpt_crypto_ct::{cmov, cswap, ct_eq_bytes, ct_select_slice, Choice, CtSelect};
+
+/// Operating-system CSPRNG (available with the `os-rng` feature).
+#[cfg(feature = "os-rng")]
+pub use tpt_crypto_core::OsRng;
