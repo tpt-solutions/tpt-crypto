@@ -461,10 +461,29 @@ impl<C: EcdsaCurve> VerifyingKey<C> {
 
     /// Verify `sig` over the message digest. Rejects high-`S` (non-canonical).
     pub fn verify_prehash(&self, digest: &[u8], sig: &Signature<C>) -> Result<()> {
+        self.verify_prehash_inner(digest, sig, false)
+    }
+
+    /// Verify `sig` over the message digest, accepting high-`S` signatures.
+    ///
+    /// X.509 certificates and TLS `ecdsa` signatures are produced by encoders
+    /// that do not normalise `s`, so both `(r, s)` and `(r, n - s)` are valid
+    /// for the same message. Use this verifier for those inputs; use
+    /// [`verify_prehash`](Self::verify_prehash) when non-malleability matters.
+    pub fn verify_prehash_allow_high_s(&self, digest: &[u8], sig: &Signature<C>) -> Result<()> {
+        self.verify_prehash_inner(digest, sig, true)
+    }
+
+    fn verify_prehash_inner(
+        &self,
+        digest: &[u8],
+        sig: &Signature<C>,
+        allow_high_s: bool,
+    ) -> Result<()> {
         if sig.r.is_zero().into_bool() || sig.s.is_zero().into_bool() {
             return Err(Error::Verification);
         }
-        if is_high_s::<C>(&sig.s) {
+        if !allow_high_s && is_high_s::<C>(&sig.s) {
             return Err(Error::Verification);
         }
         let e = digest_to_scalar::<C>(digest);
@@ -504,4 +523,45 @@ pub fn sign_p384_sha384(sk: &SigningKey<P384>, msg: &[u8]) -> Result<Signature<P
     let mut h = Sha384::new();
     h.update(msg);
     sk.sign_prehash(&h.finalize())
+}
+
+#[cfg(test)]
+mod high_s_tests {
+    use super::*;
+
+    /// `(r, n - s)` is a valid signature over the same digest, but high-S.
+    /// The strict verifier must reject it; the lenient one must accept it.
+    fn check<C: EcdsaCurve>(digest: &[u8]) {
+        let sk = SigningKey::<C>::from_bytes(&alloc::vec![0x42u8; C::N_BYTES]).unwrap();
+        let vk = sk.verifying_key();
+        let sig = sk.sign_prehash(digest).unwrap();
+        assert!(vk.verify_prehash(digest, &sig).is_ok());
+        assert!(vk.verify_prehash_allow_high_s(digest, &sig).is_ok());
+
+        let high = Signature::<C> {
+            r: sig.r,
+            s: Scalar::<C>::zero().sub(&sig.s),
+        };
+        assert!(is_high_s::<C>(&high.s));
+        assert_eq!(vk.verify_prehash(digest, &high), Err(Error::Verification));
+        assert!(vk.verify_prehash_allow_high_s(digest, &high).is_ok());
+
+        // A lenient verifier must still reject a wrong digest.
+        let mut other = digest.to_vec();
+        other[0] ^= 1;
+        assert_eq!(
+            vk.verify_prehash_allow_high_s(&other, &high),
+            Err(Error::Verification)
+        );
+    }
+
+    #[test]
+    fn p256_high_s_strict_rejects_lenient_accepts() {
+        check::<P256>(&[0x11; 32]);
+    }
+
+    #[test]
+    fn p384_high_s_strict_rejects_lenient_accepts() {
+        check::<P384>(&[0x22; 48]);
+    }
 }
