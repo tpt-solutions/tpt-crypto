@@ -612,9 +612,9 @@ variant (feature-gated re-exports instead of steps 3–6).
 > `group.rs`/`bulletproofs.rs` updated to the new `Shake256`/`Xof` API
 > (`t.state` → `t`, `bytes_to_scalar` → `bytes_to_scalar_checked` taking
 > `&[u8]`); `bulletproofs::prove_range` return tuple order fixed; `plonk.rs`
-> added as a compiling placeholder module (verifier not yet implemented —
-> returns `ZkError::Unsupported`). `Pedersen`/`Transcript`/`IPA`/`Bulletproofs`
-> types compile but are **untested** (no wiring/tests run green yet).
+> later replaced by the full GWC19 PLONK verifier (see below). The
+> `Pedersen`/`Transcript`/`IPA`/`Bulletproofs` tests now run green (`tests/kat.rs`,
+> `tests/range_proof.rs`, `tests/plonk.rs`, `tests/ipa_standalone.rs`).
 - [~] Fiat-Shamir `Transcript` (Merlin-style STROBE-lite on SHAKE256):
       `append_message`, `challenge_scalar` — `src/transcript.rs`.
 - [~] Pedersen commitments over BLS12-381 G1 / Ed25519 (`commit(value, blinding)`)
@@ -623,6 +623,9 @@ variant (feature-gated re-exports instead of steps 3–6).
       ranges up to `2^64` (`prove_range`, `verify_range` per spec API)
       — `src/ipa.rs` + `src/bulletproofs.rs` (`prove_range`/`verify_range`,
       `range_proof_{to,from}_bytes`); `verify_range` is exercised and green.
+      **RESOLVED (2026-11-10):** the standalone verifier round-trips honest proofs
+      (`tests/ipa_standalone.rs`, sizes 2–32, 3 seeds) and rejects a wrong commitment.
+      The analysis below is the historical record.
       **DEFECT FOUND (2026-10-01): `InnerProductProof::verify` (the standalone
       helper in `src/ipa.rs`) rejects honest proofs produced by
       `InnerProductProof::create` — its verification equation is inconsistent

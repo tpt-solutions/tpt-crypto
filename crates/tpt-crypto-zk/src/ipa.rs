@@ -277,7 +277,8 @@ impl InnerProductProof {
     }
 
     /// Standalone verification of the inner-product relation for a commitment
-    /// `p` (used by tests and direct callers).
+    /// `p`. Round-trip tested against [`Self::create`] in `tests/ipa_standalone.rs`
+    /// (sizes 2–32, plus rejection of a wrong commitment).
     #[allow(clippy::too_many_arguments)] // verifier input surface
     pub fn verify(
         &self,
