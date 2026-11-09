@@ -1045,8 +1045,10 @@ version = "0.1.0"
 dependencies = [
  "hex",
  "proptest",
+ "tpt-crypto-aead",
  "tpt-crypto-core",
  "tpt-crypto-ct",
+ "tpt-crypto-curve",
  "tpt-crypto-hash",
 ]
 

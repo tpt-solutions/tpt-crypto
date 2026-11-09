@@ -923,7 +923,13 @@ Each item is its own commit so any can be dropped.
 - [ ] STREAM-style chunked AEAD for large payloads (age-style), with KATs.
 - [ ] Hybrid KEM: X25519 + ML-KEM-768 combiner (X-Wing-style), with KATs and fuzz target.
 - [ ] Hybrid signature: Ed25519 + ML-DSA-65 composite, with KATs.
-- [ ] HPKE (RFC 9180) over X25519 and the hybrid KEM, with RFC test vectors.
+- [~] HPKE (RFC 9180) — base mode done, in `tpt-crypto-kem::hpke`: DHKEM(X25519,
+      HKDF-SHA256) with ChaCha20-Poly1305 and AES-128-GCM. Matches the official vectors
+      for `enc`, key, base nonce, exporter, per-sequence nonces and ciphertexts
+      (`tests/kat/hpke_base_x25519.txt`). Open items:
+      - [ ] PSK and auth modes (the RFC's other two modes).
+      - [ ] Hybrid KEM (X25519 + ML-KEM-768) as an HPKE KEM.
+      - [ ] Benchmark row in `benches/BUDGET.md`.
 - [ ] Key encoding module: DER / PEM / SPKI / PKCS#8 for Ed25519, P-256/384 and RSA public
       keys (closes the RSA SPKI gap); optional JWK. Strict minimal DER; fuzz targets added.
 - [x] Argon2id (RFC 9106) in `tpt-crypto-hash::argon2` (feature `alloc`). Matches the

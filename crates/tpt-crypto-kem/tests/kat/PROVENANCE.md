@@ -26,6 +26,25 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
 
 | File | Sha256 |
 | --- | --- |
-| `fips203_512.rsp` | `c4416e2f6c2c5c78bf3e8669adcd132dc6a3cd3cd1a50394f4c4dec6f5253358` |
-| `fips203_768.rsp` | `2d408a01b13b1ee4194bd22226298064b563a07c60df08b91a91a193fad338e1` |
-| `fips203_1024.rsp` | `4f721bfa19bc00063f48a67c25c65e336ac49bb0e3c4dd94d0b78288d6827c67` |
+| `fips203_512.rsp` | `783106e35afb1ab9aba557630f5380f3ffa40b83abfbe75a03059b5986702017` |
+| `fips203_768.rsp` | `6ecab47c229a80b85afd8e9b1b76e604317b2505ac35382b0e288116e1ba860a` |
+| `fips203_1024.rsp` | `ed23c551c53761649a2dd9573eda2f49f58285675d639fe8c0d585e21f37896c` |
+| `hpke_base_x25519.txt` | `702993dd0e57ecd61961a8a33098490fa25a870b7b897f430c52978ec2b7e8e9` |
+
+## `hpke_base_x25519.txt` — RFC 9180 HPKE base mode (DHKEM(X25519, HKDF-SHA256))
+
+- Source: `cfrg/draft-irtf-cfrg-hpke`, `test-vectors.json` (the RFC 9180
+  vector set), <https://raw.githubusercontent.com/cfrg/draft-irtf-cfrg-hpke/master/test-vectors.json>.
+  Downloaded 2026-11-10. The JSON's sha256 is
+  `61fc662f01996cd06d713dacf5e133167bd309a1f329442d53f1e21a47b3ede6`.
+- Selection: records with `mode 0` (base), `kem_id 0x0020` (DHKEM X25519),
+  `kdf_id 0x0001` (HKDF-SHA256), and `aead_id` 0x0003 (ChaCha20-Poly1305) and
+  0x0001 (AES-128-GCM). For each, the first four `seal` records (sequence 0-3).
+  The extraction script is the one-off Python snippet recorded in the commit
+  message; the output is the checked-in `.txt`.
+- The file's sha256 is in the table above. Changing it requires re-running the
+  extraction and updating the row.
+- Tests: `src/hpke.rs` (`rfc9180_sender_matches_vectors`,
+  `rfc9180_receiver_opens_vectors`) check `enc`, key, base nonce, exporter
+  secret, per-sequence nonce, and ciphertext. The source vectors' `exports`
+  field is not used.

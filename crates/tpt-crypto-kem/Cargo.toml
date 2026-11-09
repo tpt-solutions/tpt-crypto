@@ -17,11 +17,21 @@ documentation = "https://docs.rs/tpt-crypto-kem"
 tpt-crypto-core = { workspace = true }
 tpt-crypto-ct = { workspace = true }
 tpt-crypto-hash = { workspace = true }
+# HPKE (RFC 9180) needs X25519 and the AEADs. Both sit below `kem` in the layering.
+tpt-crypto-curve = { workspace = true }
+tpt-crypto-aead = { workspace = true }
 
 [features]
 default = ["std"]
-std = ["alloc", "tpt-crypto-core/std", "tpt-crypto-ct/std", "tpt-crypto-hash/std"]
-alloc = ["tpt-crypto-core/alloc", "tpt-crypto-hash/alloc"]
+std = [
+    "alloc",
+    "tpt-crypto-core/std",
+    "tpt-crypto-ct/std",
+    "tpt-crypto-hash/std",
+    "tpt-crypto-aead/std",
+    "tpt-crypto-curve/std",
+]
+alloc = ["tpt-crypto-core/alloc", "tpt-crypto-hash/alloc", "tpt-crypto-aead/alloc"]
 
 [dev-dependencies]
 hex = "0.4"

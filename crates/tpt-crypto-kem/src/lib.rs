@@ -42,6 +42,8 @@ pub mod encode;
 pub mod ml_kem;
 pub mod params;
 #[cfg(feature = "alloc")]
+pub mod hpke;
+#[cfg(feature = "alloc")]
 pub mod pke;
 pub mod poly;
 pub mod sampler;

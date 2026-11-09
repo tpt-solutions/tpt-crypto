@@ -24,7 +24,7 @@ cargo +nightly fuzz run <target>   # fuzz/ — attacker-controlled decoder targe
 core → ct → field → curve
 hash        on core + ct
 aead        on core + ct
-kem / sig   on field + curve + hash
+kem / sig   on field + curve + hash  (kem's `hpke` module also uses aead)
 zk          on curve + hash
 mpc         on field + hash
 tpt-crypto  (facade) on everything
