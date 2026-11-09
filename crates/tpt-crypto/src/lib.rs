@@ -27,6 +27,9 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
 
+#[cfg(feature = "os-rng")]
+extern crate alloc;
+
 #[cfg(feature = "classical")]
 #[doc = "Hash functions: BLAKE2b, BLAKE3, SHA-2, SHA-3, K12, HKDF, HMAC."]
 #[cfg_attr(docsrs, doc(cfg(feature = "classical")))]
@@ -107,3 +110,8 @@ pub mod ct;
 
 #[doc = "Common imports for constant-time, `no_std` workflows."]
 pub mod prelude;
+
+#[cfg(all(feature = "classical", feature = "os-rng"))]
+#[doc = "One-call recipes with misuse-resistant defaults: `seal` / `open` (XChaCha20-Poly1305, random nonce)."]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "classical", feature = "os-rng"))))]
+pub mod easy;

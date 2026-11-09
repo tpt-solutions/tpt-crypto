@@ -915,8 +915,10 @@ Each item is its own commit so any can be dropped.
 - [x] Fix: `tpt-crypto-aead` failed to build with `--no-default-features` on x86_64
       (AES-NI helper is `std`-only in `-ct`, but the caller was gated on arch alone).
       Hardware path is now gated on `all(x86_64, std)`.
-- [ ] `tpt_crypto::easy` recipes module: `seal` / `open` (XChaCha20-Poly1305, random nonce
-      prepended), `hash`, `hmac`, `hkdf_derive`, Ed25519 `sign` / `verify`, `random_bytes`.
+- [~] `tpt_crypto::easy` recipes module (feature `classical` + `os-rng`).
+      - [x] `generate_key`, `seal` / `open` (XChaCha20-Poly1305, random 192-bit nonce
+            prepended; single-bit-flip rejection test; doctest).
+      - [ ] `hash`, `hmac`, `hkdf_derive`, Ed25519 `sign` / `verify`, `random_bytes`.
 - [ ] `NonceSequence` counter-nonce type for protocols that need explicit nonces.
 - [ ] STREAM-style chunked AEAD for large payloads (age-style), with KATs.
 - [ ] Hybrid KEM: X25519 + ML-KEM-768 combiner (X-Wing-style), with KATs and fuzz target.
