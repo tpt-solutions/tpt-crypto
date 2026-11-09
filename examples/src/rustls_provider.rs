@@ -1,6 +1,13 @@
 //! A TLS 1.3 [`rustls::crypto::CryptoProvider`] built entirely from
 //! `tpt-crypto` primitives — no `ring`, no `aws-lc-rs`.
 //!
+//! **This is a minimal reference, not the production provider.** It covers
+//! TLS 1.3 with one Ed25519 demo key and nothing else. For real use, see the
+//! sibling `tpt-crypto-rustls` crate, which adds TLS 1.2, P-256/P-384, ECDSA,
+//! RSA verification and webpki trust roots. New TLS features go there, not
+//! here. This example stays self-contained so the workspace builds without
+//! the sibling repository.
+//!
 //! Wires the substrate into rustls end to end:
 //!
 //! * **AEAD** — [`tpt::aead::Aes128Gcm`] and [`tpt::aead::ChaCha20Poly1305`]
