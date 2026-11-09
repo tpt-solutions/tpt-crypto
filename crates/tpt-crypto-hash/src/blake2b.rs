@@ -209,3 +209,29 @@ pub fn blake2b_keyed(data: &[u8], key: &[u8]) -> [u8; 64] {
     h.update(data);
     h.finalize()
 }
+
+/// Unkeyed BLAKE2b with a *runtime* output length `out_len` (1..=64), hashing
+/// the concatenation of `parts`.
+///
+/// The digest length is part of the parameter block, so this is not a
+/// truncation of the 64-byte digest. It exists for constructions that need
+/// `H^n` for a variable `n` (Argon2's `H'`).
+///
+/// # Panics
+///
+/// Panics if `out_len` is not in `1..=64`.
+#[cfg(feature = "alloc")]
+#[must_use]
+pub fn blake2b_var(out_len: usize, parts: &[&[u8]]) -> alloc::vec::Vec<u8> {
+    assert!((1..=64).contains(&out_len), "BLAKE2b output must be 1..=64 bytes");
+    let mut h = Blake2b::<64>::new();
+    // Word 0 of the parameter block: digest length, key length 0, fanout 1,
+    // depth 1. `new()` built it for a 64-byte digest; rewrite the length byte.
+    h.h[0] = IV[0] ^ (out_len as u64 | 0x0101_0000);
+    for part in parts {
+        h.update(part);
+    }
+    let mut full = [0u8; 64];
+    h.finalize_to(&mut full);
+    alloc::vec::Vec::from(&full[..out_len])
+}
