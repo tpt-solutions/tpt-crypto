@@ -905,7 +905,8 @@ Each item is its own commit so any can be dropped.
 - [x] Delete stray `__pycache__/ctr_drbg_ref*.pyc`; add `__pycache__/` to `.gitignore`.
 - [ ] Annotate every `[~]` item with its remaining gap; fix the stale zk header note
       ("untested") in the Phase 4 section.
-- [ ] Add missing KAT corpora to the list of open gaps: NIST CAVP GCM `.rsp`, Wycheproof AEAD JSON.
+- [x] Add missing KAT corpora to the list of open gaps: NIST CAVP GCM `.rsp`, Wycheproof AEAD JSON.
+      — listed under "Known gaps" in `crates/tpt-crypto-aead/README.md`.
 - [x] Replace "local git only this pass" status line in `README.md` with the true state.
 
 ### B. Ease-of-use & innovation

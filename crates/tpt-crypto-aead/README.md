@@ -53,8 +53,14 @@ assert_eq!(buf, b"attack at dawn");
 ## Status
 
 Not audited. Inline KAT coverage is per-module (FIPS-197, NIST GCM Appendix B,
-RFC 8439 §2.5.2, RFC 8452 C.1); the full CAVP / Wycheproof corpora are still
-being vendored. `CtrDrbg` is not yet wired to CAVP vectors.
+RFC 8439 §2.5.2, RFC 8452 C.1).
+
+Known gaps:
+
+- NIST CAVP GCM `.rsp` vectors are not vendored (only the Appendix B cases are inline).
+- Wycheproof AEAD JSON (AES-GCM, ChaCha20-Poly1305) is not vendored.
+- `CtrDrbg` is not yet wired to CAVP vectors.
+- No external audit.
 
 ## License
 
