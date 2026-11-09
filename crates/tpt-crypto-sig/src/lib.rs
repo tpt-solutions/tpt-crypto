@@ -20,6 +20,8 @@ pub mod bytes;
 pub mod constant_time;
 pub mod ecdsa;
 pub mod ed25519;
+#[cfg(feature = "alloc")]
+pub mod encoding;
 pub mod ml_dsa;
 pub mod poly;
 #[cfg(feature = "alloc")]
