@@ -919,7 +919,7 @@ Each item is its own commit so any can be dropped.
 - [~] `tpt_crypto::easy` recipes module (feature `classical` + `os-rng`).
       - [x] `generate_key`, `seal` / `open` (XChaCha20-Poly1305, random 192-bit nonce
             prepended; single-bit-flip rejection test; doctest).
-      - [ ] `hash`, `hmac`, `hkdf_derive`, Ed25519 `sign` / `verify`, `random_bytes`.
+      - [x] `hash`, `hmac`, `hkdf_derive`, Ed25519 `sign` / `verify`, `random_bytes`.
 - [ ] `NonceSequence` counter-nonce type for protocols that need explicit nonces.
 - [ ] STREAM-style chunked AEAD for large payloads (age-style), with KATs.
 - [ ] Hybrid KEM: X25519 + ML-KEM-768 combiner (X-Wing-style), with KATs and fuzz target.
