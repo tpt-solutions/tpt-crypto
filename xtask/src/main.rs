@@ -30,6 +30,7 @@ fn main() {
         "verify" => verify(args.iter().any(|a| a == "--strict")),
         "release-dry-run" => release_dry_run(),
         "sbom" => sbom(),
+        "doctor" => doctor(),
         "help" | "--help" | "-h" => {
             print_help();
             0
@@ -589,6 +590,99 @@ fn deny() -> i32 {
             1
         }
     }
+}
+
+/// Environment report. Exits non-zero only when a required tool is missing
+/// (stable cargo, rustfmt, clippy, cargo-deny); optional items are reported as
+/// `missing` but do not fail the run.
+fn doctor() -> i32 {
+    println!("xtask doctor: checking development environment");
+    let mut required_missing = 0;
+
+    let mut check = |label: &str, ok: bool, required: bool| {
+        let tag = match (ok, required) {
+            (true, _) => "ok     ",
+            (false, true) => "MISSING",
+            (false, false) => "absent ",
+        };
+        println!("  [{tag}] {label}");
+        if !ok && required {
+            required_missing += 1;
+        }
+    };
+
+    check("cargo (stable)", probe("cargo", &["--version"]), true);
+    check("rustc (stable)", probe("rustc", &["--version"]), true);
+    let installed_components = capture("rustup", &["component", "list", "--installed"]);
+    check(
+        "rustfmt component",
+        installed_components.contains("rustfmt"),
+        true,
+    );
+    check(
+        "clippy component",
+        installed_components.contains("clippy"),
+        true,
+    );
+
+    let installed_targets = capture("rustup", &["target", "list", "--installed"]);
+    for target in [
+        "thumbv6m-none-eabi",
+        "thumbv7em-none-eabihf",
+        "wasm32-unknown-unknown",
+    ] {
+        check(
+            &format!("target {target} (no_std / wasm builds)"),
+            installed_targets.lines().any(|l| l.trim() == target),
+            false,
+        );
+    }
+
+    check(
+        "nightly toolchain",
+        probe("cargo", &["+nightly", "--version"]),
+        false,
+    );
+    check(
+        "miri (nightly)",
+        probe("cargo", &["+nightly", "miri", "--version"]),
+        false,
+    );
+    check(
+        "cargo-deny",
+        which("cargo-deny") || probe("cargo", &["deny", "--version"]),
+        true,
+    );
+    check("cargo-fuzz", probe("cargo", &["fuzz", "--version"]), false);
+
+    if required_missing == 0 {
+        println!("xtask doctor: all required tools present");
+        0
+    } else {
+        println!("xtask doctor: {required_missing} required tool(s) missing");
+        1
+    }
+}
+
+/// True when `program args...` runs and exits successfully (output discarded).
+fn probe(program: &str, args: &[&str]) -> bool {
+    Command::new(program)
+        .args(args)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Stdout of `program args...`, or empty on failure.
+fn capture(program: &str, args: &[&str]) -> String {
+    Command::new(program)
+        .args(args)
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default()
 }
 
 /// Cheap `Path::exists`-style probe for an executable on `PATH`.
