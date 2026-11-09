@@ -933,8 +933,14 @@ Each item is its own commit so any can be dropped.
       - [ ] Hybrid KEM (X25519 + ML-KEM-768) as an HPKE KEM, once the X-Wing draft
             publishes test vectors (its current vectors are a placeholder).
       - [ ] Benchmark row in `benches/BUDGET.md`.
-- [ ] Key encoding module: DER / PEM / SPKI / PKCS#8 for Ed25519, P-256/384 and RSA public
+- [~] Key encoding module: DER / PEM / SPKI / PKCS#8 for Ed25519, P-256/384 and RSA public
       keys (closes the RSA SPKI gap); optional JWK. Strict minimal DER; fuzz targets added.
+      - [x] `tpt-crypto-sig::encoding`: Ed25519 SPKI + PKCS#8 (RFC 8410), RSA SPKI (RFC 8017),
+            strict DER reader, strict base64 PEM. Byte-exact KATs vs Python `cryptography`
+            (`tests/kat_encoding.rs`).
+      - [ ] P-256 / P-384 SPKI and PKCS#8 (named-curve OIDs, uncompressed points).
+      - [ ] Optional JWK.
+      - [ ] Fuzz target for the DER / PEM decoders (`fuzz/`).
 - [x] Argon2id (RFC 9106) in `tpt-crypto-hash::argon2` (feature `alloc`). Matches the
       RFC §5.3 tag and H_0 digest; provenance in `tests/kat/PROVENANCE.md`. Only
       Argon2id v0x13 is provided (no d/i variants). `blake2b_var` adds runtime-length BLAKE2b.
