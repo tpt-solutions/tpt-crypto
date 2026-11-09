@@ -5,3 +5,4 @@ tmp_test.*
 /fuzz/target
 **/*.rs.bk
 .DS_Store
+__pycache__/
