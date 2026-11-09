@@ -18,11 +18,20 @@ pub fn hkdf_extract<H: Hasher<OUT> + Default + Clone, const BLOCK: usize, const 
 }
 
 /// HKDF-Expand: OKM = output of `okm.len()` bytes from `prk` and `info`.
+///
+/// # Panics
+///
+/// Panics if `okm.len() > 255 * OUT` (RFC 5869 §2.3): the block counter is a
+/// single octet and cannot address further blocks.
 pub fn hkdf_expand<H: Hasher<OUT> + Default + Clone, const BLOCK: usize, const OUT: usize>(
     prk: &[u8],
     info: &[u8],
     okm: &mut [u8],
 ) {
+    assert!(
+        okm.len() <= 255 * OUT,
+        "HKDF-Expand output exceeds 255 * HashLen"
+    );
     let mut prev = [0u8; OUT];
     let mut prev_len = 0usize;
     let mut written = 0;
@@ -38,7 +47,9 @@ pub fn hkdf_expand<H: Hasher<OUT> + Default + Clone, const BLOCK: usize, const O
         prev.copy_from_slice(&blk);
         prev_len = OUT;
         written += need;
-        counter += 1;
+        // After the 255th block the loop exits; wrapping keeps that last step from
+        // overflowing (the length assert above guarantees no block 0 is ever used).
+        counter = counter.wrapping_add(1);
     }
 }
 
@@ -48,4 +59,27 @@ pub fn hkdf_sha256(salt: &[u8], ikm: &[u8], info: &[u8], okm: &mut [u8]) {
     let mut prk = [0u8; 32];
     hkdf_extract::<crate::sha2::Sha256, 64, 32>(salt, ikm, &mut prk);
     hkdf_expand::<crate::sha2::Sha256, 64, 32>(&prk, info, okm);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sha2::Sha256;
+
+    #[test]
+    fn hkdf_expand_accepts_maximum_length() {
+        let prk = [0x0bu8; 32];
+        let mut okm = alloc::vec![0u8; 255 * 32];
+        hkdf_expand::<Sha256, 64, 32>(&prk, b"info", &mut okm);
+        // The last block must be produced (counter 255), not left zeroed.
+        assert!(okm[255 * 32 - 32..].iter().any(|&b| b != 0));
+    }
+
+    #[test]
+    #[should_panic(expected = "exceeds 255 * HashLen")]
+    fn hkdf_expand_rejects_over_maximum_length() {
+        let prk = [0x0bu8; 32];
+        let mut okm = alloc::vec![0u8; 255 * 32 + 1];
+        hkdf_expand::<Sha256, 64, 32>(&prk, b"info", &mut okm);
+    }
 }
