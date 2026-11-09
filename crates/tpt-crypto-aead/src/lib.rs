@@ -36,6 +36,7 @@ mod chacha;
 mod ctr_drbg;
 mod gcm;
 mod gcm_siv;
+mod nonce_seq;
 
 pub use api::{Aead, BlockCipher, Nonce, Tag};
 
@@ -44,6 +45,7 @@ pub use chacha::{poly1305_mac, ChaCha20, ChaCha20Poly1305, Poly1305, XChaCha20Po
 pub use ctr_drbg::CtrDrbg;
 pub use gcm::{Aes128Gcm, Aes256Gcm};
 pub use gcm_siv::{Aes128GcmSiv, Aes256GcmSiv};
+pub use nonce_seq::NonceSequence;
 
 #[cfg(feature = "aead-trait")]
 mod aead_compat;
