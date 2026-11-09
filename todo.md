@@ -920,8 +920,8 @@ Each item is its own commit so any can be dropped.
       - [x] `generate_key`, `seal` / `open` (XChaCha20-Poly1305, random 192-bit nonce
             prepended; single-bit-flip rejection test; doctest).
       - [x] `hash`, `hmac`, `hkdf_derive`, Ed25519 `sign` / `verify`, `random_bytes`.
-- [ ] `NonceSequence` counter-nonce type for protocols that need explicit nonces.
-- [ ] STREAM-style chunked AEAD for large payloads (age-style), with KATs.
+- [x] `NonceSequence` counter-nonce type for protocols that need explicit nonces.
+- [x] STREAM-style chunked AEAD for large payloads (age-style), with KATs. Whole-buffer API (`tpt_crypto_aead::stream_seal` / `stream_open`, ChaCha20-Poly1305); KAT is an independent Python `cryptography` vector. No incremental reader/writer yet.
 - [ ] Hybrid KEM: X25519 + ML-KEM-768 combiner (X-Wing-style), with KATs and fuzz target.
 - [ ] Hybrid signature: Ed25519 + ML-DSA-65 composite, with KATs.
 - [~] HPKE (RFC 9180) in `tpt-crypto-kem::hpke`: all four modes (base, PSK, auth,
