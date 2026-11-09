@@ -923,12 +923,14 @@ Each item is its own commit so any can be dropped.
 - [ ] STREAM-style chunked AEAD for large payloads (age-style), with KATs.
 - [ ] Hybrid KEM: X25519 + ML-KEM-768 combiner (X-Wing-style), with KATs and fuzz target.
 - [ ] Hybrid signature: Ed25519 + ML-DSA-65 composite, with KATs.
-- [~] HPKE (RFC 9180) — base mode done, in `tpt-crypto-kem::hpke`: DHKEM(X25519,
-      HKDF-SHA256) with ChaCha20-Poly1305 and AES-128-GCM. Matches the official vectors
-      for `enc`, key, base nonce, exporter, per-sequence nonces and ciphertexts
-      (`tests/kat/hpke_base_x25519.txt`). Open items:
-      - [ ] PSK and auth modes (the RFC's other two modes).
-      - [ ] Hybrid KEM (X25519 + ML-KEM-768) as an HPKE KEM.
+- [~] HPKE (RFC 9180) in `tpt-crypto-kem::hpke`: all four modes (base, PSK, auth,
+      auth-PSK) over DHKEM(X25519, HKDF-SHA256) with ChaCha20-Poly1305 and AES-128-GCM.
+      Matches the official vectors for `enc`, key, base nonce, exporter, per-sequence
+      nonces and ciphertexts (`tests/kat/hpke_base_x25519.txt`,
+      `tests/kat/hpke_modes_x25519.txt`). PSKs shorter than 32 bytes are rejected, per
+      RFC 9180 §5.1. Open items:
+      - [ ] Hybrid KEM (X25519 + ML-KEM-768) as an HPKE KEM, once the X-Wing draft
+            publishes test vectors (its current vectors are a placeholder).
       - [ ] Benchmark row in `benches/BUDGET.md`.
 - [ ] Key encoding module: DER / PEM / SPKI / PKCS#8 for Ed25519, P-256/384 and RSA public
       keys (closes the RSA SPKI gap); optional JWK. Strict minimal DER; fuzz targets added.
@@ -958,3 +960,51 @@ Each item is its own commit so any can be dropped.
       `cargo-audit` / `cargo-vet`, coverage upload, scheduled long fuzz and leakage runs.
 - [ ] Cross-repo: switch `../tpt-crypto-rustls` adapter to
       `verify_prehash_allow_high_s` and its RSA path to `PublicKey::verify_*`.
+
+---
+
+## Verification beyond tests (added 2026-11-10)
+
+Plan: `~/.claude/plans/do-you-think-we-zany-pretzel.md`. Custom-first: Kani rejected as the
+centrepiece (CBMC blows up on symbolic 256-bit multiplies and carry loops; no native
+Windows support). Honest labels: "exhaustively verified over a bounded domain" and
+"binary-checked", not "formally verified". Each item is its own commit.
+
+### V1. Exhaustive bounded-domain proofs (`cargo xtask exhaustive`)
+- [ ] `-kem::poly`: `montgomery_reduce`, `fqmul`, `freeze` over the full i16/i32 input
+      domain vs a `rem_euclid` reference; `compress`/`decompress` for every `(x, d)`.
+- [ ] `-sig::poly`: reduce/`caddq`/`freeze`, `power2round`, `decompose_impl` over the full
+      i32 domain (~2^32, release mode, ~1 min); pack/unpack round-trips at all small widths.
+- [ ] `-ct`: `ct_select`, `cswap`, `ct_eq`, `ct_ne` on u8 and u16 for all inputs.
+- [ ] Add an `exhaustive:` evidence kind to `specs/*.spec`; teach `cargo xtask verify` to
+      check it. Wire into `ct_select`, `ntt_roundtrip`, `field_reduce`.
+
+### V2. Small-scope field verification
+- [ ] Check whether `FieldElement<P, LIMBS>` / `Limb` can be instantiated with tiny
+      words and primes cheaply; if not, add a test-only mini-field mirroring the CIOS/SOS path.
+- [ ] Check every `(a, b)` for add/sub/neg/mul/sqr/invert/to_bytes against a u128 reference,
+      with primes at limb boundaries (2^n - small). Targets the `t[2n]` overflow-limb bug class.
+
+### V3. Binary-level constant-time checks (`cargo xtask ct-asm`)
+- [ ] Disassemble release builds of `ct_select`, `cswap`, `ct_lookup`, `Choice` ops, the
+      scalar-mul inner loop, ML-KEM decaps compare and AEAD tag verify; fail on
+      secret-dependent conditional jumps or indexed loads (allowlist-based report).
+      Run for x86_64 and aarch64 (Linux/WSL CI).
+- [ ] Optional: instruction-count equality across secret classes under callgrind.
+      dudect stays as the statistical backstop.
+- [ ] Add a `ct-asm:` evidence kind for `scalarmul_ct`, `ml_kem_decapsulate`, `aead_tag_verify`.
+
+### V4. Test-strength audit
+- [ ] `cargo mutants` on `-ct`, `-field`, `-kem::poly`, `-sig::poly` and the hash cores;
+      triage survivors into new tests.
+- [ ] Gate against discarded results in tests (`let _ = ...prop_assert...`), the bug that
+      hid the ML-KEM round-trip failure.
+- [ ] Regression check: reintroduce past bugs (drop `carry_hi`, wrong omega, `polyt0_unpack`
+      index) and confirm V1, V2 and V4 fail on each.
+
+### V5. Optional, only if a "formally verified" headline is wanted
+- [ ] Kani for `-ct` laws and decoder panic-freedom only (small and tractable).
+- [ ] Cryptol/SAW equivalence for SHA-256, Keccak-f and ChaCha20.
+- [ ] Verus or hax -> F* for the field reduction lemma and ML-KEM.
+- [ ] State the proof boundary (Rust/LLVM semantics, not machine code) in `SECURITY.md`
+      and `AGENTS.md` whenever any of the above lands.

@@ -48,3 +48,15 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
   `rfc9180_receiver_opens_vectors`) check `enc`, key, base nonce, exporter
   secret, per-sequence nonce, and ciphertext. The source vectors' `exports`
   field is not used.
+| `hpke_modes_x25519.txt` | `f6e6f289a09d8d42d16ce57bb972fea5ba898e56cf10866ab65eff0e9b2dcc65` |
+
+## `hpke_modes_x25519.txt` — RFC 9180 PSK, auth and auth-PSK modes
+
+- Source: the same `test-vectors.json` as `hpke_base_x25519.txt` (sha256
+  `61fc662f01996cd06d713dacf5e133167bd309a1f329442d53f1e21a47b3ede6`).
+- Selection: `mode` 1 (PSK), 2 (auth) and 3 (auth-PSK), each with
+  `kem_id 0x0020`, `kdf_id 0x0001`, `aead_id` 0x0003 and 0x0001. The first
+  four seal records per vector. Fields absent in a mode are `-`.
+- Checked by `src/hpke.rs`: `rfc9180_sender_matches_vectors_all_modes` and
+  `rfc9180_receiver_opens_vectors_all_modes`. The static public key is also
+  checked against `skSm`.
