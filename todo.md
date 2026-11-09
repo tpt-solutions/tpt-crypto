@@ -946,8 +946,9 @@ Each item is its own commit so any can be dropped.
       Argon2id v0x13 is provided (no d/i variants). `blake2b_var` adds runtime-length BLAKE2b.
       - [ ] Fuzz target for parameter / length inputs; benchmark row in `benches/BUDGET.md`.
 - [x] `tpt_crypto::selftest::run()` power-on KATs. One RFC/FIPS vector each for SHA-256, HMAC, HKDF, X25519 and Ed25519 (inlined, so it works without a filesystem). Covers the classical set only; no ML-KEM / ML-DSA vectors yet.
-- [ ] Policy profile features `profile-cnsa2` / `profile-modern` that compile out
-      non-approved algorithms (e.g. SHA-1-class, RSA < 3072).
+- [~] Policy profile features `profile-cnsa2` / `profile-modern` (sig + facade).
+      - [x] RSA minimum modulus: 2048 (`profile-modern`) / 3072 (`profile-cnsa2`); tests in `tests/rsa_profile.rs`.
+      - [ ] Class-level exclusion (Ed25519, X25519, ChaCha20, ...) for CNSA 2.0. Needs a policy decision on which algorithms count as approved; the workspace has no SHA-1/MD5 to remove.
 
 ### C. Tooling & adoption
 - [ ] `tpt-crypto-cli` workspace binary (std): `hash`, `keygen`, `sign` / `verify`,

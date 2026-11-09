@@ -69,6 +69,9 @@ mpc = ["tpt-crypto-mpc"]
 # Trait-compat pass-through: ecosystem `signature::Signer`/`Verifier` impls
 # inside `-sig` (Ed25519, ECDSA, ML-DSA, BLS).
 signature = ["tpt-crypto-sig/signature"]
+# Policy profiles: raise the minimum RSA modulus (2048 / 3072 bits). See tpt-crypto-sig.
+profile-modern = ["classical", "tpt-crypto-sig/profile-modern"]
+profile-cnsa2 = ["profile-modern", "tpt-crypto-sig/profile-cnsa2"]
 full = ["classical", "pq", "bls", "zk", "mpc"]
 
 [lints.clippy]

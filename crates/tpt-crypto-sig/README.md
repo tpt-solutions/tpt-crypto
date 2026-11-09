@@ -40,6 +40,23 @@ assert!(verify::<MlDsa65>(&pk, b"message", &sig, b"").is_ok());
 | `slh-dsa` | build the hash-based SLH-DSA module |
 | `signature` | implement the [`signature`](https://crates.io/crates/signature) crate traits |
 | `rand_core` | `rand_core` RNG bridge |
+| `profile-modern` | policy profile: RSA public keys must have a modulus of at least 2048 bits |
+| `profile-cnsa2` | policy profile: RSA modulus of at least 3072 bits (implies `profile-modern`) |
+
+### Policy profiles
+
+The profile features tighten what `rsa::PublicKey::from_components` accepts. The
+default build keeps the 1024-bit floor. A profile is a compile-time setting, so a
+binary built with it cannot accept a weaker key.
+
+`--all-features` enables both profiles, so the stricter one (3072 bits) applies in
+that configuration. Under `profile-modern`, the RSA known-answer tests that use
+2048-bit vectors are compiled out (`tests/rsa.rs`, `tests/kat_encoding.rs`);
+`tests/rsa_profile.rs` checks the length gate directly.
+
+Only RSA size is gated so far. The workspace has no SHA-1 or MD5, so there is
+nothing class-level to remove. Excluding other primitives (for example Ed25519 or
+ChaCha20 under CNSA 2.0) is a policy decision that is not implemented here.
 
 ## Status
 

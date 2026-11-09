@@ -1,4 +1,5 @@
 //! RSA verification known-answer tests (OpenSSL-generated vectors).
+#![cfg(not(feature = "profile-modern"))] // 2048-bit vectors; see tests/rsa_profile.rs
 
 use tpt_crypto_sig::rsa::{PublicKey, RsaHash};
 use tpt_crypto_sig::Error;

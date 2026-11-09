@@ -76,6 +76,14 @@ impl RsaHash {
 }
 
 /// Smallest and largest accepted modulus sizes, in bits.
+///
+/// The minimum depends on the policy profile: 1024 by default, 2048 under
+/// , and 3072 under  (the strictest enabled one wins).
+#[cfg(feature = "profile-cnsa2")]
+const MIN_MODULUS_BITS: usize = 3072;
+#[cfg(all(feature = "profile-modern", not(feature = "profile-cnsa2")))]
+const MIN_MODULUS_BITS: usize = 2048;
+#[cfg(not(feature = "profile-modern"))]
 const MIN_MODULUS_BITS: usize = 1024;
 const MAX_MODULUS_BITS: usize = 16384;
 

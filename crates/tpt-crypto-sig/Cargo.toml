@@ -33,6 +33,11 @@ alloc = [
 ]
 signature = ["dep:signature", "alloc"]
 slh-dsa = ["alloc"]
+# Policy profiles (see README "Policy profiles"). They tighten the minimum RSA
+# modulus accepted by `rsa::PublicKey::from_components`. Note: `profile-cnsa2`
+# implies `profile-modern`, and --all-features enables both, so the strictest applies.
+profile-modern = ["alloc"]
+profile-cnsa2 = ["profile-modern"]
 rand_core = ["tpt-crypto-core/rand_core"]
 
 [dev-dependencies]
