@@ -108,6 +108,7 @@ SIMD follow-up lands.
 | `ml-dsa-87/verify`     | —                                   | 168 µs (~5.9 kops/s) — recorded |
 | `ed25519/sign`         | ≥ 10 kops/s                         | 255 µs (~3.9 kops/s) — below target (was 6.2 ms before caching curve `d` / base point) |
 | `ed25519/verify`       | ≥ 5 kops/s                          | 0.61 ms (~1.6 kops/s) — below target (was 9.1 ms; Tonelli–Shanks no longer searches for a non-residue per sqrt) |
+| `rsa2048/pkcs1v15-sha256/verify` | — | ~147 µs (~6.8 kops/s) — recorded from a quick 10-sample run, not a full measurement; re-run with default settings |
 | `ecdsa-p256/sign`      | ≥ 3 kops/s                          | 339 µs (~2.9 kops/s) — close to target |
 | `ecdsa-p384/sign`      | ≥ 1.5 kops/s                        | 1.83 ms (~548 ops/s) — below target |
 | `bls12-381/sign`       | ≥ 1 kops/s (pairing-dominated)      | 2.2 ms (~460 ops/s) — below target (G2 hash-to-curve 1.1 ms + 4-bit-window constant-time G2 scalar mult ~1 ms) |
