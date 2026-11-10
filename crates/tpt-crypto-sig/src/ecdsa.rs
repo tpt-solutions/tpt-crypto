@@ -379,6 +379,12 @@ impl<C: EcdsaCurve> SigningKey<C> {
         })
     }
 
+    /// The secret scalar as a big-endian `N_BYTES` value, in a [`SecretBox`].
+    /// Only the first `C::N_BYTES` bytes are meaningful; the rest are zero.
+    pub fn to_be_bytes(&self) -> SecretBox<[u8; MAX_BYTES]> {
+        SecretBox::new(*self.d.expose_secret())
+    }
+
     fn d_scalar(&self) -> Scalar<C> {
         be_to_scalar::<C>(&self.d.expose_secret()[..C::N_BYTES])
     }

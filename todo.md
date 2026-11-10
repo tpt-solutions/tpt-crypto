@@ -950,7 +950,7 @@ Each item is its own commit so any can be dropped.
       - [x] `tpt-crypto-sig::encoding`: Ed25519 SPKI + PKCS#8 (RFC 8410), RSA SPKI (RFC 8017),
             strict DER reader, strict base64 PEM. Byte-exact KATs vs Python `cryptography`
             (`tests/kat_encoding.rs`).
-      - [ ] P-256 / P-384 SPKI and PKCS#8 (named-curve OIDs, uncompressed points).
+      - [x] P-256 / P-384 SPKI and PKCS#8 (named-curve OIDs, uncompressed points). Byte-exact vs OpenSSL (`tests/kat_ec_encoding.rs`).
       - [ ] Optional JWK.
       - [ ] Fuzz target for the DER / PEM decoders (`fuzz/`).
 - [x] Argon2id (RFC 9106) in `tpt-crypto-hash::argon2` (feature `alloc`). Matches the

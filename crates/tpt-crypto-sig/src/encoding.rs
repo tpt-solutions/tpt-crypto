@@ -13,10 +13,12 @@
 //! positive and minimally encoded, and any trailing bytes after the structure
 //! are rejected. Every rejection is [`Error::InvalidEncoding`].
 
+use crate::ecdsa::{EcdsaCurve, SigningKey as EcSigningKey, VerifyingKey as EcVerifyingKey};
 use crate::rsa::PublicKey as RsaPublicKey;
 use alloc::string::String;
 use alloc::vec::Vec;
 use tpt_crypto_core::{Error, Result};
+use tpt_crypto_curve::weierstrass::{P256, P384};
 
 /// Length of an Ed25519 public key.
 pub const ED25519_PUBLIC_LEN: usize = 32;
@@ -285,6 +287,165 @@ pub fn rsa_public_from_spki(der: &[u8]) -> Result<RsaPublicKey> {
     let (e, rest) = read_uint(rest)?;
     exact(rest)?;
     RsaPublicKey::from_components(n, e).map_err(|_| Error::InvalidEncoding)
+}
+
+// ---------------------------------------------------------------------------
+// ECDSA: P-256 and P-384 (RFC 5480 SPKI, RFC 5915 private key in PKCS#8)
+// ---------------------------------------------------------------------------
+
+const OID_EC_PUBLIC_KEY: &[u8] = &[0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01];
+const OID_PRIME256V1: &[u8] = &[0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07];
+const OID_SECP384R1: &[u8] = &[0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22];
+const TAG_CONTEXT_1: u8 = 0xa1;
+
+/// AlgorithmIdentifier body: `id-ecPublicKey ‖ namedCurve`.
+fn ec_alg_body(curve_oid: &[u8]) -> Vec<u8> {
+    let mut v = Vec::with_capacity(OID_EC_PUBLIC_KEY.len() + curve_oid.len());
+    v.extend_from_slice(OID_EC_PUBLIC_KEY);
+    v.extend_from_slice(curve_oid);
+    v
+}
+
+fn ec_spki_encode<C: EcdsaCurve>(curve_oid: &[u8], vk: &EcVerifyingKey<C>) -> Vec<u8> {
+    let mut bits = Vec::with_capacity(1 + 1 + 2 * C::FIELD_BYTES);
+    bits.push(0x00);
+    bits.extend_from_slice(&vk.to_sec1_uncompressed());
+    let mut body = tlv(TAG_OID_CONSTRUCTED_SEQ, &ec_alg_body(curve_oid));
+    body.extend_from_slice(&tlv(TAG_BIT_STRING, &bits));
+    tlv(TAG_OID_CONSTRUCTED_SEQ, &body)
+}
+
+fn ec_spki_decode<C: EcdsaCurve>(der: &[u8], curve_oid: &[u8]) -> Result<EcVerifyingKey<C>> {
+    let (seq, rest) = expect(der, TAG_OID_CONSTRUCTED_SEQ)?;
+    exact(rest)?;
+    let (alg, rest) = expect(seq, TAG_OID_CONSTRUCTED_SEQ)?;
+    if alg != ec_alg_body(curve_oid).as_slice() {
+        return Err(Error::InvalidEncoding);
+    }
+    let (bits, rest) = expect(rest, TAG_BIT_STRING)?;
+    exact(rest)?;
+    let (&unused, point) = bits.split_first().ok_or(Error::InvalidEncoding)?;
+    if unused != 0 {
+        return Err(Error::InvalidEncoding);
+    }
+    EcVerifyingKey::<C>::from_sec1(point).map_err(|_| Error::InvalidEncoding)
+}
+
+/// PKCS#8 PrivateKeyInfo wrapping an RFC 5915 `ECPrivateKey` that carries the
+/// optional public key, the same shape OpenSSL emits.
+fn ec_pkcs8_encode<C: EcdsaCurve>(curve_oid: &[u8], sk: &EcSigningKey<C>) -> Vec<u8> {
+    let d_all = sk.to_be_bytes();
+    let d = &d_all.expose_secret()[..C::N_BYTES];
+    let point = sk.verifying_key().to_sec1_uncompressed();
+    let mut bits = Vec::with_capacity(1 + point.len());
+    bits.push(0x00);
+    bits.extend_from_slice(&point);
+
+    // ECPrivateKey ::= SEQUENCE { version INTEGER 1, privateKey OCTET STRING,
+    //                             publicKey [1] BIT STRING }
+    let mut ec_pk = der_uint(&[1]);
+    ec_pk.extend_from_slice(&tlv(TAG_OCTET_STRING, d));
+    ec_pk.extend_from_slice(&tlv(TAG_CONTEXT_1, &tlv(TAG_BIT_STRING, &bits)));
+    let ec_pk = tlv(TAG_OID_CONSTRUCTED_SEQ, &ec_pk);
+
+    // PrivateKeyInfo ::= SEQUENCE { version INTEGER 0, algorithm, privateKey OCTET STRING }
+    let mut body = der_uint(&[0]);
+    body.extend_from_slice(&tlv(TAG_OID_CONSTRUCTED_SEQ, &ec_alg_body(curve_oid)));
+    body.extend_from_slice(&tlv(TAG_OCTET_STRING, &ec_pk));
+    tlv(TAG_OID_CONSTRUCTED_SEQ, &body)
+}
+
+fn ec_pkcs8_decode<C: EcdsaCurve>(der: &[u8], curve_oid: &[u8]) -> Result<EcSigningKey<C>> {
+    let (seq, rest) = expect(der, TAG_OID_CONSTRUCTED_SEQ)?;
+    exact(rest)?;
+    let (version, rest) = read_uint(seq)?;
+    if version != [0] {
+        return Err(Error::InvalidEncoding);
+    }
+    let (alg, rest) = expect(rest, TAG_OID_CONSTRUCTED_SEQ)?;
+    if alg != ec_alg_body(curve_oid).as_slice() {
+        return Err(Error::InvalidEncoding);
+    }
+    let (octet, rest) = expect(rest, TAG_OCTET_STRING)?;
+    exact(rest)?;
+
+    let (ec_pk, rest) = expect(octet, TAG_OID_CONSTRUCTED_SEQ)?;
+    exact(rest)?;
+    let (ec_version, rest) = read_uint(ec_pk)?;
+    if ec_version != [1] {
+        return Err(Error::InvalidEncoding);
+    }
+    let (d, rest) = expect(rest, TAG_OCTET_STRING)?;
+    if d.len() != C::N_BYTES {
+        return Err(Error::InvalidEncoding);
+    }
+
+    // Optional [1] public key; when present it must match the private scalar.
+    let advertised = if rest.is_empty() {
+        None
+    } else {
+        let (tag, value, after) = read_tlv(rest)?;
+        if tag != TAG_CONTEXT_1 {
+            return Err(Error::InvalidEncoding);
+        }
+        exact(after)?;
+        let (bits, after_bits) = expect(value, TAG_BIT_STRING)?;
+        exact(after_bits)?;
+        match bits.split_first() {
+            Some((&0, point)) => Some(point),
+            _ => return Err(Error::InvalidEncoding),
+        }
+    };
+
+    let sk = EcSigningKey::<C>::from_bytes(d).map_err(|_| Error::InvalidEncoding)?;
+    if let Some(point) = advertised {
+        if sk.verifying_key().to_sec1_uncompressed().as_slice() != point {
+            return Err(Error::InvalidEncoding);
+        }
+    }
+    Ok(sk)
+}
+
+/// DER SubjectPublicKeyInfo for a P-256 public key (uncompressed point).
+pub fn p256_public_to_spki(vk: &EcVerifyingKey<P256>) -> Vec<u8> {
+    ec_spki_encode(OID_PRIME256V1, vk)
+}
+
+/// Parse a DER SubjectPublicKeyInfo for a P-256 public key.
+pub fn p256_public_from_spki(der: &[u8]) -> Result<EcVerifyingKey<P256>> {
+    ec_spki_decode(der, OID_PRIME256V1)
+}
+
+/// DER PKCS#8 PrivateKeyInfo for a P-256 key. The result contains the secret
+/// scalar; zero it after use.
+pub fn p256_private_to_pkcs8(sk: &EcSigningKey<P256>) -> Vec<u8> {
+    ec_pkcs8_encode(OID_PRIME256V1, sk)
+}
+
+/// Parse a DER PKCS#8 PrivateKeyInfo for a P-256 key.
+pub fn p256_private_from_pkcs8(der: &[u8]) -> Result<EcSigningKey<P256>> {
+    ec_pkcs8_decode(der, OID_PRIME256V1)
+}
+
+/// DER SubjectPublicKeyInfo for a P-384 public key (uncompressed point).
+pub fn p384_public_to_spki(vk: &EcVerifyingKey<P384>) -> Vec<u8> {
+    ec_spki_encode(OID_SECP384R1, vk)
+}
+
+/// Parse a DER SubjectPublicKeyInfo for a P-384 public key.
+pub fn p384_public_from_spki(der: &[u8]) -> Result<EcVerifyingKey<P384>> {
+    ec_spki_decode(der, OID_SECP384R1)
+}
+
+/// DER PKCS#8 PrivateKeyInfo for a P-384 key. The result contains the secret
+/// scalar; zero it after use.
+pub fn p384_private_to_pkcs8(sk: &EcSigningKey<P384>) -> Vec<u8> {
+    ec_pkcs8_encode(OID_SECP384R1, sk)
+}
+
+/// Parse a DER PKCS#8 PrivateKeyInfo for a P-384 key.
+pub fn p384_private_from_pkcs8(der: &[u8]) -> Result<EcSigningKey<P384>> {
+    ec_pkcs8_decode(der, OID_SECP384R1)
 }
 
 // ---------------------------------------------------------------------------
