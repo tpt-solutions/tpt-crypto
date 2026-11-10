@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 tpt-crypto-core = { path = "../crates/tpt-crypto-core", default-features = true }
-tpt-crypto = { path = "../crates/tpt-crypto", default-features = false, features = ["pq", "classical", "bls", "std"] }
+tpt-crypto = { path = "../crates/tpt-crypto", default-features = false, features = ["pq", "classical", "bls", "std", "os-rng"] }
 
 # MIT OR Apache-2.0 / ISC — `CryptoProvider` example: TLS 1.3 with the
 # substrate's own AEADs, X25519, HKDF and Ed25519 (no ring / aws-lc-rs:
