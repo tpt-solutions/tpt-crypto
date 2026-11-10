@@ -356,6 +356,9 @@ fn parse_spec(stem: &str, text: &str) -> Result<Vec<Evidence>, String> {
             continue;
         }
         let t = line.trim();
+        if t.starts_with('#') {
+            continue; // comment line inside an evidence block
+        }
         if let Some(args) = t.strip_prefix("cargo-test:") {
             evidence.push(Evidence::CargoTest(
                 args.split_whitespace().map(String::from).collect(),
