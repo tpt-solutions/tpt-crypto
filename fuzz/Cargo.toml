@@ -66,3 +66,15 @@ doc = false
 
 [package.metadata]
 cargo-fuzz = true
+
+[[bin]]
+name = "xwing_decapsulate"
+path = "fuzz_targets/xwing_decapsulate.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "xwing_encapsulate_pk"
+path = "fuzz_targets/xwing_encapsulate_pk.rs"
+test = false
+doc = false
