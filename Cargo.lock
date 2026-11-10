@@ -959,6 +959,7 @@ dependencies = [
  "hex",
  "proptest",
  "rand",
+ "serde_json",
  "tpt-crypto-core",
  "tpt-crypto-ct",
 ]
