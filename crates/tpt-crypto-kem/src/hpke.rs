@@ -131,7 +131,8 @@ fn labeled_extract(suite: &[u8], salt: &[u8], label: &[u8], ikm: &[u8]) -> [u8; 
 /// `LabeledExpand` (RFC 9180 §4). `out.len()` must be at most `255 * 32`.
 fn labeled_expand(suite: &[u8], prk: &[u8], label: &[u8], info: &[u8], out: &mut [u8]) {
     let len = (out.len() as u16).to_be_bytes();
-    let mut labeled_info = Vec::with_capacity(2 + HPKE_V1.len() + suite.len() + label.len() + info.len());
+    let mut labeled_info =
+        Vec::with_capacity(2 + HPKE_V1.len() + suite.len() + label.len() + info.len());
     labeled_info.extend_from_slice(&len);
     labeled_info.extend_from_slice(HPKE_V1);
     labeled_info.extend_from_slice(suite);
@@ -204,12 +205,14 @@ impl Context {
         let nonce = Nonce::new(self.nonce()?);
         let ct = match self.alg {
             AeadAlgorithm::ChaCha20Poly1305 => {
-                let key: &[u8; 32] = self.key.as_slice().try_into().map_err(|_| Error::InvalidKey)?;
+                let key: &[u8; 32] = self
+                    .key
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| Error::InvalidKey)?;
                 ChaCha20Poly1305::new(key).encrypt(&nonce, aad, plaintext)
             }
-            AeadAlgorithm::Aes128Gcm => {
-                Aes128Gcm::new(&self.key)?.encrypt(&nonce, aad, plaintext)
-            }
+            AeadAlgorithm::Aes128Gcm => Aes128Gcm::new(&self.key)?.encrypt(&nonce, aad, plaintext),
         };
         self.seq += 1;
         Ok(ct)
@@ -221,7 +224,11 @@ impl Context {
         let nonce = Nonce::new(self.nonce()?);
         let pt = match self.alg {
             AeadAlgorithm::ChaCha20Poly1305 => {
-                let key: &[u8; 32] = self.key.as_slice().try_into().map_err(|_| Error::InvalidKey)?;
+                let key: &[u8; 32] = self
+                    .key
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| Error::InvalidKey)?;
                 ChaCha20Poly1305::new(key).decrypt(&nonce, aad, ciphertext)?
             }
             AeadAlgorithm::Aes128Gcm => {
@@ -490,7 +497,16 @@ pub fn setup_auth_psk_sender<R: CryptoRng>(
     rng: &mut R,
 ) -> Result<([u8; NENC], Context)> {
     let mut sk_e = random_scalar(rng)?;
-    let out = sender_core(alg, Mode::AuthPsk, &sk_e, pk_r, Some(sk_s), info, psk, psk_id);
+    let out = sender_core(
+        alg,
+        Mode::AuthPsk,
+        &sk_e,
+        pk_r,
+        Some(sk_s),
+        info,
+        psk,
+        psk_id,
+    );
     sk_e.zeroize();
     out
 }
@@ -600,7 +616,13 @@ mod tests {
                 let pt = unhex(parts.next().unwrap());
                 let ct = unhex(parts.next().unwrap());
                 let nonce = unhex(parts.next().unwrap());
-                r.seals.push(Seal { seq, aad, pt, ct, nonce });
+                r.seals.push(Seal {
+                    seq,
+                    aad,
+                    pt,
+                    ct,
+                    nonce,
+                });
                 continue;
             }
             let value = parts.next().unwrap_or("-");
@@ -651,7 +673,10 @@ mod tests {
             2 => Mode::Auth,
             _ => Mode::AuthPsk,
         };
-        sender_core(rec.alg, mode, &rec.sk_em, &rec.pk_rm, sk_s, &rec.info, psk, psk_id).unwrap()
+        sender_core(
+            rec.alg, mode, &rec.sk_em, &rec.pk_rm, sk_s, &rec.info, psk, psk_id,
+        )
+        .unwrap()
     }
 
     fn receiver_for(rec: &Record, enc: &[u8; 32], pk_s: &[u8; 32]) -> Result<Context> {
@@ -682,12 +707,33 @@ mod tests {
             let (enc, mut ctx) = sender_for(rec);
             assert_eq!(enc, rec.enc, "mode {} enc", rec.mode);
             assert_eq!(ctx.key, rec.key, "mode {} key", rec.mode);
-            assert_eq!(ctx.base_nonce.to_vec(), rec.base_nonce, "mode {} nonce", rec.mode);
-            assert_eq!(ctx.exporter_secret.to_vec(), rec.exporter_secret, "mode {} exp", rec.mode);
+            assert_eq!(
+                ctx.base_nonce.to_vec(),
+                rec.base_nonce,
+                "mode {} nonce",
+                rec.mode
+            );
+            assert_eq!(
+                ctx.exporter_secret.to_vec(),
+                rec.exporter_secret,
+                "mode {} exp",
+                rec.mode
+            );
             for s in &rec.seals {
                 assert_eq!(ctx.seq, s.seq);
-                assert_eq!(ctx.nonce().unwrap().to_vec(), s.nonce, "nonce seq {}", s.seq);
-                assert_eq!(ctx.seal(&s.aad, &s.pt).unwrap(), s.ct, "mode {} ct seq {}", rec.mode, s.seq);
+                assert_eq!(
+                    ctx.nonce().unwrap().to_vec(),
+                    s.nonce,
+                    "nonce seq {}",
+                    s.seq
+                );
+                assert_eq!(
+                    ctx.seal(&s.aad, &s.pt).unwrap(),
+                    s.ct,
+                    "mode {} ct seq {}",
+                    rec.mode,
+                    s.seq
+                );
             }
         }
     }
@@ -698,7 +744,13 @@ mod tests {
             let pk_s = rec.pk_sm;
             let mut ctx = receiver_for(&rec, &rec.enc, &pk_s).unwrap();
             for s in &rec.seals {
-                assert_eq!(ctx.open(&s.aad, &s.ct).unwrap(), s.pt, "mode {} seq {}", rec.mode, s.seq);
+                assert_eq!(
+                    ctx.open(&s.aad, &s.ct).unwrap(),
+                    s.pt,
+                    "mode {} seq {}",
+                    rec.mode,
+                    s.seq
+                );
             }
         }
     }
@@ -711,7 +763,10 @@ mod tests {
         let mut bad = s.ct.clone();
         bad[0] ^= 1;
         assert!(ctx.open(&s.aad, &bad).is_err());
-        assert_eq!(ctx.seq, 0, "failed open must not advance the sequence number");
+        assert_eq!(
+            ctx.seq, 0,
+            "failed open must not advance the sequence number"
+        );
         assert_eq!(ctx.open(&s.aad, &s.ct).unwrap(), s.pt);
     }
 
@@ -744,7 +799,15 @@ mod tests {
         let rec = parse(KAT_MODES).into_iter().find(|r| r.mode == 1).unwrap();
         let short = [0x55u8; 16];
         assert_eq!(
-            setup_psk_receiver(rec.alg, &rec.enc, &rec.sk_rm, &rec.info, &short, &rec.psk_id).err(),
+            setup_psk_receiver(
+                rec.alg,
+                &rec.enc,
+                &rec.sk_rm,
+                &rec.info,
+                &short,
+                &rec.psk_id
+            )
+            .err(),
             Some(Error::InvalidLength)
         );
     }
@@ -767,7 +830,8 @@ mod tests {
         assert!(wrong.open(&s.aad, &s.ct).is_err());
 
         // A base-mode receiver cannot open a PSK-mode message.
-        let mut base = setup_base_receiver(psk_rec.alg, &psk_rec.enc, &psk_rec.sk_rm, &psk_rec.info).unwrap();
+        let mut base =
+            setup_base_receiver(psk_rec.alg, &psk_rec.enc, &psk_rec.sk_rm, &psk_rec.info).unwrap();
         assert!(base.open(&s.aad, &s.ct).is_err());
     }
 

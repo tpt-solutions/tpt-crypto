@@ -94,7 +94,19 @@ pub fn argon2id(
     for pass in 0..t {
         for slice in 0..SYNC_POINTS {
             for lane in 0..p_us {
-                fill_segment(&mut mem, Geometry { lanes: p_us, q, seg, m_prime, t, pass, slice, lane });
+                fill_segment(
+                    &mut mem,
+                    Geometry {
+                        lanes: p_us,
+                        q,
+                        seg,
+                        m_prime,
+                        t,
+                        pass,
+                        slice,
+                        lane,
+                    },
+                );
             }
         }
     }
@@ -133,7 +145,16 @@ struct Geometry {
 }
 
 fn fill_segment(mem: &mut [Block], g: Geometry) {
-    let Geometry { lanes, q, seg, m_prime, t, pass, slice, lane } = g;
+    let Geometry {
+        lanes,
+        q,
+        seg,
+        m_prime,
+        t,
+        pass,
+        slice,
+        lane,
+    } = g;
     let data_independent = pass == 0 && slice <= 1;
     let start = if pass == 0 && slice == 0 { 2 } else { 0 };
 
@@ -203,7 +224,11 @@ fn fill_segment(mem: &mut [Block], g: Geometry) {
         let ref_idx = ref_lane * q + ref_col;
 
         let new = compress_g(&mem[prev], &mem[ref_idx]);
-        mem[cur] = if pass == 0 { new } else { xor_block(&new, &mem[cur]) };
+        mem[cur] = if pass == 0 {
+            new
+        } else {
+            xor_block(&new, &mem[cur])
+        };
     }
 
     input.zeroize();
@@ -351,8 +376,10 @@ fn permute_p(v: &mut [u64; 16]) {
 #[inline(always)]
 fn fbla(x: u64, y: u64) -> u64 {
     // a + b + 2 * trunc(a) * trunc(b), mod 2^64.
-    x.wrapping_add(y)
-        .wrapping_add(2u64.wrapping_mul(x & 0xffff_ffff).wrapping_mul(y & 0xffff_ffff))
+    x.wrapping_add(y).wrapping_add(
+        2u64.wrapping_mul(x & 0xffff_ffff)
+            .wrapping_mul(y & 0xffff_ffff),
+    )
 }
 
 #[inline(always)]
@@ -391,7 +418,11 @@ mod tests {
             &salt,
             &secret,
             &ad,
-            Params { m_kib: 32, t: 3, p: 4 },
+            Params {
+                m_kib: 32,
+                t: 3,
+                p: 4,
+            },
             &mut tag,
         )
         .unwrap();
@@ -409,17 +440,19 @@ mod tests {
             &[0x02u8; 16],
             &[0x03u8; 8],
             &[0x04u8; 12],
-            Params { m_kib: 32, t: 3, p: 4 },
+            Params {
+                m_kib: 32,
+                t: 3,
+                p: 4,
+            },
             32,
         );
         assert_eq!(
             h0,
-            hex(
-                "28 89 de 48 7e b4 2a e5 00 c0 00 7e d9 25 2f
+            hex("28 89 de 48 7e b4 2a e5 00 c0 00 7e d9 25 2f
                  10 69 ea de c4 0d 57 65 b4 85 de 6d c2 43 7a 67 b8 54 6a 2f 0a
                  cc 1a 08 82 db 8f cf 74 71 4b 47 2e 94 df 42 1a 5d a1 11 2f fa
-                 11 43 43 70 a1 e9 97"
-            )
+                 11 43 43 70 a1 e9 97")
         );
     }
 
@@ -435,19 +468,35 @@ mod tests {
     #[test]
     fn parameter_validation() {
         let mut tag = [0u8; 32];
-        let ok = Params { m_kib: 32, t: 1, p: 1 };
+        let ok = Params {
+            m_kib: 32,
+            t: 1,
+            p: 1,
+        };
         let bad_salt = [0u8; 7];
         assert!(argon2id(b"pw", &bad_salt, &[], &[], ok, &mut tag).is_err());
         assert!(argon2id(b"pw", &[0u8; 8], &[], &[], Params { t: 0, ..ok }, &mut tag).is_err());
         assert!(argon2id(b"pw", &[0u8; 8], &[], &[], Params { p: 0, ..ok }, &mut tag).is_err());
-        assert!(argon2id(b"pw", &[0u8; 8], &[], &[], Params { m_kib: 7, ..ok }, &mut tag).is_err());
+        assert!(argon2id(
+            b"pw",
+            &[0u8; 8],
+            &[],
+            &[],
+            Params { m_kib: 7, ..ok },
+            &mut tag
+        )
+        .is_err());
         let mut short = [0u8; 3];
         assert!(argon2id(b"pw", &[0u8; 8], &[], &[], ok, &mut short).is_err());
     }
 
     #[test]
     fn output_depends_on_every_input() {
-        let params = Params { m_kib: 64, t: 2, p: 2 };
+        let params = Params {
+            m_kib: 64,
+            t: 2,
+            p: 2,
+        };
         let run = |pw: &[u8], salt: &[u8], sec: &[u8], ad: &[u8]| {
             let mut tag = [0u8; 32];
             argon2id(pw, salt, sec, ad, params, &mut tag).unwrap();

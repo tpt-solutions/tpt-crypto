@@ -32,47 +32,82 @@ fn key() -> PublicKey {
 fn pkcs1v15_sha256_and_sha384_verify() {
     let k = key();
     assert_eq!(k.modulus_len(), 384);
-    k.verify_pkcs1v15(RsaHash::Sha256, MSG, &hx(SIG_P1_256)).unwrap();
-    k.verify_pkcs1v15(RsaHash::Sha384, MSG, &hx(SIG_P1_384)).unwrap();
+    k.verify_pkcs1v15(RsaHash::Sha256, MSG, &hx(SIG_P1_256))
+        .unwrap();
+    k.verify_pkcs1v15(RsaHash::Sha384, MSG, &hx(SIG_P1_384))
+        .unwrap();
 }
 
 #[test]
 fn pkcs1v15_rejects_wrong_hash_message_and_signature() {
     let k = key();
     let sig = hx(SIG_P1_256);
-    assert_eq!(k.verify_pkcs1v15(RsaHash::Sha384, MSG, &sig), Err(Error::Verification));
-    assert_eq!(k.verify_pkcs1v15(RsaHash::Sha256, b"tampered", &sig), Err(Error::Verification));
+    assert_eq!(
+        k.verify_pkcs1v15(RsaHash::Sha384, MSG, &sig),
+        Err(Error::Verification)
+    );
+    assert_eq!(
+        k.verify_pkcs1v15(RsaHash::Sha256, b"tampered", &sig),
+        Err(Error::Verification)
+    );
     let mut bad = sig.clone();
     bad[100] ^= 0x01;
-    assert_eq!(k.verify_pkcs1v15(RsaHash::Sha256, MSG, &bad), Err(Error::Verification));
-    assert_eq!(k.verify_pkcs1v15(RsaHash::Sha256, MSG, &sig[1..]), Err(Error::Verification));
-    assert_eq!(k.verify_pkcs1v15(RsaHash::Sha256, MSG, &hx(SIG_PSS_256)), Err(Error::Verification));
+    assert_eq!(
+        k.verify_pkcs1v15(RsaHash::Sha256, MSG, &bad),
+        Err(Error::Verification)
+    );
+    assert_eq!(
+        k.verify_pkcs1v15(RsaHash::Sha256, MSG, &sig[1..]),
+        Err(Error::Verification)
+    );
+    assert_eq!(
+        k.verify_pkcs1v15(RsaHash::Sha256, MSG, &hx(SIG_PSS_256)),
+        Err(Error::Verification)
+    );
 }
 
 #[test]
 fn pss_verify_all_hashes() {
     let k = key();
-    k.verify_pss(RsaHash::Sha256, 32, MSG, &hx(SIG_PSS_256)).unwrap();
-    k.verify_pss(RsaHash::Sha384, 48, MSG, &hx(SIG_PSS_384)).unwrap();
-    k.verify_pss(RsaHash::Sha512, 64, MSG, &hx(SIG_PSS_512)).unwrap();
+    k.verify_pss(RsaHash::Sha256, 32, MSG, &hx(SIG_PSS_256))
+        .unwrap();
+    k.verify_pss(RsaHash::Sha384, 48, MSG, &hx(SIG_PSS_384))
+        .unwrap();
+    k.verify_pss(RsaHash::Sha512, 64, MSG, &hx(SIG_PSS_512))
+        .unwrap();
 }
 
 #[test]
 fn pss_rejects_wrong_salt_length_message_and_signature() {
     let k = key();
     let sig = hx(SIG_PSS_256);
-    assert_eq!(k.verify_pss(RsaHash::Sha256, 20, MSG, &sig), Err(Error::Verification));
-    assert_eq!(k.verify_pss(RsaHash::Sha256, 32, b"tampered", &sig), Err(Error::Verification));
+    assert_eq!(
+        k.verify_pss(RsaHash::Sha256, 20, MSG, &sig),
+        Err(Error::Verification)
+    );
+    assert_eq!(
+        k.verify_pss(RsaHash::Sha256, 32, b"tampered", &sig),
+        Err(Error::Verification)
+    );
     let mut bad = sig.clone();
     bad[0] ^= 0x80;
-    assert_eq!(k.verify_pss(RsaHash::Sha256, 32, MSG, &bad), Err(Error::Verification));
-    assert_eq!(k.verify_pss(RsaHash::Sha256, 32, MSG, &hx(SIG_P1_256)), Err(Error::Verification));
+    assert_eq!(
+        k.verify_pss(RsaHash::Sha256, 32, MSG, &bad),
+        Err(Error::Verification)
+    );
+    assert_eq!(
+        k.verify_pss(RsaHash::Sha256, 32, MSG, &hx(SIG_P1_256)),
+        Err(Error::Verification)
+    );
 }
 
 #[test]
 fn signature_at_or_above_modulus_is_rejected() {
     let k = key();
-    assert_eq!(k.verify_pkcs1v15(RsaHash::Sha256, MSG, &hx(N_HEX)), Err(Error::Verification));
+    assert_eq!(
+        k.verify_pkcs1v15(RsaHash::Sha256, MSG, &hx(N_HEX)),
+        Err(Error::Verification)
+    );
 }
 
 #[test]

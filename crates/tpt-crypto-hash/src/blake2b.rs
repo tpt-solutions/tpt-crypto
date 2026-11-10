@@ -223,7 +223,10 @@ pub fn blake2b_keyed(data: &[u8], key: &[u8]) -> [u8; 64] {
 #[cfg(feature = "alloc")]
 #[must_use]
 pub fn blake2b_var(out_len: usize, parts: &[&[u8]]) -> alloc::vec::Vec<u8> {
-    assert!((1..=64).contains(&out_len), "BLAKE2b output must be 1..=64 bytes");
+    assert!(
+        (1..=64).contains(&out_len),
+        "BLAKE2b output must be 1..=64 bytes"
+    );
     let mut h = Blake2b::<64>::new();
     // Word 0 of the parameter block: digest length, key length 0, fanout 1,
     // depth 1. `new()` built it for a 64-byte digest; rewrite the length byte.
