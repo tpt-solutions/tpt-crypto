@@ -322,6 +322,14 @@ fn hex_of(bytes: &[u8]) -> String {
 enum Evidence {
     /// `cargo-test: <args>` — run `cargo test <args>`; must pass and run ≥ 1 test.
     CargoTest(Vec<String>),
+    /// `exhaustive: <pkg> <test-target> <test-name>` — run one exhaustive
+    /// bounded-domain test (`#[ignore]`d or not) in release mode with all features,
+    /// selected by exact name; it must pass and run exactly that test.
+    Exhaustive {
+        pkg: String,
+        target: String,
+        test: String,
+    },
     /// `pending: <reason>` — contract acknowledged but not yet backed by tests.
     Pending(String),
 }
@@ -352,6 +360,20 @@ fn parse_spec(stem: &str, text: &str) -> Result<Vec<Evidence>, String> {
             evidence.push(Evidence::CargoTest(
                 args.split_whitespace().map(String::from).collect(),
             ));
+        } else if let Some(rest) = t.strip_prefix("exhaustive:") {
+            let parts: Vec<&str> = rest.split_whitespace().collect();
+            match parts.as_slice() {
+                [pkg, target, test] => evidence.push(Evidence::Exhaustive {
+                    pkg: pkg.to_string(),
+                    target: target.to_string(),
+                    test: test.to_string(),
+                }),
+                _ => {
+                    return Err(format!(
+                        "exhaustive entry needs `<pkg> <test-target> <test-name>`: `{t}`"
+                    ))
+                }
+            }
         } else if let Some(why) = t.strip_prefix("pending:") {
             evidence.push(Evidence::Pending(why.trim().to_string()));
         } else {
@@ -368,6 +390,40 @@ fn parse_spec(stem: &str, text: &str) -> Result<Vec<Evidence>, String> {
 }
 
 /// Run `cargo test <args>`; succeed only if it passes and at least one test ran.
+/// Run one named exhaustive test in release mode and require that it ran and passed.
+fn run_exhaustive(pkg: &str, target: &str, test: &str) -> Result<(), String> {
+    let out = Command::new("cargo")
+        .args([
+            "test",
+            "--release",
+            "--all-features",
+            "-p",
+            pkg,
+            "--test",
+            target,
+            "--",
+            "--include-ignored",
+            "--exact",
+            test,
+        ])
+        .output()
+        .map_err(|e| format!("could not invoke cargo: {e}"))?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    if !out.status.success() {
+        return Err(format!(
+            "cargo test failed\n{}\n{}",
+            stdout,
+            String::from_utf8_lossy(&out.stderr)
+        ));
+    }
+    let ran_one = stdout.lines().any(|l| l.trim() == "running 1 test");
+    let passed = stdout.lines().any(|l| l.starts_with("test result: ok. 1 passed"));
+    if !(ran_one && passed) {
+        return Err(format!("expected exactly one passing test named `{test}`"));
+    }
+    Ok(())
+}
+
 fn run_evidence(args: &[String]) -> Result<(), String> {
     let out = Command::new("cargo")
         .arg("test")
@@ -440,6 +496,15 @@ fn verify(strict: bool) -> i32 {
                             "verify: {}: FAILED — cargo test {}: {e}",
                             path.display(),
                             args.join(" ")
+                        );
+                        spec_ok = false;
+                    }
+                }
+                Evidence::Exhaustive { pkg, target, test } => {
+                    if let Err(e) = run_exhaustive(pkg, target, test) {
+                        eprintln!(
+                            "verify: {}: FAILED — exhaustive {pkg} {target} {test}: {e}",
+                            path.display()
                         );
                         spec_ok = false;
                     }
@@ -966,6 +1031,7 @@ fn exhaustive() -> i32 {
     const SUITES: &[(&str, &[&str])] = &[
         ("tpt-crypto-ct", &[]),
         ("tpt-crypto-kem", &["--features", "alloc"]),
+        ("tpt-crypto-sig", &["--features", "alloc"]),
     ];
     let mut worst = 0;
     for (pkg, extra) in SUITES {

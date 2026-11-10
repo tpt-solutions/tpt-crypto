@@ -50,3 +50,6 @@ verification:
 
 evidence:
   cargo-test: -p tpt-crypto-kem --lib ntt_mul_matches_schoolbook
+  # Supporting: the reductions every NTT butterfly uses, over their full domains.
+  exhaustive: tpt-crypto-kem exhaustive freeze_full_i32_domain
+  exhaustive: tpt-crypto-kem exhaustive montgomery_full_documented_domain
