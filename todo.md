@@ -952,7 +952,7 @@ Each item is its own commit so any can be dropped.
             (`tests/kat_encoding.rs`).
       - [x] P-256 / P-384 SPKI and PKCS#8 (named-curve OIDs, uncompressed points). Byte-exact vs OpenSSL (`tests/kat_ec_encoding.rs`).
       - [ ] Optional JWK.
-      - [ ] Fuzz target for the DER / PEM decoders (`fuzz/`).
+      - [x] Fuzz target for the DER / PEM decoders (`key_der_parse`; type-checked, not run on this host).
 - [x] Argon2id (RFC 9106) in `tpt-crypto-hash::argon2` (feature `alloc`). Matches the
       RFC §5.3 tag and H_0 digest; provenance in `tests/kat/PROVENANCE.md`. Only
       Argon2id v0x13 is provided (no d/i variants). `blake2b_var` adds runtime-length BLAKE2b.
