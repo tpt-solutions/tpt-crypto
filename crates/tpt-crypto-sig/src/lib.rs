@@ -18,12 +18,14 @@ extern crate alloc;
 pub mod bls;
 pub mod bytes;
 pub mod constant_time;
-#[cfg(feature = "alloc")]
-pub mod hybrid;
 pub mod ecdsa;
 pub mod ed25519;
 #[cfg(feature = "alloc")]
 pub mod encoding;
+#[cfg(feature = "alloc")]
+pub mod hybrid;
+#[cfg(feature = "alloc")]
+pub mod jwk;
 pub mod ml_dsa;
 pub mod poly;
 #[cfg(feature = "alloc")]
