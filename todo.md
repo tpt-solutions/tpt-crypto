@@ -963,8 +963,11 @@ Each item is its own commit so any can be dropped.
       - [ ] Class-level exclusion (Ed25519, X25519, ChaCha20, ...) for CNSA 2.0. Needs a policy decision on which algorithms count as approved; the workspace has no SHA-1/MD5 to remove.
 
 ### C. Tooling & adoption
-- [ ] `tpt-crypto-cli` workspace binary (std): `hash`, `keygen`, `sign` / `verify`,
+- [~] `tpt-crypto-cli` workspace binary (std): `hash`, `keygen`, `sign` / `verify`,
       `seal` / `open`, `kem encap` / `decap`, `selftest`, `bench`.
+      - [x] `selftest`, `hash`, `random`, `sign-keygen` / `sign` / `verify`, `seal-keygen` / `seal` / `open`
+            (`crates/tpt-crypto-cli`, end-to-end tests). Output files are never overwritten.
+      - [ ] `kem encap` / `decap` (X-Wing) and `bench`. PEM/DER import and export need a file-format decision first.
 - [ ] Runnable `cargo run --example` programs: `ml_kem`, `ml_dsa`, `ring_subset`,
       `bls_aggregate`, `hybrid_kem`, `seal_open`.
 - [ ] Docs book (`docs/`): "which primitive should I use?" chooser, feature-flag guide,

@@ -981,6 +981,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tpt-crypto-cli"
+version = "0.1.0"
+dependencies = [
+ "tpt-crypto",
+]
+
+[[package]]
 name = "tpt-crypto-core"
 version = "0.1.0"
 dependencies = [
