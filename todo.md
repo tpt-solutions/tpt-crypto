@@ -928,9 +928,8 @@ Each item is its own commit so any can be dropped.
             checked against Python references. Fuzz targets `xwing_decapsulate` and `xwing_encapsulate_pk`.
       - [ ] Official test vectors: none published yet by the draft, so there is no independent
             end-to-end KAT. Wire format is unstable until the draft is final.
-      - [ ] `ml_kem::encapsulate` / `encapsulate_msg` still assume a well-formed key (they `expect`
-            `decode_pk`, and the public `EncapsKey.bytes` field lets callers pass a wrong length, which panics).
-            `ml_kem::check_encaps_key` (FIPS 203 §7.2) is used by `xwing` only; the plain ML-KEM API should call it too.
+      - [x] Plain ML-KEM `encapsulate` / `encapsulate_msg` now run the FIPS 203 §7.2 check and return
+            `Result` (breaking change, crate unreleased). Regression test: `tests/encaps_validation.rs`, all parameter sets.
 - [ ] Hybrid signature: Ed25519 + ML-DSA-65 composite, with KATs.
 - [~] HPKE (RFC 9180) in `tpt-crypto-kem::hpke`: all four modes (base, PSK, auth,
       auth-PSK) over DHKEM(X25519, HKDF-SHA256) with ChaCha20-Poly1305 and AES-128-GCM.

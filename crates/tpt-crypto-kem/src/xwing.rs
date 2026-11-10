@@ -121,13 +121,10 @@ pub fn encapsulate_with(
     let mut pk_x = [0u8; 32];
     pk_x.copy_from_slice(&pk.0[MlKem768::PK_LEN..]);
 
-    // Untrusted input: check before the ML-KEM encapsulation, which assumes a
-    // well-formed key.
-    ml_kem::check_encaps_key::<MlKem768>(pk_m)?;
     let ek = EncapsKey {
         bytes: pk_m.to_vec(),
     };
-    let (ss_m, ct_m) = ml_kem::encapsulate_msg::<MlKem768>(&ek, m);
+    let (ss_m, ct_m) = ml_kem::encapsulate_msg::<MlKem768>(&ek, m)?;
 
     let ss_x = X25519::diffie_hellman(eph, &pk_x);
     if ss_x.iter().all(|&b| b == 0) {

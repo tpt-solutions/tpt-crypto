@@ -86,7 +86,7 @@ fn check_file<P: MlKemParams>(path: &str) {
         let ek = EncapsKey::from_bytes::<P>(&v.pk).expect("valid pk length");
         let dk = DecapsKey::from_bytes::<P>(&v.sk).expect("valid sk length");
 
-        let (ss, ct) = encapsulate_msg::<P>(&ek, &v.msg);
+        let (ss, ct) = encapsulate_msg::<P>(&ek, &v.msg).unwrap();
         assert_eq!(&ct.bytes, &v.ct, "[{path}] count {} ct", v.count);
         assert_eq!(&ss, &v.ss, "[{path}] count {} ss", v.count);
 

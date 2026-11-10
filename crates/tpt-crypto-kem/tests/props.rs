@@ -23,7 +23,7 @@ impl CryptoRng for TestRng {
 /// For every parameter set: `decapsulate(sk, encapsulate(pk).1) == encapsulate(pk).0`.
 fn round_trip<P: MlKemParams>(rng: &mut TestRng) -> Result<(), TestCaseError> {
     let (pk, sk) = keygen::<P>(rng);
-    let (ss1, ct) = encapsulate::<P>(&pk, rng);
+    let (ss1, ct) = encapsulate::<P>(&pk, rng).unwrap();
     let ss2 =
         decapsulate::<P>(&sk, &ct.bytes).expect("decapsulation must succeed on a valid ciphertext");
     prop_assert_eq!(ss1, ss2);
@@ -54,7 +54,7 @@ proptest! {
     fn malformed_no_panic(seed in any::<u64>(), flip in 0usize..2000) {
         let mut rng = TestRng(seed.wrapping_add(7));
         let (pk, sk) = keygen::<MlKem768>(&mut rng);
-        let (ss1, ct) = encapsulate::<MlKem768>(&pk, &mut rng);
+        let (ss1, ct) = encapsulate::<MlKem768>(&pk, &mut rng).unwrap();
 
         // Wrong length: a constant-time `InvalidCiphertext`, no panic.
         let short = ct.bytes[..ct.bytes.len() / 2].to_vec();

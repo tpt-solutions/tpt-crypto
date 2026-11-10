@@ -45,7 +45,7 @@ pub fn secret_handling_snippet() {}
 /// let mut rng = TestRng::from_seed(&[0x11; 32]);
 ///
 /// let (pk, sk) = keygen::<MlKem768>(&mut rng);
-/// let (shared_secret, ciphertext) = encapsulate::<MlKem768>(&pk, &mut rng);
+/// let (shared_secret, ciphertext) = encapsulate::<MlKem768>(&pk, &mut rng).unwrap();
 /// let recovered = decapsulate::<MlKem768>(&sk, &ciphertext.bytes)
 ///     .expect("valid ciphertext decapsulates");
 ///
@@ -169,7 +169,7 @@ mod tests {
 
         let mut rng = TestRng::from_seed(&[0x33; 32]);
         let (pk, sk) = keygen::<MlKem512>(&mut rng);
-        let (ss1, ct) = encapsulate::<MlKem512>(&pk, &mut rng);
+        let (ss1, ct) = encapsulate::<MlKem512>(&pk, &mut rng).unwrap();
         let ss2 = decapsulate::<MlKem512>(&sk, &ct.bytes).expect("decapsulate");
         assert_eq!(ss1, ss2);
     }

@@ -124,9 +124,8 @@ fn j_parts(a: &[u8], b: &[u8]) -> [u8; 32] {
 /// FIPS 203 §7.2 encapsulation-key check for an untrusted public key: the length
 /// must be right and every 12-bit coefficient must be below `q` (3329).
 ///
-/// [`encapsulate_msg`] and [`encapsulate`] assume a well-formed key, so callers
-/// that receive keys from outside must run this first. `pke::decode_pk` alone
-/// checks only the length.
+/// [`encapsulate_msg`] and [`encapsulate`] run this check themselves. Call it
+/// directly to validate a key early. (`pke::decode_pk` alone checks only the length.)
 pub fn check_encaps_key<P: MlKemParams>(pk: &[u8]) -> Result<(), Error> {
     let (_, t_hat) = pke::decode_pk::<P>(pk)?;
     let in_range = t_hat
@@ -176,7 +175,14 @@ fn finish_keygen<P: MlKemParams>(d: &[u8; 32], z: &[u8; 32]) -> (EncapsKey, Deca
 /// Encapsulate to `pk` with an explicit 32-byte message `m`, returning the shared
 /// secret and ciphertext. Equivalent to [`encapsulate`] when `m` is chosen at
 /// random; provided for reproducible tests and KAT validation.
-pub fn encapsulate_msg<P: MlKemParams>(pk: &EncapsKey, m: &[u8; 32]) -> (SharedSecret, Ciphertext) {
+///
+/// Returns [`Error::InvalidLength`] or [`Error::InvalidKey`] if `pk` fails the
+/// FIPS 203 §7.2 encapsulation-key check.
+pub fn encapsulate_msg<P: MlKemParams>(
+    pk: &EncapsKey,
+    m: &[u8; 32],
+) -> Result<(SharedSecret, Ciphertext), Error> {
+    check_encaps_key::<P>(&pk.bytes)?;
     let h_pk = h_parts(&pk.bytes, &[]);
     let g = g_parts(m, &h_pk);
     let mut k = [0u8; 32];
@@ -184,17 +190,19 @@ pub fn encapsulate_msg<P: MlKemParams>(pk: &EncapsKey, m: &[u8; 32]) -> (SharedS
     let mut r_seed = [0u8; 32];
     r_seed.copy_from_slice(&g[32..]);
 
-    let (rho, t_hat) = pke::decode_pk::<P>(&pk.bytes).expect("own public key is well-formed");
+    let (rho, t_hat) = pke::decode_pk::<P>(&pk.bytes)?;
     let ct = pke::kpke_encrypt::<P>(&rho, &t_hat, m, &r_seed);
-    (k, Ciphertext { bytes: ct })
+    Ok((k, Ciphertext { bytes: ct }))
 }
 
 /// Encapsulate to `pk`, returning the shared secret and ciphertext. `rng`
-/// supplies the random message `m`.
+/// supplies the random message `m`. Fails on a malformed `pk` (see
+/// [`encapsulate_msg`]).
 pub fn encapsulate<P: MlKemParams>(
     pk: &EncapsKey,
     rng: &mut impl CryptoRng,
-) -> (SharedSecret, Ciphertext) {
+) -> Result<(SharedSecret, Ciphertext), Error> {
+    check_encaps_key::<P>(&pk.bytes)?;
     let m = rng.gen_array::<32>();
     let h_pk = h_parts(&pk.bytes, &[]);
     let g = g_parts(&m, &h_pk);
@@ -203,9 +211,9 @@ pub fn encapsulate<P: MlKemParams>(
     let mut r_seed = [0u8; 32];
     r_seed.copy_from_slice(&g[32..]);
 
-    let (rho, t_hat) = pke::decode_pk::<P>(&pk.bytes).expect("own public key is well-formed");
+    let (rho, t_hat) = pke::decode_pk::<P>(&pk.bytes)?;
     let ct = pke::kpke_encrypt::<P>(&rho, &t_hat, &m, &r_seed);
-    (k, Ciphertext { bytes: ct })
+    Ok((k, Ciphertext { bytes: ct }))
 }
 
 /// Decapsulate `ct` under `sk`.

@@ -21,7 +21,7 @@
 //! # }
 //! # let mut rng = DemoRng(42);
 //! let (pk, sk) = keygen::<MlKem768>(&mut rng);
-//! let (ss, ct) = encapsulate::<MlKem768>(&pk, &mut rng);
+//! let (ss, ct) = encapsulate::<MlKem768>(&pk, &mut rng).unwrap();
 //! let ss2 = decapsulate::<MlKem768>(&sk, &ct.bytes).unwrap();
 //! assert_eq!(ss, ss2);
 //! ```

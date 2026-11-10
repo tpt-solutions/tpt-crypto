@@ -43,10 +43,10 @@ fn kem(c: &mut Criterion) {
 
         g.bench_function("ml-kem-768/encaps", |b| {
             let mut r = BenchRng(2);
-            b.iter(|| core::hint::black_box(encapsulate::<MlKem768>(&pk, &mut r)))
+            b.iter(|| core::hint::black_box(encapsulate::<MlKem768>(&pk, &mut r).unwrap()))
         });
 
-        let (ss, ct) = encapsulate::<MlKem768>(&pk, &mut rng);
+        let (ss, ct) = encapsulate::<MlKem768>(&pk, &mut rng).unwrap();
         let _ = ss;
         let ct_bytes = ct.as_bytes().to_vec();
         g.bench_function("ml-kem-768/decaps", |b| {
