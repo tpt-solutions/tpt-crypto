@@ -973,8 +973,8 @@ Each item is its own commit so any can be dropped.
 - [ ] `wasm32` bindings crate (wasm-bindgen) with npm package. C-ABI crate only if a
       consumer asks.
 - [x] `cargo xtask doctor` (toolchain, targets, nightly/miri, deny/fuzz present).
-- [ ] `cargo xtask wycheproof-fetch` (download + sha256 into `tests/kat/` PROVENANCE).
-- [ ] `cargo xtask new-primitive` (scaffold a crate per AGENTS.md rules).
+- [x] `cargo xtask wycheproof-fetch` (download + sha256 into `tests/kat/` PROVENANCE). Fetches AES-GCM and ChaCha20-Poly1305 files; a test that parses them is still to write.
+- [x] `cargo xtask new-primitive` (scaffold a crate per AGENTS.md rules). Also adds the workspace dependency entry; the `../tpt-rust-map` registry entry is printed for manual addition (that repo is not present here).
 - [ ] `cargo xtask coverage`.
 - [ ] CI: release workflow (tag → package → publish gate), Dependabot, MSRV job (1.84),
       `cargo-audit` / `cargo-vet`, coverage upload, scheduled long fuzz and leakage runs.
