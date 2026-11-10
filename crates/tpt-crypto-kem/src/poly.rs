@@ -49,12 +49,11 @@ pub fn fqmul(a: i32, b: i32) -> i32 {
 /// Reduce a coefficient into canonical `[0, q)` form.
 #[inline]
 pub fn freeze(x: i32) -> i32 {
+    // `x % Q` lies in (-Q, Q). Add Q back when negative, without a branch: `r >> 31`
+    // is all ones for a negative value and zero otherwise. Coefficients are secret,
+    // so this must not compile to a secret-dependent jump.
     let r = x % Q;
-    if r < 0 {
-        r + Q
-    } else {
-        r
-    }
+    r + (Q & (r >> 31))
 }
 
 // ---------------------------------------------------------------------------
