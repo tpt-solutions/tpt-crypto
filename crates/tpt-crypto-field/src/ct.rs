@@ -73,7 +73,9 @@ impl Choice {
     #[inline]
     #[must_use]
     pub fn mask_u64(self) -> u64 {
-        0u64.wrapping_sub(u64::from(self.0))
+        // The black_box keeps the optimizer from proving the bit is 0 or 1 and
+        // rewriting the masked select `a ^ (m & (a ^ b))` into a branch.
+        0u64.wrapping_sub(core::hint::black_box(u64::from(self.0)))
     }
 }
 

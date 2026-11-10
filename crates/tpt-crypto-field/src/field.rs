@@ -288,7 +288,8 @@ impl<P: FieldParams> FieldElement<P> {
         let (r, carry) = consts::add_limbs(&self.limbs, &other.limbs);
         let ge_p = consts::limbs_ge(&r, &P::MODULUS);
         let (rsub, _) = consts::sub_limbs(&r, &P::MODULUS);
-        let cond = Choice::from_bool(carry != 0 || ge_p);
+        // Bitwise OR, not `||`: a short-circuit operator can compile to a branch.
+        let cond = Choice::from_u8(((carry != 0) as u8) | (ge_p as u8));
         let mut out = [0u64; MAX_LIMBS];
         let mut i = 0;
         while i < MAX_LIMBS {

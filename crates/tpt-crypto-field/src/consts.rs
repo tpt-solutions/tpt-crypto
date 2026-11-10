@@ -58,36 +58,27 @@ pub(crate) const fn add_limbs<const N: usize>(a: &[u64; N], b: &[u64; N]) -> ([u
     (out, carry as u8)
 }
 
-/// Lexicographic `a >= b` over limb arrays (most-significant limb first).
+/// Branch-free select: `x1` when `bit == 1`, `x0` when `bit == 0`. `bit` must be 0 or 1.
 #[inline]
-pub(crate) const fn limbs_ge<const N: usize>(a: &[u64; N], b: &[u64; N]) -> bool {
-    let mut i = N;
-    while i > 0 {
-        i -= 1;
-        if a[i] > b[i] {
-            return true;
-        }
-        if a[i] < b[i] {
-            return false;
-        }
-    }
-    true
+pub(crate) const fn sel(bit: u64, x1: u64, x0: u64) -> u64 {
+    // These helpers are `const fn` (MSRV 1.84 has no const black_box), and they run
+    // on public moduli at compile time. Runtime field add/sub use the non-const
+    // `ct_select_u64`, which carries the black_box barrier.
+    let mask = 0u64.wrapping_sub(bit);
+    x0 ^ (mask & (x0 ^ x1))
 }
 
-/// Lexicographic `a >= b` over `N`-limb arrays (most-significant limb first).
+/// Lexicographic `a >= b` over limb arrays. Computed as "no borrow out of `a - b`",
+/// so it does not branch on limb values (the operands may be secret).
+#[inline]
+pub(crate) const fn limbs_ge<const N: usize>(a: &[u64; N], b: &[u64; N]) -> bool {
+    sub_limbs(a, b).1 == 0
+}
+
+/// `a >= b` over `N`-limb arrays; branch-free like [`limbs_ge`].
 #[inline]
 pub(crate) const fn ge_n<const N: usize>(a: &[u64; N], b: &[u64; N]) -> bool {
-    let mut i = N;
-    while i > 0 {
-        i -= 1;
-        if a[i] > b[i] {
-            return true;
-        }
-        if a[i] < b[i] {
-            return false;
-        }
-    }
-    true
+    sub_limbs(a, b).1 == 0
 }
 
 /// `a - b` over `N` limbs, assuming `a >= b` (no borrow handling needed).
@@ -124,9 +115,17 @@ pub(crate) const fn reduce_wide(
         mpad[j] = m[j];
         j += 1;
     }
+    // Fixed four rounds with a conditional select: the number of subtractions
+    // depends on the (possibly secret) value, so no loop exit may depend on it.
     let mut cnt = 0;
-    while ge_n(&t, &mpad) && cnt < 4 {
-        t = sub_n(&t, &mpad);
+    while cnt < 4 {
+        let ge = ge_n(&t, &mpad) as u64;
+        let d = sub_n(&t, &mpad);
+        let mut k = 0;
+        while k < MAX_LIMBS + 1 {
+            t[k] = sel(ge, d[k], t[k]);
+            k += 1;
+        }
         cnt += 1;
     }
     let mut out = [0u64; MAX_LIMBS];
@@ -141,14 +140,15 @@ pub(crate) const fn reduce_wide(
 /// Lexicographic `a == b` over limb arrays.
 #[inline]
 pub(crate) const fn limbs_eq<const N: usize>(a: &[u64; N], b: &[u64; N]) -> bool {
+    // Accumulate every limb difference before testing, so the result does not
+    // depend on where the first mismatch is.
+    let mut diff = 0u64;
     let mut i = 0;
     while i < N {
-        if a[i] != b[i] {
-            return false;
-        }
+        diff |= a[i] ^ b[i];
         i += 1;
     }
-    true
+    diff == 0
 }
 
 /// `a - b mod m`, assuming `a < m` and `b < m`.
@@ -158,12 +158,15 @@ pub(crate) const fn sub_mod(
     b: &[u64; MAX_LIMBS],
     m: &[u64; MAX_LIMBS],
 ) -> [u64; MAX_LIMBS] {
-    let (mut r, borrow) = sub_limbs(a, b);
-    if borrow == 1 {
-        let (s, _) = add_limbs(&r, m);
-        r = s;
+    let (r, borrow) = sub_limbs(a, b);
+    let (s, _) = add_limbs(&r, m);
+    let mut out = [0u64; MAX_LIMBS];
+    let mut i = 0;
+    while i < MAX_LIMBS {
+        out[i] = sel(borrow as u64, s[i], r[i]);
+        i += 1;
     }
-    r
+    out
 }
 
 /// `a + b mod m`, assuming `a < m` and `b < m`.
@@ -264,8 +267,12 @@ pub(crate) const fn mod_reduce(t: &[u64; 2 * MAX_LIMBS], m: &[u64; MAX_LIMBS]) -
     while bit >= mbits - 1 {
         let shift = bit - (mbits - 1);
         let sm = shl_bits(m, shift);
-        if limbs_ge(&r, &sm) {
-            r = sub_big(&r, &sm);
+        let ge = limbs_ge(&r, &sm) as u64;
+        let d = sub_big(&r, &sm);
+        let mut k = 0;
+        while k < 2 * MAX_LIMBS {
+            r[k] = sel(ge, d[k], r[k]);
+            k += 1;
         }
         bit -= 1;
     }
@@ -275,9 +282,12 @@ pub(crate) const fn mod_reduce(t: &[u64; 2 * MAX_LIMBS], m: &[u64; MAX_LIMBS]) -
         out[i] = r[i];
         i += 1;
     }
-    if limbs_ge(&out, m) {
-        let (d, _) = sub_limbs(&out, m);
-        out = d;
+    let ge = limbs_ge(&out, m) as u64;
+    let (d, _) = sub_limbs(&out, m);
+    let mut j = 0;
+    while j < MAX_LIMBS {
+        out[j] = sel(ge, d[j], out[j]);
+        j += 1;
     }
     out
 }
