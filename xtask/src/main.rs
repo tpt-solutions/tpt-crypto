@@ -28,6 +28,7 @@ fn main() {
         ),
         "kat-check" => kat_check(),
         "exhaustive" => exhaustive(),
+        "ct-asm" => ct_asm(),
         "verify" => verify(args.iter().any(|a| a == "--strict")),
         "release-dry-run" => release_dry_run(),
         "sbom" => sbom(),
@@ -64,6 +65,7 @@ fn print_help() {
          no-std           build no_std crates for thumbv6m-none-eabi\n  \
          kat-check        verify tests/kat/PROVENANCE.md sha256s\n  \
          exhaustive       release-mode exhaustive bounded-domain checks (todo V1)\n  \
+         ct-asm           binary-level constant-time check of probe functions (todo V3)\n  \
          verify           check specs/*.spec against cited test evidence (--strict fails on pending)\n  \
          release-dry-run  cargo publish --dry-run in topo order\n  \
          sbom             emit a SBOM artifact\n  \
@@ -1049,6 +1051,157 @@ fn exhaustive() -> i32 {
         println!("xtask exhaustive: PASS (bounded-domain checks; not formal proofs)");
     }
     worst
+}
+
+/// `cargo xtask ct-asm`: binary-level constant-time check (todo V3).
+///
+/// Compiles each probe test target to release assembly with `--emit asm` and scans
+/// every `probe_*` function body for conditional jumps. A conditional jump in a
+/// probe means the compiler turned the primitive into a branch, and that branch
+/// can depend on a secret. The command fails on any jump and also when no probe is
+/// found, so an empty scan cannot pass.
+fn ct_asm() -> i32 {
+    // (package, probe test target)
+    // (package, probe test target, strict). Strict targets fail on any conditional
+    // jump. Report-only targets are composite functions whose jumps have not been
+    // triaged yet (loops over public lengths, overflow checks); they are listed by
+    // mnemonic and do not fail the run.
+    const PROBES: &[(&str, &str, bool)] = &[
+        ("tpt-crypto-ct", "ct_asm_probe", true),
+        ("tpt-crypto-kem", "kem_asm_probe", false),
+    ];
+    let mut worst = 0;
+    for (pkg, target, strict) in PROBES {
+        match ct_asm_one(pkg, target, *strict) {
+            Ok(summary) => println!("ct-asm: {summary}"),
+            Err(e) => {
+                eprintln!("ct-asm: {pkg} {target}: {e}");
+                worst = 1;
+            }
+        }
+    }
+    if worst == 0 {
+        println!("ct-asm: PASS for strict targets (no conditional jumps in their probe functions). Report-only targets are not triaged yet. This is a static check, not a timing proof.");
+    }
+    worst
+}
+
+/// A probe label is a plain `probe_*` symbol, or a mangled name whose `probe_`
+/// component carries its length prefix (a digit right before it, as in `20probe_…`).
+/// The digit test keeps std functions such as `small_probe_read` out.
+fn is_probe_label(name: &str) -> bool {
+    if name.contains(char::is_whitespace) {
+        return false;
+    }
+    if name.starts_with("probe_") {
+        return true;
+    }
+    name.match_indices("probe_")
+        .any(|(i, _)| i > 0 && name.as_bytes()[i - 1].is_ascii_digit())
+}
+
+fn ct_asm_one(pkg: &str, target: &str, strict: bool) -> Result<String, String> {
+    // Cargo treats the test target as up to date and does not re-emit assembly, so
+    // clean the package first and remove any earlier output. Otherwise the scan
+    // reads a stale file, or none.
+    let _ = Command::new("cargo")
+        .args(["clean", "--release", "-p", pkg])
+        .status();
+    let deps = std::path::Path::new("target/release/deps");
+    let prefix = format!("{}-", target.replace('-', "_"));
+    if let Ok(entries) = std::fs::read_dir(deps) {
+        for e in entries.flatten() {
+            let p = e.path();
+            let stale = p.extension().is_some_and(|x| x == "s")
+                && p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with(&prefix));
+            if stale {
+                let _ = std::fs::remove_file(&p);
+            }
+        }
+    }
+    let status = Command::new("cargo")
+        .args([
+            "rustc",
+            "--release",
+            "-p",
+            pkg,
+            "--test",
+            target,
+            "--",
+            "--emit",
+            "asm",
+            "-C",
+            "codegen-units=1",
+        ])
+        .status()
+        .map_err(|e| format!("could not invoke cargo: {e}"))?;
+    if !status.success() {
+        return Err("cargo rustc --emit asm failed".into());
+    }
+    let asm = std::fs::read_dir(deps)
+        .map_err(|e| format!("{}: {e}", deps.display()))?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.extension().is_some_and(|x| x == "s")
+                && p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with(&prefix))
+        })
+        .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+        .ok_or("no assembly file produced")?;
+    let text = std::fs::read_to_string(&asm).map_err(|e| format!("{}: {e}", asm.display()))?;
+
+    let mut current: Option<String> = None;
+    let mut probes = 0usize;
+    let mut violations = Vec::new();
+    for line in text.lines() {
+        if let Some(name) = line.strip_suffix(':') {
+            if is_probe_label(name) {
+                current = Some(name.to_string());
+                probes += 1;
+            } else if !name.starts_with('.') {
+                current = None;
+            }
+            continue;
+        }
+        if line.starts_with(".Lfunc_end") {
+            current = None;
+            continue;
+        }
+        let Some(fname) = &current else { continue };
+        let op = line.split_whitespace().next().unwrap_or("");
+        if op.starts_with('j') && op != "jmp" {
+            violations.push(format!("{fname}: {}", line.trim()));
+        }
+    }
+
+    if probes == 0 {
+        return Err(format!("no probe_* functions found in {}", asm.display()));
+    }
+    if !strict {
+        let mut by_op: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+        for v in &violations {
+            let op = v.rsplit(": ").next().unwrap_or("").split_whitespace().next().unwrap_or("");
+            *by_op.entry(op.to_string()).or_default() += 1;
+        }
+        let ops: Vec<String> = by_op.iter().map(|(k, v)| format!("{k} x{v}")).collect();
+        return Ok(format!(
+            "{pkg} {target}: {probes} probe-labelled function(s), {} conditional jump(s) NOT YET TRIAGED (report only): {}",
+            violations.len(),
+            ops.join(", ")
+        ));
+    }
+    if !violations.is_empty() {
+        return Err(format!(
+            "{} conditional jump(s) in probe functions:\n  {}",
+            violations.len(),
+            violations.join("\n  ")
+        ));
+    }
+    Ok(format!("{pkg} {target}: {probes} probe-labelled function(s), 0 conditional jumps"))
 }
 
 /// Cheap `Path::exists`-style probe for an executable on `PATH`.

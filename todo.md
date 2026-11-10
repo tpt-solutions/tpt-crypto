@@ -1027,13 +1027,19 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       only by their KATs.
 
 ### V3. Binary-level constant-time checks (`cargo xtask ct-asm`)
-- [ ] Disassemble release builds of `ct_select`, `cswap`, `ct_lookup`, `Choice` ops, the
-      scalar-mul inner loop, ML-KEM decaps compare and AEAD tag verify; fail on
-      secret-dependent conditional jumps or indexed loads (allowlist-based report).
-      Run for x86_64 and aarch64 (Linux/WSL CI).
-- [ ] Optional: instruction-count equality across secret classes under callgrind.
-      dudect stays as the statistical backstop.
-- [ ] Add a `ct-asm:` evidence kind for `scalarmul_ct`, `ml_kem_decapsulate`, `aead_tag_verify`.
+- [x] Scanner: compiles probe test targets to release assembly (`--emit asm`), finds
+      `probe_*` functions (plain or mangled), and reports conditional jumps. Strict
+      targets fail on any jump. Negative control: a secret-dependent loop is caught.
+      The stale-assembly and std false-positive problems are fixed.
+- [x] Strict: `ct_select` (u8/u16/u64), `cswap`, `ct_eq`, `ct_ne` in `-ct`. No jumps.
+- [ ] ML-KEM-768 decapsulation (`-kem`): report-only, 73 conditional jumps, not triaged.
+      Most are loop bounds over public lengths. The rest are overflow checks: the release
+      profile sets `overflow-checks = true`, and those are data-dependent jumps in theory.
+      Next: read the disassembly, separate public-length loops from data-dependent ones,
+      and decide whether `overflow-checks` stays on for the constant-time crates.
+- [ ] AEAD tag verify, scalar multiplication (`-curve`): not probed yet.
+- [ ] Optional instruction-count equality (callgrind): not started.
+- [ ] `ct-asm:` evidence kind in `specs/*.spec`: not added.
 
 ### V4. Test-strength audit
 - [ ] `cargo mutants` on `-ct`, `-field`, `-kem::poly`, `-sig::poly` and the hash cores;
