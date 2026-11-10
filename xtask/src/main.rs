@@ -30,6 +30,14 @@ fn main() {
         "verify" => verify(args.iter().any(|a| a == "--strict")),
         "release-dry-run" => release_dry_run(),
         "sbom" => sbom(),
+        "new-primitive" => match args.get(1) {
+            Some(name) => new_primitive(name),
+            None => {
+                eprintln!("usage: cargo xtask new-primitive <tpt-crypto-name>");
+                1
+            }
+        },
+        "wycheproof-fetch" => wycheproof_fetch(),
         "doctor" => doctor(),
         "help" | "--help" | "-h" => {
             print_help();
@@ -56,7 +64,10 @@ fn print_help() {
          kat-check        verify tests/kat/PROVENANCE.md sha256s\n  \
          verify           check specs/*.spec against cited test evidence (--strict fails on pending)\n  \
          release-dry-run  cargo publish --dry-run in topo order\n  \
-         sbom             emit a SBOM artifact\n"
+         sbom             emit a SBOM artifact\n  \
+         doctor           report toolchain, targets, nightly/miri, deny and fuzz status\n  \
+         new-primitive    scaffold crates/<name> per AGENTS.md (name: tpt-crypto-*)\n  \
+         wycheproof-fetch download pinned Wycheproof AEAD vectors and record sha256\n"
     );
 }
 
@@ -683,6 +694,255 @@ fn capture(program: &str, args: &[&str]) -> String {
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
         .unwrap_or_default()
+}
+
+/// `cargo xtask new-primitive <name>`: scaffold a crate under `crates/<name>/`
+/// following AGENTS.md (no_std, workspace lints, README, CHANGELOG, crates.io
+/// metadata), and add it to the root `[workspace.dependencies]`.
+///
+/// The registry entry in `../tpt-rust-map/registry.toml` is not written here:
+/// that repo sits outside this workspace. The command prints the line to add.
+fn new_primitive(name: &str) -> i32 {
+    if !name.starts_with("tpt-crypto-")
+        || name.len() > 64
+        || name.contains("--")
+        || name.ends_with('-')
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
+        eprintln!(
+            "xtask new-primitive: name must start with `tpt-crypto-`, use lowercase letters, \
+             digits and single hyphens, and be at most 64 characters"
+        );
+        return 1;
+    }
+    let dir = std::path::Path::new("crates").join(name);
+    if dir.exists() {
+        eprintln!("xtask new-primitive: {} already exists", dir.display());
+        return 1;
+    }
+
+    let cargo_toml = format!(
+        "[package]\n\
+         name = \"{name}\"\n\
+         version = \"0.1.0\"\n\
+         edition.workspace = true\n\
+         rust-version.workspace = true\n\
+         license.workspace = true\n\
+         authors.workspace = true\n\
+         description = \"{name}: scaffold, not yet implemented.\"\n\
+         readme = \"README.md\"\n\
+         repository.workspace = true\n\
+         homepage.workspace = true\n\
+         documentation = \"https://docs.rs/{name}\"\n\
+         keywords = [\"cryptography\", \"no-std\", \"constant-time\", \"crypto\"]\n\
+         categories = [\"cryptography\", \"no-std\"]\n\
+         \n\
+         [dependencies]\n\
+         \n\
+         [lints]\n\
+         workspace = true\n"
+    );
+    let lib_rs = format!(
+        "//! `{name}`: scaffold. Replace this with the primitive's documentation.\n\
+         \n\
+         #![no_std]\n\
+         #![forbid(unsafe_code)]\n\
+         #![warn(missing_docs)]\n"
+    );
+    let readme = format!(
+        "# {name}\n\
+         \n\
+         Scaffold, not yet implemented. Part of the tpt-crypto workspace.\n\
+         \n\
+         ## License\n\
+         \n\
+         MIT OR Apache-2.0\n"
+    );
+    let changelog = "# Changelog\n\n## 0.1.0 — unreleased\n\n- Scaffold.\n";
+    let provenance = "# KAT PROVENANCE\n\nNo vectors yet. Record each vector file here with its source and sha256.\n";
+
+    let writes: [(std::path::PathBuf, &str); 5] = [
+        (dir.join("Cargo.toml"), cargo_toml.as_str()),
+        (dir.join("src").join("lib.rs"), lib_rs.as_str()),
+        (dir.join("README.md"), readme.as_str()),
+        (dir.join("CHANGELOG.md"), changelog),
+        (
+            dir.join("tests").join("kat").join("PROVENANCE.md"),
+            provenance,
+        ),
+    ];
+    for (path, body) in writes.iter() {
+        if let Some(parent) = path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                eprintln!(
+                    "xtask new-primitive: cannot create {}: {e}",
+                    parent.display()
+                );
+                return 1;
+            }
+        }
+        if let Err(e) = std::fs::write(path, body) {
+            eprintln!("xtask new-primitive: cannot write {}: {e}", path.display());
+            return 1;
+        }
+    }
+
+    match add_workspace_dependency(name) {
+        Ok(true) => println!("xtask new-primitive: added `{name}` to [workspace.dependencies]"),
+        Ok(false) => println!("xtask new-primitive: `{name}` already in [workspace.dependencies]"),
+        Err(e) => {
+            eprintln!("xtask new-primitive: could not update Cargo.toml: {e}");
+            return 1;
+        }
+    }
+
+    println!("xtask new-primitive: scaffolded {}", dir.display());
+    println!("next steps:");
+    println!("  - implement the primitive and add KATs under tests/kat/ (PROVENANCE.md)");
+    println!("  - register the crate in ../tpt-rust-map/registry.toml with status = \"git\"");
+    println!("    (that repo is outside this workspace; add it by hand)");
+    0
+}
+
+/// Insert `name = { version, path, default-features = false }` after the last
+/// `tpt-crypto-*` entry of `[workspace.dependencies]`. Returns `Ok(false)` when
+/// the entry is already present.
+fn add_workspace_dependency(name: &str) -> Result<bool, String> {
+    let path = "Cargo.toml";
+    let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let prefix = format!("{name} = ");
+    if text.lines().any(|l| l.starts_with(&prefix)) {
+        return Ok(false);
+    }
+    let mut out: Vec<String> = Vec::new();
+    let mut in_section = false;
+    let mut insert_at: Option<usize> = None;
+    for line in text.lines() {
+        if line.starts_with('[') {
+            in_section = line.trim() == "[workspace.dependencies]";
+        }
+        out.push(line.to_string());
+        if in_section && line.starts_with("tpt-crypto-") {
+            insert_at = Some(out.len());
+        }
+    }
+    let at = insert_at.ok_or("no tpt-crypto-* entries in [workspace.dependencies]")?;
+    out.insert(
+        at,
+        format!("{name} = {{ version = \"0.1.0\", path = \"crates/{name}\", default-features = false }}"),
+    );
+    let mut joined = out.join("\n");
+    if text.ends_with('\n') {
+        joined.push('\n');
+    }
+    std::fs::write(path, joined).map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+/// Wycheproof files fetched by `wycheproof-fetch`, with the crate that uses them.
+const WYCHEPROOF_BASE: &str =
+    "https://raw.githubusercontent.com/C2SP/wycheproof/master/testvectors_v1/";
+const WYCHEPROOF_FILES: &[&str] = &["aes_gcm_test.json", "chacha20_poly1305_test.json"];
+const WYCHEPROOF_DEST: &str = "crates/tpt-crypto-aead/tests/kat/wycheproof";
+const WYCHEPROOF_SECTION: &str = "## Wycheproof (fetched by `cargo xtask wycheproof-fetch`)";
+
+/// `cargo xtask wycheproof-fetch`: download the pinned Wycheproof AEAD vector
+/// files into `tests/kat/wycheproof/`, check that each is a Wycheproof JSON
+/// document, and record its sha256 in the crate's `PROVENANCE.md` in the form
+/// `kat-check` reads.
+fn wycheproof_fetch() -> i32 {
+    let dest = std::path::Path::new(WYCHEPROOF_DEST);
+    if let Err(e) = std::fs::create_dir_all(dest) {
+        eprintln!("wycheproof-fetch: cannot create {}: {e}", dest.display());
+        return 1;
+    }
+    let mut rows: Vec<(String, String)> = Vec::new();
+    for file in WYCHEPROOF_FILES {
+        let url = format!("{WYCHEPROOF_BASE}{file}");
+        let target = dest.join(file);
+        println!("wycheproof-fetch: GET {url}");
+        let status = Command::new("curl")
+            .args(["-fsSL", "--retry", "2", "-o"])
+            .arg(&target)
+            .arg(&url)
+            .status();
+        match status {
+            Ok(s) if s.success() => {}
+            Ok(s) => {
+                eprintln!("wycheproof-fetch: curl failed for {url} ({s})");
+                return 1;
+            }
+            Err(e) => {
+                eprintln!("wycheproof-fetch: could not run curl: {e}");
+                return 1;
+            }
+        }
+        // Sanity check: a Wycheproof file is a JSON object with `testGroups`.
+        let body = match std::fs::read_to_string(&target) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("wycheproof-fetch: cannot read {}: {e}", target.display());
+                return 1;
+            }
+        };
+        if !body.trim_start().starts_with('{') || !body.contains("\"testGroups\"") {
+            eprintln!("wycheproof-fetch: {file} is not a Wycheproof test file");
+            return 1;
+        }
+        match sha256_file(&target) {
+            Ok(h) => rows.push((format!("wycheproof/{file}"), h)),
+            Err(e) => {
+                eprintln!("wycheproof-fetch: {e}");
+                return 1;
+            }
+        }
+    }
+
+    if let Err(e) = write_wycheproof_provenance(&rows) {
+        eprintln!("wycheproof-fetch: cannot update PROVENANCE.md: {e}");
+        return 1;
+    }
+    for (file, hash) in &rows {
+        println!("wycheproof-fetch: {file}  sha256 {hash}");
+    }
+    println!("wycheproof-fetch: done; run `cargo xtask kat-check` to verify");
+    0
+}
+
+/// Rewrite the Wycheproof section of the aead crate's PROVENANCE.md, keeping
+/// everything before it.
+fn write_wycheproof_provenance(rows: &[(String, String)]) -> Result<(), String> {
+    let path = std::path::Path::new(WYCHEPROOF_DEST)
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .join("PROVENANCE.md");
+    // Normalise line endings so a CRLF checkout does not mix with the LF rows.
+    let existing = std::fs::read_to_string(&path)
+        .unwrap_or_default()
+        .replace("\r\n", "\n");
+    let head = match existing.find(WYCHEPROOF_SECTION) {
+        Some(i) => &existing[..i],
+        None => existing.as_str(),
+    };
+    let mut section = String::new();
+    section.push_str(WYCHEPROOF_SECTION);
+    section.push_str("\n\n");
+    section.push_str(
+        "Source: <https://github.com/C2SP/wycheproof> `testvectors_v1/` (master), \
+         fetched by `cargo xtask wycheproof-fetch`. Apache-2.0.\n\n",
+    );
+    section.push_str("| File | sha256 |\n| --- | --- |\n");
+    for (file, hash) in rows {
+        section.push_str(&format!("| `{file}` | {hash} |\n"));
+    }
+    let mut out = head.trim_end().to_string();
+    if !out.is_empty() {
+        out.push_str("\n\n");
+    }
+    out.push_str(&section);
+    std::fs::write(&path, out).map_err(|e| e.to_string())
 }
 
 /// Cheap `Path::exists`-style probe for an executable on `PATH`.
