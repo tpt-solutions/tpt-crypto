@@ -27,6 +27,7 @@ fn main() {
                 .unwrap_or("thumbv6m-none-eabi"),
         ),
         "kat-check" => kat_check(),
+        "exhaustive" => exhaustive(),
         "verify" => verify(args.iter().any(|a| a == "--strict")),
         "release-dry-run" => release_dry_run(),
         "sbom" => sbom(),
@@ -62,6 +63,7 @@ fn print_help() {
          leakage          run the dudect-style Welch t-test harness (tpt-crypto-ct)\n  \
          no-std           build no_std crates for thumbv6m-none-eabi\n  \
          kat-check        verify tests/kat/PROVENANCE.md sha256s\n  \
+         exhaustive       release-mode exhaustive bounded-domain checks (todo V1)\n  \
          verify           check specs/*.spec against cited test evidence (--strict fails on pending)\n  \
          release-dry-run  cargo publish --dry-run in topo order\n  \
          sbom             emit a SBOM artifact\n  \
@@ -954,6 +956,29 @@ fn write_wycheproof_provenance(rows: &[(String, String)]) -> Result<(), String> 
     }
     out.push_str(&section);
     std::fs::write(&path, out).map_err(|e| e.to_string())
+}
+
+/// `cargo xtask exhaustive`: run the `#[ignore]`d exhaustive checks (todo V1) in
+/// release mode. These cover the full `u16` constant-time domain, the full `i32`
+/// range for `freeze`, and the documented ML-KEM Montgomery domain. Each test is
+/// named in the output so a failure can be traced to its check.
+fn exhaustive() -> i32 {
+    const SUITES: &[(&str, &[&str])] = &[
+        ("tpt-crypto-ct", &[]),
+        ("tpt-crypto-kem", &["--features", "alloc"]),
+    ];
+    let mut worst = 0;
+    for (pkg, extra) in SUITES {
+        let mut args: Vec<&str> = vec!["test", "--release", "-p", pkg, "--test", "exhaustive"];
+        args.extend_from_slice(extra);
+        args.extend_from_slice(&["--", "--ignored"]);
+        println!("xtask exhaustive: cargo {}", args.join(" "));
+        worst = worst.max(cargo(&args));
+    }
+    if worst == 0 {
+        println!("xtask exhaustive: PASS (bounded-domain checks; not formal proofs)");
+    }
+    worst
 }
 
 /// Cheap `Path::exists`-style probe for an executable on `PATH`.
