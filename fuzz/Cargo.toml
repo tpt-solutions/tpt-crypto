@@ -9,6 +9,7 @@ description = "Fuzzing harness for tpt-crypto attacker-controlled decoders"
 publish = false
 
 [dependencies]
+tpt-crypto-hash = { path = "../crates/tpt-crypto-hash", default-features = false, features = ["alloc"] }
 tpt-crypto-aead = { path = "../crates/tpt-crypto-aead", default-features = false, features = ["std"] }
 tpt-crypto-kem = { path = "../crates/tpt-crypto-kem", default-features = false, features = ["std"] }
 tpt-crypto-sig = { path = "../crates/tpt-crypto-sig", default-features = false, features = ["std"] }
@@ -88,5 +89,11 @@ doc = false
 [[bin]]
 name = "key_der_parse"
 path = "fuzz_targets/key_der_parse.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "argon2id_params"
+path = "fuzz_targets/argon2id_params.rs"
 test = false
 doc = false

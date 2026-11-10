@@ -121,6 +121,7 @@ dependencies = [
  "libfuzzer-sys",
  "tpt-crypto-aead",
  "tpt-crypto-curve",
+ "tpt-crypto-hash",
  "tpt-crypto-kem",
  "tpt-crypto-sig",
  "tpt-crypto-zk",
@@ -138,8 +139,10 @@ dependencies = [
 name = "tpt-crypto-kem"
 version = "0.1.0"
 dependencies = [
+ "tpt-crypto-aead",
  "tpt-crypto-core",
  "tpt-crypto-ct",
+ "tpt-crypto-curve",
  "tpt-crypto-hash",
 ]
 

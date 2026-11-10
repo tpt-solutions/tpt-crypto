@@ -960,7 +960,10 @@ Each item is its own commit so any can be dropped.
 - [x] Argon2id (RFC 9106) in `tpt-crypto-hash::argon2` (feature `alloc`). Matches the
       RFC §5.3 tag and H_0 digest; provenance in `tests/kat/PROVENANCE.md`. Only
       Argon2id v0x13 is provided (no d/i variants). `blake2b_var` adds runtime-length BLAKE2b.
-      - [ ] Fuzz target for parameter / length inputs; benchmark row in `benches/BUDGET.md`.
+      - [x] Fuzz target for parameter / length inputs: `fuzz/fuzz_targets/argon2id_params.rs`
+            (invalid parameters must return `Err`; valid small runs must be deterministic).
+            Type-checked only; not run, since libFuzzer needs the ASan runtime absent here.
+      - [ ] Benchmark row in `benches/BUDGET.md`.
 - [x] `tpt_crypto::selftest::run()` power-on KATs. One RFC/FIPS vector each for SHA-256, HMAC, HKDF, X25519 and Ed25519 (inlined, so it works without a filesystem). Covers the classical set only; no ML-KEM / ML-DSA vectors yet.
 - [~] Policy profile features `profile-cnsa2` / `profile-modern` (sig + facade).
       - [x] RSA minimum modulus: 2048 (`profile-modern`) / 3072 (`profile-cnsa2`); tests in `tests/rsa_profile.rs`.
