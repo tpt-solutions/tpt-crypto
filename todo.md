@@ -897,7 +897,8 @@ Each item is its own commit so any can be dropped.
 - [x] Replace placeholder `crates/tpt-crypto-sig/benches/sig_bench.rs` with real criterion
       benches. Removed the placeholder; `benches/benches/sig.rs` now covers Ed25519, ECDSA,
       BLS and ML-DSA-44/65/87, with measured rows in `benches/BUDGET.md`.
-      - [ ] RSA verify bench (needs a fixed 2048-bit vector).
+      - [x] RSA verify bench — `rsa_bench` in `benches/benches/sig.rs` (2048-bit KAT
+            vector from `tests/rsa.rs`); row in `benches/BUDGET.md` from a quick run only.
 - [x] Remove FrodoKEM / Classic McEliece placeholder modules and features (they only returned
       `Unsupported`; `--all-features` enabled them). Implementations tracked separately:
       - [ ] FrodoKEM-640/976/1344 (SHAKE + sampler reuse).
@@ -905,6 +906,9 @@ Each item is its own commit so any can be dropped.
 - [x] Delete stray `__pycache__/ctr_drbg_ref*.pyc`; add `__pycache__/` to `.gitignore`.
 - [ ] Annotate every `[~]` item with its remaining gap; fix the stale zk header note
       ("untested") in the Phase 4 section.
+      — zk note: no "untested" wording remains in the crate or this file (checked
+      2026-11-11); the Phase 4 section already reads RESOLVED. Per-item `[~]`
+      annotation still open.
 - [x] Add missing KAT corpora to the list of open gaps: NIST CAVP GCM `.rsp`, Wycheproof AEAD JSON.
       — listed under "Known gaps" in `crates/tpt-crypto-aead/README.md`.
 - [x] Replace "local git only this pass" status line in `README.md` with the true state.
@@ -970,8 +974,9 @@ Each item is its own commit so any can be dropped.
       - [x] `kem-keygen` / `kem-encap` / `kem-decap` (X-Wing hybrid), end-to-end tested.
       - [x] `bench` (quick `Instant` timings; not a substitute for `benches/`).
       - [ ] PEM/DER import and export. Needs a file-format decision first.
-- [ ] Runnable `cargo run --example` programs: `ml_kem`, `ml_dsa`, `ring_subset`,
-      `bls_aggregate`, `hybrid_kem`, `seal_open`.
+- [x] Runnable `cargo run --example` programs: `ml_kem`, `ml_dsa`, `ring_subset`,
+      `bls_aggregate`, `hybrid_kem`, `seal_open` — in `examples/examples/`, run with
+      `cargo run -p tpt-crypto-examples --example <name>`; each asserts its own round trip.
 - [x] Docs book (`docs/`): "which primitive should I use?" chooser, feature-flag guide,
       constant-time guarantees, migration cheat-sheet from `ring` / RustCrypto /
       `aws-lc-rs`. Written from the codebase; the migration table is a mapping to check, not a compatibility claim.
@@ -1052,7 +1057,9 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       `tests/slices.rs`.
 - [ ] `-field`, `-kem::poly`, `-sig::poly` and the hash cores: not run yet.
 - [ ] Triage survivors into new tests (done per survivor so far).
-- [ ] Gate against discarded results in tests (`let _ = ...prop_assert...`): not checked.
+- [x] Gate against discarded results in tests (`let _ = ...prop_assert...`): checked
+      2026-11-11 — no `let _ =` wraps an assertion in any `tests/` or `src/` file; the
+      remaining `let _` lines discard non-assertion values (e.g. `mpc/src/ot.rs:201`).
 - [ ] Regression check: reintroduce past bugs (drop `carry_hi`, wrong omega, `polyt0_unpack`
       index) and confirm V1, V2 and V4 fail on each.
 
