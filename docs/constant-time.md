@@ -35,9 +35,13 @@ comment, and the reasoning is in `SECURITY.md`.
 
 - **No external audit.** The library has not been reviewed by an independent
   cryptographer or a side-channel lab.
-- **No binary-level check.** The planned `cargo xtask ct-asm` (todo V3) would
-  inspect release builds for secret-dependent jumps. It is not implemented, so
-  the compiler could still turn a branch-free source into one.
+- **Binary-level check, partial.** `cargo xtask ct-asm` compiles probe functions to
+  release assembly and fails on any conditional jump in the strict targets (the
+  scalar `-ct` primitives). It does not yet cover ML-KEM decapsulation, scalar
+  multiplication or AEAD tag verification, and it does not prove anything about
+  timing. Release builds set `overflow-checks = true`, which adds jumps that fire
+  only on overflow. Those jumps are kept on deliberately: silent wraparound is a
+  worse failure than a panic.
 - **Statistical timing tests are not proofs.** A Welch test with a finite number
   of samples can miss a leak, and results depend on the CPU, the frequency
   governor and the load. Treat a pass as evidence, not as absence of leakage.

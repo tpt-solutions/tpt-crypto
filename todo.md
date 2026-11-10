@@ -1035,8 +1035,9 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
 - [ ] ML-KEM-768 decapsulation (`-kem`): report-only, 73 conditional jumps, not triaged.
       Most are loop bounds over public lengths. The rest are overflow checks: the release
       profile sets `overflow-checks = true`, and those are data-dependent jumps in theory.
-      Next: read the disassembly, separate public-length loops from data-dependent ones,
-      and decide whether `overflow-checks` stays on for the constant-time crates.
+      Decision: `overflow-checks` stays on (silent wraparound is worse than a panic). The
+      ML-KEM jumps stay open. A classifier finds only 4 panic-path jumps; the other ~120
+      need reading in the disassembly.
 - [ ] AEAD tag verify, scalar multiplication (`-curve`): not probed yet.
 - [ ] Optional instruction-count equality (callgrind): not started.
 - [ ] `ct-asm:` evidence kind in `specs/*.spec`: not added.
