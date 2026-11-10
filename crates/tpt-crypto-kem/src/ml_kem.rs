@@ -121,6 +121,25 @@ fn j_parts(a: &[u8], b: &[u8]) -> [u8; 32] {
     out
 }
 
+/// FIPS 203 §7.2 encapsulation-key check for an untrusted public key: the length
+/// must be right and every 12-bit coefficient must be below `q` (3329).
+///
+/// [`encapsulate_msg`] and [`encapsulate`] assume a well-formed key, so callers
+/// that receive keys from outside must run this first. `pke::decode_pk` alone
+/// checks only the length.
+pub fn check_encaps_key<P: MlKemParams>(pk: &[u8]) -> Result<(), Error> {
+    let (_, t_hat) = pke::decode_pk::<P>(pk)?;
+    let in_range = t_hat
+        .vec
+        .iter()
+        .all(|poly| poly.iter().all(|&c| (0..crate::poly::Q).contains(&c)));
+    if in_range {
+        Ok(())
+    } else {
+        Err(Error::InvalidKey)
+    }
+}
+
 /// Generate an ML-KEM keypair. `rng` supplies the seed `d` and nonce `z`.
 pub fn keygen<P: MlKemParams>(rng: &mut impl CryptoRng) -> (EncapsKey, DecapsKey) {
     let d = rng.gen_array::<32>();

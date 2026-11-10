@@ -47,5 +47,7 @@ pub mod hpke;
 pub mod pke;
 pub mod poly;
 pub mod sampler;
+#[cfg(feature = "alloc")]
+pub mod xwing;
 
 pub use params::{MlKem1024, MlKem512, MlKem768};
