@@ -13,9 +13,9 @@ pub fn pack_bits(out: &mut [u8], vals: &[u32], bits: usize) {
     for &v in vals {
         let mut val = v;
         for _ in 0..bits {
-            if val & 1 == 1 {
-                out[byte_off] |= 1u8 << bit_in;
-            }
+            // OR in the bit unconditionally. A branch here would depend on the
+            // (possibly secret) coefficient bit. The index is public.
+            out[byte_off] |= ((val & 1) as u8) << bit_in;
             val >>= 1;
             bit_in += 1;
             if bit_in == 8 {

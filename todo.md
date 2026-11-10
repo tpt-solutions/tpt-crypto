@@ -1049,12 +1049,18 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       targets fail on any jump. Negative control: a secret-dependent loop is caught.
       The stale-assembly and std false-positive problems are fixed.
 - [x] Strict: `ct_select` (u8/u16/u64), `cswap`, `ct_eq`, `ct_ne` in `-ct`. No jumps.
-- [ ] ML-KEM-768 decapsulation (`-kem`): report-only, 73 conditional jumps, not triaged.
-      Most are loop bounds over public lengths. The rest are overflow checks: the release
-      profile sets `overflow-checks = true`, and those are data-dependent jumps in theory.
-      Decision: `overflow-checks` stays on (silent wraparound is worse than a panic). The
-      ML-KEM jumps stay open. A classifier finds only 4 panic-path jumps; the other ~120
-      need reading in the disassembly.
+- [ ] ML-KEM-768 decapsulation (`-kem`): report-only, 73 conditional jumps, still open.
+      Decision: `overflow-checks` stays on (silent wraparound is worse than a panic).
+      **Finding (2026-11-11), fixed:** `encode::pack_bits` branched on each coefficient
+      bit (`if val & 1 == 1`). It runs on the secret key in keygen and on the re-encrypted
+      ciphertext in decapsulation, so this was a secret-dependent branch. It is now an
+      unconditional OR. Probe `kem_pack_asm_probe` (report-only: 112 jumps before, 48
+      after). The 48 that remain are public bit-counter loops and bounds checks.
+      **Coverage gap found:** the scanner reads only each probe's own body. The
+      decapsulation probe calls `kpke_encrypt`, `pack`, and `sampler` out of line, so
+      the 73 jumps do not include them. Those callees need their own probes. The
+      checks in the source: `sample_ntt` branches only on public XOF output, `cbd` only on
+      the public `eta`, and decapsulation selects with `ct_eq_bytes` and `ct_select_array`.
 - [x] Ed25519 field add/sub, Ed25519 point add, and AEAD tag verify (16 and 32 bytes):
       probed and strict (`field_asm_probe`, `curve_asm_probe`, `aead_asm_probe`).
       **Finding (2026-11-11), fixed:** the first scan failed. Two problems:
