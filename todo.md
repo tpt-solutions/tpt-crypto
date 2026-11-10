@@ -1041,11 +1041,17 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
 - [ ] Optional instruction-count equality (callgrind): not started.
 - [ ] `ct-asm:` evidence kind in `specs/*.spec`: not added.
 
-### V4. Test-strength audit
-- [ ] `cargo mutants` on `-ct`, `-field`, `-kem::poly`, `-sig::poly` and the hash cores;
-      triage survivors into new tests.
-- [ ] Gate against discarded results in tests (`let _ = ...prop_assert...`), the bug that
-      hid the ML-KEM round-trip failure.
+### V4. Test-strength audit (`cargo mutants`, installed as cargo-mutants 27.1.0)
+- [x] `-ct` `select.rs` and `cmp.rs`: 50 mutants. 37 caught, 12 unviable, 1 missed.
+      The missed one (`|` → `^` in the length term of `ct_eq_slices`) is equivalent for
+      every length a slice can have (the difference is below 2^63, where the two agree).
+      The run found a real bug, now fixed: `ct_eq_slices` reported equal non-empty slices
+      as unequal (it ORed `ct_eq`'s 1-for-equal results), and it truncated the length
+      difference to 8 bits. It had no tests and no callers. Direct tests in
+      `tests/slices.rs`.
+- [ ] `-field`, `-kem::poly`, `-sig::poly` and the hash cores: not run yet.
+- [ ] Triage survivors into new tests (done per survivor so far).
+- [ ] Gate against discarded results in tests (`let _ = ...prop_assert...`): not checked.
 - [ ] Regression check: reintroduce past bugs (drop `carry_hi`, wrong omega, `polyt0_unpack`
       index) and confirm V1, V2 and V4 fail on each.
 
