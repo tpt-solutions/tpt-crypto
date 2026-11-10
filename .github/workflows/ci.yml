@@ -43,6 +43,9 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - run: cargo nextest run --workspace --all-features
       - run: cargo test --workspace --all-features --doc
+      # --all-features enables profile-cnsa2, which compiles out the 2048-bit RSA KATs.
+      # Run the sig crate under profile-modern so they still execute in CI.
+      - run: cargo nextest run -p tpt-crypto-sig --features alloc,profile-modern
 
   no_std:
     name: no_std (${{ matrix.target }})
