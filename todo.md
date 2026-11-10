@@ -1073,7 +1073,9 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       fixed-count loop counters (`incq`/`jne`, `addq $-1`/`jae`), plus one length-check
       compare that I did not trace to source.
 - [ ] Optional instruction-count equality (callgrind): not started.
-- [ ] `ct-asm:` evidence kind in `specs/*.spec`: not added.
+- [x] `ct-asm:` evidence kind in `specs/*.spec`: `ct-asm: <pkg> <probe-target>` runs the
+      strict binary scan for that target. Wired into `ct_select.spec` (ct_asm_probe) and
+      `aead_tag_verify.spec` (aead_asm_probe). `cargo xtask verify`: 14 verified, 0 failed.
 
 ### V4. Test-strength audit (`cargo mutants`, installed as cargo-mutants 27.1.0)
 - [x] `-ct` `select.rs` and `cmp.rs`: 50 mutants. 37 caught, 12 unviable, 1 missed.

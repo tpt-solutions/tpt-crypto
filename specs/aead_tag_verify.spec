@@ -55,3 +55,4 @@ evidence:
   cargo-test: -p tpt-crypto-aead --test props round_trip
   cargo-test: -p tpt-crypto-aead --test props bitflip
   cargo-test: -p tpt-crypto-ct --features leakage --test leakage leakage_ct_eq -- --test-threads=1
+  ct-asm: tpt-crypto-aead aead_asm_probe

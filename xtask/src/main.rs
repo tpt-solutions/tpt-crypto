@@ -334,6 +334,9 @@ enum Evidence {
         target: String,
         test: String,
     },
+    /// `ct-asm: <pkg> <probe-target>` — the binary-level scan of that probe target
+    /// (`cargo xtask ct-asm`) must find no conditional jump in its `probe_*` functions.
+    CtAsm { pkg: String, target: String },
     /// `pending: <reason>` — contract acknowledged but not yet backed by tests.
     Pending(String),
 }
@@ -380,6 +383,15 @@ fn parse_spec(stem: &str, text: &str) -> Result<Vec<Evidence>, String> {
                         "exhaustive entry needs `<pkg> <test-target> <test-name>`: `{t}`"
                     ))
                 }
+            }
+        } else if let Some(rest) = t.strip_prefix("ct-asm:") {
+            let parts: Vec<&str> = rest.split_whitespace().collect();
+            match parts.as_slice() {
+                [pkg, target] => evidence.push(Evidence::CtAsm {
+                    pkg: pkg.to_string(),
+                    target: target.to_string(),
+                }),
+                _ => return Err(format!("ct-asm entry needs `<pkg> <probe-target>`: `{t}`")),
             }
         } else if let Some(why) = t.strip_prefix("pending:") {
             evidence.push(Evidence::Pending(why.trim().to_string()));
@@ -513,6 +525,15 @@ fn verify(strict: bool) -> i32 {
                     if let Err(e) = run_exhaustive(pkg, target, test) {
                         eprintln!(
                             "verify: {}: FAILED — exhaustive {pkg} {target} {test}: {e}",
+                            path.display()
+                        );
+                        spec_ok = false;
+                    }
+                }
+                Evidence::CtAsm { pkg, target } => {
+                    if let Err(e) = ct_asm_one(pkg, target, true) {
+                        eprintln!(
+                            "verify: {}: FAILED — ct-asm {pkg} {target}: {e}",
                             path.display()
                         );
                         spec_ok = false;

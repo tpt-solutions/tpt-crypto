@@ -35,3 +35,4 @@ evidence:
   cargo-test: -p tpt-crypto-ct --features leakage --test leakage leakage_ct_select -- --test-threads=1
   exhaustive: tpt-crypto-ct exhaustive u8_select_swap_eq_exhaustive
   exhaustive: tpt-crypto-ct exhaustive u16_select_swap_eq_exhaustive
+  ct-asm: tpt-crypto-ct ct_asm_probe
