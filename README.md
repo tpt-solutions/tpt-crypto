@@ -64,6 +64,9 @@ the exact names from `spec.txt` §4 so downstream code compiles verbatim against
 
 See [`spec.txt`](./spec.txt) for the full design and target API.
 
+Guides (which primitive to use, feature flags, constant-time claims and their limits,
+migration from `ring` / RustCrypto / `aws-lc-rs`) are in [`docs/`](./docs/README.md).
+
 ## Guarantees
 
 - **Constant-time by construction.** No secret-dependent branches or indexing.

@@ -972,9 +972,9 @@ Each item is its own commit so any can be dropped.
       - [ ] PEM/DER import and export. Needs a file-format decision first.
 - [ ] Runnable `cargo run --example` programs: `ml_kem`, `ml_dsa`, `ring_subset`,
       `bls_aggregate`, `hybrid_kem`, `seal_open`.
-- [ ] Docs book (`docs/`): "which primitive should I use?" chooser, feature-flag guide,
+- [x] Docs book (`docs/`): "which primitive should I use?" chooser, feature-flag guide,
       constant-time guarantees, migration cheat-sheet from `ring` / RustCrypto /
-      `aws-lc-rs`.
+      `aws-lc-rs`. Written from the codebase; the migration table is a mapping to check, not a compatibility claim.
 - [ ] `wasm32` bindings crate (wasm-bindgen) with npm package. C-ABI crate only if a
       consumer asks.
 - [x] `cargo xtask doctor` (toolchain, targets, nightly/miri, deny/fuzz present).
