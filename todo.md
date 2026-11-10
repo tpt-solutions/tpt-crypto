@@ -1043,7 +1043,23 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       Decision: `overflow-checks` stays on (silent wraparound is worse than a panic). The
       ML-KEM jumps stay open. A classifier finds only 4 panic-path jumps; the other ~120
       need reading in the disassembly.
-- [ ] AEAD tag verify, scalar multiplication (`-curve`): not probed yet.
+- [x] Ed25519 field add/sub, Ed25519 point add, and AEAD tag verify (16 and 32 bytes):
+      probed and strict (`field_asm_probe`, `curve_asm_probe`, `aead_asm_probe`).
+      **Finding (2026-11-11), fixed:** the first scan failed. Two problems:
+      (a) `consts::limbs_ge` / `ge_n` / `limbs_eq` branched on limb values, and
+      `FieldElement::add` used `carry != 0 || ge_p`. (b) LLVM rewrote the masked
+      select in `ct_select_u64` into `cmp`/`jne` for the Ed25519 field add/sub. Fixes:
+      comparisons are now borrow-based and accumulated; the `||` is a bitwise OR;
+      `Choice::mask_u64` and the `consts::sel` helper use the same mask. `sel` is
+      `const fn`, so it has no `black_box` (MSRV 1.84 has no const `black_box`).
+      Runtime field arithmetic uses the non-const `ct_select_u64`. The
+      compile-time helpers (`mod_reduce`, `reduce_wide`, `sub_mod`) are now
+      branch-free too, but nothing is probed for them. Field, curve, sig and ct
+      test suites pass after the change.
+- [ ] Ed25519 scalar multiplication (`-curve`, `curve_mul_asm_probe`): report-only,
+      11 conditional jumps, not triaged. The jumps I read in the disassembly are
+      fixed-count loop counters (`incq`/`jne`, `addq $-1`/`jae`), plus one length-check
+      compare that I did not trace to source.
 - [ ] Optional instruction-count equality (callgrind): not started.
 - [ ] `ct-asm:` evidence kind in `specs/*.spec`: not added.
 

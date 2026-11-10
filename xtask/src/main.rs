@@ -422,7 +422,9 @@ fn run_exhaustive(pkg: &str, target: &str, test: &str) -> Result<(), String> {
         ));
     }
     let ran_one = stdout.lines().any(|l| l.trim() == "running 1 test");
-    let passed = stdout.lines().any(|l| l.starts_with("test result: ok. 1 passed"));
+    let passed = stdout
+        .lines()
+        .any(|l| l.starts_with("test result: ok. 1 passed"));
     if !(ran_one && passed) {
         return Err(format!("expected exactly one passing test named `{test}`"));
     }
@@ -1069,6 +1071,10 @@ fn ct_asm() -> i32 {
     const PROBES: &[(&str, &str, bool)] = &[
         ("tpt-crypto-ct", "ct_asm_probe", true),
         ("tpt-crypto-kem", "kem_asm_probe", false),
+        ("tpt-crypto-aead", "aead_asm_probe", true),
+        ("tpt-crypto-field", "field_asm_probe", true),
+        ("tpt-crypto-curve", "curve_asm_probe", true),
+        ("tpt-crypto-curve", "curve_mul_asm_probe", false),
     ];
     let mut worst = 0;
     for (pkg, target, strict) in PROBES {
@@ -1182,9 +1188,16 @@ fn ct_asm_one(pkg: &str, target: &str, strict: bool) -> Result<String, String> {
         return Err(format!("no probe_* functions found in {}", asm.display()));
     }
     if !strict {
-        let mut by_op: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+        let mut by_op: std::collections::BTreeMap<String, usize> =
+            std::collections::BTreeMap::new();
         for v in &violations {
-            let op = v.rsplit(": ").next().unwrap_or("").split_whitespace().next().unwrap_or("");
+            let op = v
+                .rsplit(": ")
+                .next()
+                .unwrap_or("")
+                .split_whitespace()
+                .next()
+                .unwrap_or("");
             *by_op.entry(op.to_string()).or_default() += 1;
         }
         let ops: Vec<String> = by_op.iter().map(|(k, v)| format!("{k} x{v}")).collect();
@@ -1201,7 +1214,9 @@ fn ct_asm_one(pkg: &str, target: &str, strict: bool) -> Result<String, String> {
             violations.join("\n  ")
         ));
     }
-    Ok(format!("{pkg} {target}: {probes} probe-labelled function(s), 0 conditional jumps"))
+    Ok(format!(
+        "{pkg} {target}: {probes} probe-labelled function(s), 0 conditional jumps"
+    ))
 }
 
 /// Cheap `Path::exists`-style probe for an executable on `PATH`.
