@@ -58,7 +58,7 @@ RFC 8439 §2.5.2, RFC 8452 C.1).
 Known gaps:
 
 - NIST CAVP GCM `.rsp` vectors are not vendored (only the Appendix B cases are inline).
-- Wycheproof AEAD JSON (AES-GCM, ChaCha20-Poly1305) is not vendored.
+- Wycheproof AEAD JSON (AES-GCM, ChaCha20-Poly1305) is vendored under `tests/kat/wycheproof/`, but no test consumes it yet.
 - `CtrDrbg` is not yet wired to CAVP vectors.
 - No external audit.
 

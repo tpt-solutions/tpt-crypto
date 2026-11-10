@@ -30,3 +30,12 @@ Checksums (sha256, relative to `crates/tpt-crypto-aead/tests/kat/`):
 | File | Sha256 |
 | --- | --- |
 | `rfc8452.txt` | `4297e1ea82fd764e3d05bb9fd54f0addfca9121e14790cac2cb553068609ccad` |
+
+## Wycheproof (fetched by `cargo xtask wycheproof-fetch`)
+
+Source: <https://github.com/C2SP/wycheproof> `testvectors_v1/` (master), fetched by `cargo xtask wycheproof-fetch`. Apache-2.0.
+
+| File | sha256 |
+| --- | --- |
+| `wycheproof/aes_gcm_test.json` | 985e5ecc172e181eaf49e89508b9470dcf478002eb7e8559c707eb42dc97dfe7 |
+| `wycheproof/chacha20_poly1305_test.json` | fe61d25f90e1bde4461d00eafe61049e5f29bd999f36b766df9cda90906ad53d |
