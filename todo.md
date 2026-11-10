@@ -1013,10 +1013,18 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       `ct_select` and `ntt_roundtrip` (the latter as supporting evidence).
 
 ### V2. Small-scope field verification
-- [ ] Check whether `FieldElement<P, LIMBS>` / `Limb` can be instantiated with tiny
-      words and primes cheaply; if not, add a test-only mini-field mirroring the CIOS/SOS path.
-- [ ] Check every `(a, b)` for add/sub/neg/mul/sqr/invert/to_bytes against a u128 reference,
-      with primes at limb boundaries (2^n - small). Targets the `t[2n]` overflow-limb bug class.
+- [x] Small-prime instantiation of `FieldElement` (`tpt-crypto-field/tests/small_field.rs`):
+      `FieldParams` is a trait, so test-only fields with `p = 97`, `251`, `65521` and
+      `2^64 - 59` are declared. Their Montgomery constants come from
+      `gen_small_field.py` (independent of the crate's compile-time derivation). Not
+      from `crates/` directly, because those helpers are `pub(crate)`.
+- [x] `p = 97`, `251`, `65521`: add, sub, mul, square, neg, invert and the byte encoding
+      checked against a `u128` reference over every pair (65521 runs under
+      `cargo xtask exhaustive`, about 130 s in release).
+- [x] `2^64 - 59` (one full limb, the limb-boundary case): every edge value against
+      every other, plus 200 000 sampled pairs. This is sampling, not enumeration.
+- [ ] Multi-limb primes (P-256 / P-384 / BLS12-381 base fields): not enumerable. Covered
+      only by their KATs.
 
 ### V3. Binary-level constant-time checks (`cargo xtask ct-asm`)
 - [ ] Disassemble release builds of `ct_select`, `cswap`, `ct_lookup`, `Choice` ops, the

@@ -1031,14 +1031,15 @@ fn write_wycheproof_provenance(rows: &[(String, String)]) -> Result<(), String> 
 /// range for `freeze`, and the documented ML-KEM Montgomery domain. Each test is
 /// named in the output so a failure can be traced to its check.
 fn exhaustive() -> i32 {
-    const SUITES: &[(&str, &[&str])] = &[
-        ("tpt-crypto-ct", &[]),
-        ("tpt-crypto-kem", &["--features", "alloc"]),
-        ("tpt-crypto-sig", &["--features", "alloc"]),
+    const SUITES: &[(&str, &str, &[&str])] = &[
+        ("tpt-crypto-ct", "exhaustive", &[]),
+        ("tpt-crypto-kem", "exhaustive", &["--features", "alloc"]),
+        ("tpt-crypto-sig", "exhaustive", &["--features", "alloc"]),
+        ("tpt-crypto-field", "small_field", &[]),
     ];
     let mut worst = 0;
-    for (pkg, extra) in SUITES {
-        let mut args: Vec<&str> = vec!["test", "--release", "-p", pkg, "--test", "exhaustive"];
+    for (pkg, target, extra) in SUITES {
+        let mut args: Vec<&str> = vec!["test", "--release", "-p", pkg, "--test", target];
         args.extend_from_slice(extra);
         args.extend_from_slice(&["--", "--ignored"]);
         println!("xtask exhaustive: cargo {}", args.join(" "));
