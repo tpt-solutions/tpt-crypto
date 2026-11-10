@@ -1104,7 +1104,8 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       reached these helpers. Added direct tests against a `u128` reference (`consts::tests`,
       covering `sel`, add/sub with flags, comparisons, `limbs_eq`, `sub_mod`/`add_mod`,
       `reduce_wide`). Rerun: 24 caught, 1 timeout (a `+=`→`*=` counter mutant that hangs
-      `limbs_eq`, so it is also detected). Still not run: `-field` other files, `-kem::poly`,
+      `limbs_eq`, so it is also detected). `-kem::encode::pack_bits` (the branch-free fix):
+      23 of 23 caught by the kem lib tests. Still not run: `-field` other files, `-kem::poly`,
       `-sig::poly`, the hash cores.
 - [ ] Triage survivors into new tests (done per survivor so far).
 - [x] Gate against discarded results in tests (`let _ = ...prop_assert...`): checked
