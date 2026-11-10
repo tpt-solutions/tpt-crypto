@@ -10,6 +10,8 @@
 use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
 use tpt_crypto::easy;
+use tpt_crypto::kem::xwing;
+use tpt_crypto::prelude::OsRng;
 use tpt_crypto::sig::ed25519;
 
 const USAGE: &str = "\
@@ -28,6 +30,12 @@ commands:
   seal-keygen <key-out>          new 256-bit symmetric key (hex file)
   seal <key-file> <in|-> <out>   XChaCha20-Poly1305 encrypt (random nonce)
   open <key-file> <in|-> <out>   decrypt and authenticate
+  kem-keygen <seed-out> <pub-out>
+                                 X25519 + ML-KEM-768 hybrid key pair (hex files)
+  kem-encap <pub-file> <ss-out> <ct-out>
+                                 encapsulate: shared secret and ciphertext (hex)
+  kem-decap <seed-file> <ct-file> <ss-out>
+                                 decapsulate: shared secret (hex)
   help                           this message
 
 Output files are created new and never overwritten.";
@@ -124,6 +132,41 @@ fn run(args: &[String]) -> Result<i32, String> {
                 }
                 Err(_) => {
                     println!("FAIL: authentication failed");
+                    Ok(1)
+                }
+            }
+        }
+        ("kem-keygen", [seed_out, pub_out]) => {
+            let seed = easy::random_bytes(xwing::SEED_LEN).map_err(|e| format!("rng: {e:?}"))?;
+            let mut seed_arr = [0u8; xwing::SEED_LEN];
+            seed_arr.copy_from_slice(&seed);
+            let (public, _sk) = xwing::keygen_seed(&seed_arr);
+            write_secret_text_new(seed_out, &to_hex(&seed_arr))?;
+            write_text_new(pub_out, &to_hex(&public.0))?;
+            println!("wrote {seed_out} (secret) and {pub_out}");
+            Ok(0)
+        }
+        ("kem-encap", [pub_file, ss_out, ct_out]) => {
+            let public = xwing::PublicKey(read_hex_key::<{ xwing::PUBLIC_KEY_LEN }>(pub_file)?);
+            let (ss, ct) = xwing::encapsulate(&public, &mut OsRng)
+                .map_err(|e| format!("encapsulate: {e:?}"))?;
+            write_secret_text_new(ss_out, &to_hex(&ss))?;
+            write_text_new(ct_out, &to_hex(&ct))?;
+            println!("wrote {ss_out} (secret) and {ct_out}");
+            Ok(0)
+        }
+        ("kem-decap", [seed_file, ct_file, ss_out]) => {
+            let seed: [u8; xwing::SEED_LEN] = read_hex_key(seed_file)?;
+            let ct: [u8; xwing::CIPHERTEXT_LEN] = read_hex_key(ct_file)?;
+            let sk = xwing::SecretKey::from_seed(seed);
+            match xwing::decapsulate(&sk, &ct) {
+                Ok(ss) => {
+                    write_secret_text_new(ss_out, &to_hex(&ss))?;
+                    println!("wrote {ss_out} (secret)");
+                    Ok(0)
+                }
+                Err(_) => {
+                    println!("FAIL: ciphertext rejected");
                     Ok(1)
                 }
             }

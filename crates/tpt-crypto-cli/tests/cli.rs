@@ -140,3 +140,51 @@ fn usage_errors_exit_two() {
     assert_eq!(code(&run(&["hash"])), 2);
     assert_eq!(code(&run(&["random", "lots"])), 2);
 }
+
+#[test]
+fn kem_round_trip_and_implicit_rejection() {
+    let dir = scratch("kem");
+    let seed = p(&dir, "seed.hex");
+    let public = p(&dir, "pub.hex");
+    let ss_sent = p(&dir, "ss-sent.hex");
+    let ct = p(&dir, "ct.hex");
+    let ss_got = p(&dir, "ss-got.hex");
+
+    assert_eq!(code(&run(&["kem-keygen", &seed, &public])), 0);
+    assert_eq!(code(&run(&["kem-encap", &public, &ss_sent, &ct])), 0);
+    assert_eq!(code(&run(&["kem-decap", &seed, &ct, &ss_got])), 0);
+    assert_eq!(
+        std::fs::read_to_string(&ss_sent).unwrap(),
+        std::fs::read_to_string(&ss_got).unwrap()
+    );
+
+    // A tampered ciphertext is not an error: ML-KEM implicit rejection gives a
+    // different secret. The X25519 component is checked too, so flip the ML-KEM part.
+    let hex = std::fs::read_to_string(&ct).unwrap();
+    let mut bytes = hex.trim().to_string();
+    let flipped = if bytes.as_bytes()[10] == b'0' {
+        '1'
+    } else {
+        '0'
+    };
+    bytes.replace_range(10..11, &flipped.to_string());
+    std::fs::write(&ct, format!("{bytes}\n")).unwrap();
+    let ss_bad = p(&dir, "ss-bad.hex");
+    assert_eq!(code(&run(&["kem-decap", &seed, &ct, &ss_bad])), 0);
+    assert_ne!(
+        std::fs::read_to_string(&ss_sent).unwrap(),
+        std::fs::read_to_string(&ss_bad).unwrap()
+    );
+}
+
+#[test]
+fn kem_decap_rejects_wrong_length_ciphertext() {
+    let dir = scratch("kem-len");
+    let seed = p(&dir, "seed.hex");
+    let public = p(&dir, "pub.hex");
+    let ct = p(&dir, "short.hex");
+    let ss = p(&dir, "ss.hex");
+    assert_eq!(code(&run(&["kem-keygen", &seed, &public])), 0);
+    std::fs::write(&ct, "00ff\n").unwrap();
+    assert_eq!(code(&run(&["kem-decap", &seed, &ct, &ss])), 2);
+}

@@ -18,7 +18,7 @@ name = "tpt-crypto"
 path = "src/main.rs"
 
 [dependencies]
-tpt-crypto = { workspace = true, features = ["std", "classical", "os-rng"] }
+tpt-crypto = { workspace = true, features = ["std", "classical", "os-rng", "pq"] }
 
 [lints]
 workspace = true
