@@ -922,7 +922,15 @@ Each item is its own commit so any can be dropped.
       - [x] `hash`, `hmac`, `hkdf_derive`, Ed25519 `sign` / `verify`, `random_bytes`.
 - [x] `NonceSequence` counter-nonce type for protocols that need explicit nonces.
 - [x] STREAM-style chunked AEAD for large payloads (age-style), with KATs. Whole-buffer API (`tpt_crypto_aead::stream_seal` / `stream_open`, ChaCha20-Poly1305); KAT is an independent Python `cryptography` vector. No incremental reader/writer yet.
-- [ ] Hybrid KEM: X25519 + ML-KEM-768 combiner (X-Wing-style), with KATs and fuzz target.
+- [~] Hybrid KEM: X25519 + ML-KEM-768 combiner (X-Wing-style), with KATs and fuzz target.
+      - [x] `tpt-crypto-kem::xwing`: keygen from a 32-byte seed (SHAKE256 expansion), encaps/decaps,
+            SHA3-256 combiner with the draft label. Expansion, X25519 component and combiner are
+            checked against Python references. Fuzz targets `xwing_decapsulate` and `xwing_encapsulate_pk`.
+      - [ ] Official test vectors: none published yet by the draft, so there is no independent
+            end-to-end KAT. Wire format is unstable until the draft is final.
+      - [ ] `ml_kem::encapsulate` / `encapsulate_msg` still assume a well-formed key (they `expect`
+            `decode_pk`, and the public `EncapsKey.bytes` field lets callers pass a wrong length, which panics).
+            `ml_kem::check_encaps_key` (FIPS 203 §7.2) is used by `xwing` only; the plain ML-KEM API should call it too.
 - [ ] Hybrid signature: Ed25519 + ML-DSA-65 composite, with KATs.
 - [~] HPKE (RFC 9180) in `tpt-crypto-kem::hpke`: all four modes (base, PSK, auth,
       auth-PSK) over DHKEM(X25519, HKDF-SHA256) with ChaCha20-Poly1305 and AES-128-GCM.
