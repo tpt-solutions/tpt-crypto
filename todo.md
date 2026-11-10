@@ -1099,7 +1099,13 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       as unequal (it ORed `ct_eq`'s 1-for-equal results), and it truncated the length
       difference to 8 bits. It had no tests and no callers. Direct tests in
       `tests/slices.rs`.
-- [ ] `-field`, `-kem::poly`, `-sig::poly` and the hash cores: not run yet.
+- [x] `-field` `consts.rs` helpers changed in the constant-time pass (`sel`, `limbs_ge`,
+      `ge_n`, `limbs_eq`): 25 mutants, first run **25 missed**, because the lib tests never
+      reached these helpers. Added direct tests against a `u128` reference (`consts::tests`,
+      covering `sel`, add/sub with flags, comparisons, `limbs_eq`, `sub_mod`/`add_mod`,
+      `reduce_wide`). Rerun: 24 caught, 1 timeout (a `+=`→`*=` counter mutant that hangs
+      `limbs_eq`, so it is also detected). Still not run: `-field` other files, `-kem::poly`,
+      `-sig::poly`, the hash cores.
 - [ ] Triage survivors into new tests (done per survivor so far).
 - [x] Gate against discarded results in tests (`let _ = ...prop_assert...`): checked
       2026-11-11 — no `let _ =` wraps an assertion in any `tests/` or `src/` file; the

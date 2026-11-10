@@ -493,3 +493,111 @@ pub(crate) const fn find_nonresidue(m: &[u64; MAX_LIMBS]) -> [u64; MAX_LIMBS] {
         a += 1;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Direct checks of the limb helpers against a `u128` reference. These are
+    //! `const fn` and are reached by the field tests only through derived constants,
+    //! so each one is tested here on its own.
+    use super::*;
+
+    const EDGE: [u64; 7] = [
+        0,
+        1,
+        2,
+        1 << 63,
+        u64::MAX - 1,
+        u64::MAX,
+        0x0123_4567_89ab_cdef,
+    ];
+
+    fn val2(lo: u64, hi: u64) -> u128 {
+        (u128::from(hi) << 64) | u128::from(lo)
+    }
+
+    #[test]
+    fn sel_picks_by_bit() {
+        for &x in &EDGE {
+            for &y in &EDGE {
+                assert_eq!(sel(1, x, y), x);
+                assert_eq!(sel(0, x, y), y);
+            }
+        }
+    }
+
+    #[test]
+    fn add_and_sub_limbs_match_u128_with_flags() {
+        for &a0 in &EDGE {
+            for &a1 in &EDGE {
+                for &b0 in &EDGE {
+                    for &b1 in &EDGE {
+                        let a = [a0, a1];
+                        let b = [b0, b1];
+                        let (sum, carry) = add_limbs(&a, &b);
+                        let (fs, fc) = val2(a0, a1).overflowing_add(val2(b0, b1));
+                        assert_eq!(val2(sum[0], sum[1]), fs);
+                        assert_eq!(u128::from(carry), u128::from(fc));
+                        let (diff, borrow) = sub_limbs(&a, &b);
+                        let (fd, under) = val2(a0, a1).overflowing_sub(val2(b0, b1));
+                        assert_eq!(val2(diff[0], diff[1]), fd);
+                        assert_eq!(u128::from(borrow), u128::from(under));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn comparisons_match_u128() {
+        for &a0 in &EDGE {
+            for &a1 in &EDGE {
+                for &b0 in &EDGE {
+                    for &b1 in &EDGE {
+                        let a = [a0, a1];
+                        let b = [b0, b1];
+                        let (av, bv) = (val2(a0, a1), val2(b0, b1));
+                        assert_eq!(limbs_ge(&a, &b), av >= bv, "limbs_ge {av} {bv}");
+                        assert_eq!(ge_n(&a, &b), av >= bv, "ge_n {av} {bv}");
+                        assert_eq!(limbs_eq(&a, &b), av == bv, "limbs_eq {av} {bv}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn limbs_eq_detects_a_difference_in_any_limb() {
+        let base = [5u64, 7, 9, 11, 13, 15];
+        assert!(limbs_eq(&base, &base));
+        for i in 0..MAX_LIMBS {
+            let mut other = base;
+            other[i] ^= 1 << 40;
+            assert!(!limbs_eq(&base, &other), "limb {i}");
+        }
+    }
+
+    #[test]
+    fn sub_mod_and_add_mod_reduce_small_modulus() {
+        // Single-limb modulus 97: operands below m, result must be the residue.
+        let m = [97u64, 0, 0, 0, 0, 0];
+        for a in 0..97u64 {
+            for b in 0..97u64 {
+                let av = [a, 0, 0, 0, 0, 0];
+                let bv = [b, 0, 0, 0, 0, 0];
+                let want_sub = (a + 97 - b) % 97;
+                assert_eq!(sub_mod(&av, &bv, &m)[0], want_sub, "sub {a} {b}");
+                let want_add = (a + b) % 97;
+                assert_eq!(add_mod(&av, &bv, &m)[0], want_add, "add {a} {b}");
+            }
+        }
+    }
+
+    #[test]
+    fn reduce_wide_reduces_small_multiples() {
+        let m = [97u64, 0, 0, 0, 0, 0];
+        for t in 0..(4 * 97u64) {
+            let input = [t, 0, 0, 0, 0, 0, 0];
+            assert_eq!(reduce_wide(input, &m)[0], t % 97, "t = {t}");
+        }
+    }
+}
