@@ -757,6 +757,82 @@ mod tests {
         }
     }
 
+    /// Check one hint input point against the `high_bits` reference for every `z` in
+    /// a set that includes both extremes.
+    fn check_hint_point(g: i32, r0: i32) {
+        let r = canonicalize(r0);
+        for z in [-g, -g + 1, -1, 0, 1, g - 1, g] {
+            let h = make_hint(z, r, g);
+            let want = high_bits(g, canonicalize(r + z));
+            assert_eq!(
+                use_hint(h, r, g),
+                want,
+                "boundary hint failed for g={g} r={r} z={z}"
+            );
+        }
+    }
+
+    /// Boundary inputs for hints: `r` at and next to multiples of `2γ₂` (where `r₀ = 0`
+    /// and the `r₁` edges sit), plus the ends of the canonical range. Random sampling
+    /// rarely hits `r₀ = 0`, so these are listed explicitly.
+    fn hint_boundaries() {
+        for g in [(Q - 1) / 88, (Q - 1) / 32] {
+            let two_g = 2 * g;
+            for k in 0..=(Q / two_g + 1) {
+                for j in [-1i32, 0, 1] {
+                    check_hint_point(g, k * two_g + j);
+                }
+            }
+            for r0 in [0, 1, Q - 1, Q - 2] {
+                check_hint_point(g, r0);
+            }
+        }
+    }
+
+    fn check_decompose_into<G: Gamma2>(g: i32) {
+        let mut p = Poly::ZERO;
+        for (i, c) in p.coeffs.iter_mut().enumerate() {
+            *c = canonicalize((i as i32).wrapping_mul(40_961).wrapping_add(7) % Q);
+        }
+        let mut hi = Poly::ZERO;
+        let mut lo = Poly::ZERO;
+        p.decompose_into::<G>(&mut hi, &mut lo);
+        for i in 0..N {
+            let (a1, a0) = decompose_impl(g, p.coeffs[i]);
+            assert_eq!((hi.coeffs[i], lo.coeffs[i]), (a1, a0), "coeff {i} g={g}");
+        }
+    }
+
+    /// `Poly::decompose_into` must agree with `decompose_impl` coefficient by coefficient.
+    fn decompose_into_matches_impl() {
+        check_decompose_into::<Gamma2Q88>((Q - 1) / 88);
+        check_decompose_into::<Gamma2Q32>((Q - 1) / 32);
+    }
+
+    /// `reduce_mod` must land in `[0, q)` for multiples of `q`, negatives and their
+    /// neighbours. Those are the inputs where a `<` vs `<=`/`==` branch shows.
+    fn reduce_mod_is_canonical() {
+        let q = Q as i64;
+        for x in [
+            0,
+            1,
+            q - 1,
+            q,
+            q + 1,
+            -1,
+            -q,
+            -q - 1,
+            -q + 1,
+            5 * q,
+            -5 * q,
+            123_456_789_012,
+        ] {
+            let r = Poly::reduce_mod(x);
+            assert!((0..Q).contains(&r), "reduce_mod({x}) = {r} not canonical");
+            assert_eq!(r as i64, x.rem_euclid(q), "reduce_mod({x})");
+        }
+    }
+
     fn power2round_is_exact() {
         for r in [0i32, 1, 4096, 4097, Q - 1, Q / 2] {
             let r = canonicalize(r);
@@ -832,6 +908,9 @@ mod tests {
         ntt_multiplication_matches_schoolbook();
         decompose_matches_spec_exhaustively();
         hint_round_trip();
+        hint_boundaries();
+        decompose_into_matches_impl();
+        reduce_mod_is_canonical();
         power2round_is_exact();
         exceeds_norm_is_exact();
     }

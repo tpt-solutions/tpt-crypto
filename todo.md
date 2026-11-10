@@ -1105,8 +1105,18 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       covering `sel`, add/sub with flags, comparisons, `limbs_eq`, `sub_mod`/`add_mod`,
       `reduce_wide`). Rerun: 24 caught, 1 timeout (a `+=`→`*=` counter mutant that hangs
       `limbs_eq`, so it is also detected). `-kem::encode::pack_bits` (the branch-free fix):
-      23 of 23 caught by the kem lib tests. Still not run: `-field` other files, `-kem::poly`,
-      `-sig::poly`, the hash cores.
+      23 of 23 caught by the kem lib tests.
+      `-kem::poly` reduction functions (`freeze`, `montgomery_reduce`, `fqmul`): 21 of 21 caught.
+      `-sig::poly` (`reduce_mod`, `decompose_*`, `use_hint`, `make_hint`, `high_bits`): 112
+      mutants on the lib tests, 90 caught at first. Added `hint_boundaries` (r at and next to
+      multiples of 2γ₂, extreme z), `decompose_into_matches_impl` and `reduce_mod_is_canonical`.
+      `reduce_mod` is now 10/10 caught. The 21 that remain are equivalent by inspection:
+      integer division gives the same constant (`(Q±1)/32`), the `a1` clamp keeps the wrap
+      branch dead (`a1 ≤ 43` or `≤ 15`, so `a1·2γ₂ ≠ Q-1`), and the mask-shift mutants
+      give the same output. The exhaustive suite (`--test exhaustive decompose_is`) kills the
+      live arithmetic mutants, which I confirmed by hand on the `a0` subtraction. The wrap
+      branch is dead code. Removing it is left as a choice. Still not run: the hash cores,
+      the other `-field` files.
 - [ ] Triage survivors into new tests (done per survivor so far).
 - [x] Gate against discarded results in tests (`let _ = ...prop_assert...`): checked
       2026-11-11 — no `let _ =` wraps an assertion in any `tests/` or `src/` file; the
