@@ -985,9 +985,15 @@ Each item is its own commit so any can be dropped.
 - [x] `cargo xtask doctor` (toolchain, targets, nightly/miri, deny/fuzz present).
 - [x] `cargo xtask wycheproof-fetch` (download + sha256 into `tests/kat/` PROVENANCE). Fetches AES-GCM and ChaCha20-Poly1305 files, consumed by `tpt-crypto-aead/tests/wycheproof.rs`.
 - [x] `cargo xtask new-primitive` (scaffold a crate per AGENTS.md rules). Also adds the workspace dependency entry; the `../tpt-rust-map` registry entry is printed for manual addition (that repo is not present here).
-- [ ] `cargo xtask coverage`.
+- [x] `cargo xtask coverage` — wraps `cargo llvm-cov --workspace --all-features --summary-only`;
+      fails with a clear message when `cargo-llvm-cov` is missing. Not run in the foreground
+      (the instrumented suite takes longer than a 10-minute shell call).
 - [ ] CI: release workflow (tag → package → publish gate), Dependabot, MSRV job (1.84),
       `cargo-audit` / `cargo-vet`, coverage upload, scheduled long fuzz and leakage runs.
+      — added (not yet run on GitHub; no remote here): `.github/dependabot.yml` (cargo +
+      github-actions, weekly), `msrv` job (`dtolnay/rust-toolchain@1.84.0`, `cargo check`),
+      `ct-asm` job (`cargo xtask ct-asm`), `audit` job (`rustsec/audit-check`). Still open:
+      release workflow, `cargo-vet`, coverage upload, scheduled fuzz and leakage runs.
 - [ ] Cross-repo: switch `../tpt-crypto-rustls` adapter to
       `verify_prehash_allow_high_s` and its RSA path to `PublicKey::verify_*`.
 
