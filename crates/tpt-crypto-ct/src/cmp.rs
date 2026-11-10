@@ -91,10 +91,14 @@ pub fn ct_eq_limbs(a: &[Limb], b: &[Limb]) -> Choice {
 #[inline]
 #[must_use]
 pub fn ct_eq_slices<T: CtEq>(a: &[T], b: &[T]) -> Choice {
-    let mut diff = (a.len() ^ b.len()) as u8;
+    // Accumulate *inequality*: `ct_eq` yields 1 for equal elements, so XOR it with 1.
+    // The length difference is reduced to one bit from the full word, not truncated
+    // to 8 bits (lengths 0 and 256 differ, but `as u8` would hide that).
+    let len_xor = a.len() ^ b.len();
+    let mut diff = ((len_xor | len_xor.wrapping_neg()) >> (usize::BITS - 1)) as u8;
     let n = a.len().min(b.len());
     for i in 0..n {
-        diff |= a[i].ct_eq(&b[i]).unwrap_u8();
+        diff |= a[i].ct_eq(&b[i]).unwrap_u8() ^ 1;
     }
     eq_reduce(diff)
 }
