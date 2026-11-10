@@ -930,7 +930,12 @@ Each item is its own commit so any can be dropped.
             end-to-end KAT. Wire format is unstable until the draft is final.
       - [x] Plain ML-KEM `encapsulate` / `encapsulate_msg` now run the FIPS 203 §7.2 check and return
             `Result` (breaking change, crate unreleased). Regression test: `tests/encaps_validation.rs`, all parameter sets.
-- [ ] Hybrid signature: Ed25519 + ML-DSA-65 composite, with KATs.
+- [~] Hybrid signature: Ed25519 + ML-DSA-65 composite, with KATs.
+      - [x] `tpt-crypto-sig::hybrid`: both signatures required, over `LABEL ‖ len(ctx) ‖ ctx ‖ M`. Ed25519
+            component checked against a Python `cryptography` reference. Fuzz target `hybrid_verify`.
+      - [ ] This is a crate-specific encoding, not the IETF composite wire format
+            (draft-ietf-lamps-pq-composite-sigs). Switch to it once that draft is final, or drop the item.
+      - [ ] No independent end-to-end KAT for the ML-DSA half of the hybrid (ML-DSA itself has FIPS 204 KATs).
 - [~] HPKE (RFC 9180) in `tpt-crypto-kem::hpke`: all four modes (base, PSK, auth,
       auth-PSK) over DHKEM(X25519, HKDF-SHA256) with ChaCha20-Poly1305 and AES-128-GCM.
       Matches the official vectors for `enc`, key, base nonce, exporter, per-sequence
