@@ -78,3 +78,9 @@ name = "xwing_encapsulate_pk"
 path = "fuzz_targets/xwing_encapsulate_pk.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "hybrid_verify"
+path = "fuzz_targets/hybrid_verify.rs"
+test = false
+doc = false
