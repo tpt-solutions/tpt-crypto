@@ -103,7 +103,18 @@ fn clippy() -> i32 {
 
 fn test() -> i32 {
     println!("xtask test: cargo test --workspace --all-features");
-    cargo(&["test", "--workspace", "--all-features"])
+    let all = cargo(&["test", "--workspace", "--all-features"]);
+    // `--all-features` enables `profile-cnsa2`, which compiles out the 2048-bit RSA
+    // known-answer tests. Run the sig crate under `profile-modern` so they still run.
+    println!("xtask test: cargo test -p tpt-crypto-sig --features alloc,profile-modern");
+    let modern = cargo(&[
+        "test",
+        "-p",
+        "tpt-crypto-sig",
+        "--features",
+        "alloc,profile-modern",
+    ]);
+    all.max(modern)
 }
 
 /// Run `tests/leakage.rs` for `tpt-crypto-ct` under the `leakage` feature.

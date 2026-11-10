@@ -1,5 +1,5 @@
 //! RSA verification known-answer tests (OpenSSL-generated vectors).
-#![cfg(not(feature = "profile-modern"))] // 2048-bit vectors; see tests/rsa_profile.rs
+#![cfg(not(feature = "profile-cnsa2"))] // 2048-bit vectors are below the CNSA 2.0 minimum; the 3072-bit set is in tests/rsa_3072.rs
 
 use tpt_crypto_sig::rsa::{PublicKey, RsaHash};
 use tpt_crypto_sig::Error;

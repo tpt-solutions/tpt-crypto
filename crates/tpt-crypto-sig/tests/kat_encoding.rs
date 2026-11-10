@@ -4,7 +4,7 @@
 //! an Ed25519 key from the RFC 8032 test 1 seed, and a fresh RSA-2048 key with
 //! e = 65537. The encoder must reproduce the reference DER and PEM byte-for-byte.
 
-#![cfg(all(feature = "alloc", not(feature = "profile-modern")))]
+#![cfg(all(feature = "alloc", not(feature = "profile-cnsa2")))]
 
 use tpt_crypto_sig::encoding::*;
 

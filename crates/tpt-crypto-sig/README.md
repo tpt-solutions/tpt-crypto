@@ -50,9 +50,11 @@ default build keeps the 1024-bit floor. A profile is a compile-time setting, so 
 binary built with it cannot accept a weaker key.
 
 `--all-features` enables both profiles, so the stricter one (3072 bits) applies in
-that configuration. Under `profile-modern`, the RSA known-answer tests that use
-2048-bit vectors are compiled out (`tests/rsa.rs`, `tests/kat_encoding.rs`);
-`tests/rsa_profile.rs` checks the length gate directly.
+that configuration. The 2048-bit RSA known-answer tests (`tests/rsa.rs`,
+`tests/kat_encoding.rs`) are compiled out under `profile-cnsa2` only, and the 3072-bit
+set (`tests/rsa_3072.rs`) runs in every build. `cargo xtask test` also runs the crate
+under `profile-modern`, so the 2048-bit set is still exercised. `tests/rsa_profile.rs`
+checks the length gate directly.
 
 Only RSA size is gated so far. The workspace has no SHA-1 or MD5, so there is
 nothing class-level to remove. Excluding other primitives (for example Ed25519 or
