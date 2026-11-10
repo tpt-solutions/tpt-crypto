@@ -16,7 +16,7 @@ tpt-crypto = { path = "../crates/tpt-crypto", default-features = false, features
 # built with default-features = false and a fully custom provider).
 rustls = { version = "0.23", default-features = false, features = ["std"] }
 # MIT OR Apache-2.0 — system randomness for the provider's SecureRandom
-getrandom = "0.2"
+getrandom = "0.4"
 
 [dev-dependencies]
 proptest = "1"
