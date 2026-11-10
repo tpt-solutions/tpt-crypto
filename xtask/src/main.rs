@@ -40,6 +40,7 @@ fn main() {
             }
         },
         "wycheproof-fetch" => wycheproof_fetch(),
+        "coverage" => coverage(),
         "doctor" => doctor(),
         "help" | "--help" | "-h" => {
             print_help();
@@ -71,7 +72,8 @@ fn print_help() {
          sbom             emit a SBOM artifact\n  \
          doctor           report toolchain, targets, nightly/miri, deny and fuzz status\n  \
          new-primitive    scaffold crates/<name> per AGENTS.md (name: tpt-crypto-*)\n  \
-         wycheproof-fetch download pinned Wycheproof AEAD vectors and record sha256\n"
+         wycheproof-fetch download pinned Wycheproof AEAD vectors and record sha256\n  \
+         coverage         line/region coverage summary via cargo-llvm-cov (all features)\n"
     );
 }
 
@@ -1228,4 +1230,27 @@ fn which(name: &str) -> bool {
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+/// `cargo xtask coverage`: line and region coverage over the whole workspace with
+/// every feature enabled, via `cargo-llvm-cov`. Prints the summary table only; it
+/// does not gate on a threshold. Fails with a clear message when the tool is absent.
+fn coverage() -> i32 {
+    let installed = Command::new("cargo")
+        .args(["llvm-cov", "--version"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !installed {
+        eprintln!("xtask coverage: cargo-llvm-cov is not installed (cargo install cargo-llvm-cov)");
+        return 1;
+    }
+    cargo(&[
+        "llvm-cov",
+        "--workspace",
+        "--all-features",
+        "--summary-only",
+    ])
 }

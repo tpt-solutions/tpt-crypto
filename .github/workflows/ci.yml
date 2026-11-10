@@ -167,3 +167,30 @@ jobs:
         with:
           name: sbom.json
           path: target/sbom.json
+
+  msrv:
+    # Pinned to the workspace rust-version (edition 2021, rust-version 1.84).
+    name: msrv (1.84)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.84.0
+      - run: cargo check --workspace --all-features --lib --bins
+
+  ct-asm:
+    # Binary-level constant-time scan of the strict probe targets (todo V3).
+    name: ct-asm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo xtask ct-asm
+
+  audit:
+    name: cargo-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
