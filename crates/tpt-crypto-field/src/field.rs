@@ -391,9 +391,11 @@ impl<P: FieldParams> FieldElement<P> {
             loop {
                 result = result.square();
                 let b = (exp[limb] >> bit) & 1;
-                if b == 1 {
-                    result = result.mul(self);
-                }
+                // Always multiply, then select, so the exponent bit never picks a
+                // branch. This is what makes a secret exponent safe.
+                let prod = result.mul(self);
+                // ct_select_fe(a, b, c) returns `b` when c == 1.
+                result = Self::ct_select_fe(&result, &prod, Choice::from_u8(b as u8));
                 if bit == 0 {
                     break;
                 }

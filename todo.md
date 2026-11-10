@@ -1068,10 +1068,15 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       compile-time helpers (`mod_reduce`, `reduce_wide`, `sub_mod`) are now
       branch-free too, but nothing is probed for them. Field, curve, sig and ct
       test suites pass after the change.
-- [ ] Ed25519 scalar multiplication (`-curve`, `curve_mul_asm_probe`): report-only,
-      11 conditional jumps, not triaged. The jumps I read in the disassembly are
-      fixed-count loop counters (`incq`/`jne`, `addq $-1`/`jae`), plus one length-check
-      compare that I did not trace to source.
+- [ ] Ed25519 scalar multiplication (`-curve`, `curve_mul_asm_probe`): report-only.
+      **Fixed (2026-11-11):** the scan had found 11 jumps. One was a real problem:
+      `FieldElement::pow` branched on each exponent bit (`if b == 1 { mul }`). Its doc said
+      the exponent may be secret. Every current caller passes a public exponent, so nothing
+      leaked, but the contract was wrong. `pow` now multiplies every bit and selects with
+      `ct_select_fe`. Field, curve and sig tests pass. Cost: about one extra multiplication
+      per exponent bit; not benchmarked. Remaining 5 jumps: fixed-count loops (`decl`/`jne`,
+      `cmp $3072`, `addq $-1`/`jb`, `inc`/`jne`). One `testq %r14`/`jne` I have not traced
+      to source, so the item stays open.
 - [ ] Optional instruction-count equality (callgrind): not started.
 - [x] `ct-asm:` evidence kind in `specs/*.spec`: `ct-asm: <pkg> <probe-target>` runs the
       strict binary scan for that target. Wired into `ct_select.spec` (ct_asm_probe) and
