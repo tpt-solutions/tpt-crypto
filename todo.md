@@ -996,13 +996,21 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
 "binary-checked", not "formally verified". Each item is its own commit.
 
 ### V1. Exhaustive bounded-domain proofs (`cargo xtask exhaustive`)
-- [ ] `-kem::poly`: `montgomery_reduce`, `fqmul`, `freeze` over the full i16/i32 input
-      domain vs a `rem_euclid` reference; `compress`/`decompress` for every `(x, d)`.
-- [ ] `-sig::poly`: reduce/`caddq`/`freeze`, `power2round`, `decompose_impl` over the full
-      i32 domain (~2^32, release mode, ~1 min); pack/unpack round-trips at all small widths.
-- [ ] `-ct`: `ct_select`, `cswap`, `ct_eq`, `ct_ne` on u8 and u16 for all inputs.
-- [ ] Add an `exhaustive:` evidence kind to `specs/*.spec`; teach `cargo xtask verify` to
-      check it. Wire into `ct_select`, `ntt_roundtrip`, `field_reduce`.
+- [x] `-kem::poly`: `freeze` over all `i32` (`freeze` is now branch-free: it was a
+      secret-dependent branch); `montgomery_reduce` over its documented range
+      `|a| < 2^15·q` (it wraps outside that range, so the full `i32` domain is not
+      claimed); `fqmul` over all reduced pairs; `compress`/`decompress` for every
+      `x ∈ [0, q)` and `d ∈ {1, 4, 5, 10, 11}`.
+- [x] `-sig::poly`: `reduce` over its documented range (it overflows above
+      `i32::MAX − 2^22`, as the Dilithium reference does); `canonicalize` on the same
+      range; `decompose_impl` over every canonical `a ∈ [0, q)` for both γ₂; `power2round`
+      over every canonical `a`; per-position round trips for every value of the η, t₁,
+      t₀ and z packers. Not done: the `w₁` packer.
+- [x] `-ct`: `ct_select`, `cswap`, `ct_eq` and `ct_ne` over all `u8` pairs (every test
+      run) and all `u16` pairs (`cargo xtask exhaustive`, about 5 s in release).
+- [x] `exhaustive:` evidence kind in `specs/*.spec`; `cargo xtask verify` runs the named
+      test in release with `--include-ignored --exact` and requires it to pass. Wired into
+      `ct_select` and `ntt_roundtrip` (the latter as supporting evidence).
 
 ### V2. Small-scope field verification
 - [ ] Check whether `FieldElement<P, LIMBS>` / `Limb` can be instantiated with tiny
