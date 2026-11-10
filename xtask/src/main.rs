@@ -1095,6 +1095,8 @@ fn ct_asm() -> i32 {
         ("tpt-crypto-ct", "ct_asm_probe", true),
         ("tpt-crypto-kem", "kem_asm_probe", false),
         ("tpt-crypto-kem", "kem_pack_asm_probe", false),
+        ("tpt-crypto-kem", "kem_pke_asm_probe", false),
+        ("tpt-crypto-kem", "kem_cbd_asm_probe", false),
         ("tpt-crypto-aead", "aead_asm_probe", true),
         ("tpt-crypto-field", "field_asm_probe", true),
         ("tpt-crypto-curve", "curve_asm_probe", true),

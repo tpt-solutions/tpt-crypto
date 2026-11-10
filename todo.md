@@ -1058,8 +1058,11 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       after). The 48 that remain are public bit-counter loops and bounds checks.
       **Coverage gap found:** the scanner reads only each probe's own body. The
       decapsulation probe calls `kpke_encrypt`, `pack`, and `sampler` out of line, so
-      the 73 jumps do not include them. Those callees need their own probes. The
-      checks in the source: `sample_ntt` branches only on public XOF output, `cbd` only on
+      the 73 jumps do not include them. Callee probes now exist, all report-only and
+      untriaged: `kem_pke_asm_probe` (`kpke_encrypt` 42 jumps, `kpke_decrypt` 13) and
+      `kem_cbd_asm_probe` (eta = 2 sampler, 67). Their jumps are mostly loop control over
+      public counts, but I have not classified them. Strict status needs straight-line
+      code or a flag-source classifier. The checks in the source: `sample_ntt` branches only on public XOF output, `cbd` only on
       the public `eta`, and decapsulation selects with `ct_eq_bytes` and `ct_select_array`.
 - [x] Ed25519 field add/sub, Ed25519 point add, and AEAD tag verify (16 and 32 bytes):
       probed and strict (`field_asm_probe`, `curve_asm_probe`, `aead_asm_probe`).
