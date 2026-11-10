@@ -1115,8 +1115,13 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       branch dead (`a1 ≤ 43` or `≤ 15`, so `a1·2γ₂ ≠ Q-1`), and the mask-shift mutants
       give the same output. The exhaustive suite (`--test exhaustive decompose_is`) kills the
       live arithmetic mutants, which I confirmed by hand on the `a0` subtraction. The wrap
-      branch is dead code. Removing it is left as a choice. Still not run: the hash cores,
-      the other `-field` files.
+      branch is dead code. Removing it is left as a choice.
+      `-hash::sha3` (SHA-3 / SP 800-185): `keccak_f` 76 of 76 caught by `tests/kat.rs`. The lib
+      tests reached none of it (135/135 missed there). The encoders `left_encode`,
+      `right_encode` and `bytepad` had 3 survivors, because the KATs only use one-byte
+      lengths. `encode_tests` checks SP 800-185 vectors and the `bytepad` length
+      formula. Rerun: 50 caught, 1 timeout. Still not run: the other hash cores (SHA-2,
+      BLAKE2b, BLAKE3, K12, Argon2), the other `-field` files.
 - [ ] Triage survivors into new tests (done per survivor so far).
 - [x] Gate against discarded results in tests (`let _ = ...prop_assert...`): checked
       2026-11-11 — no `let _ =` wraps an assertion in any `tests/` or `src/` file; the

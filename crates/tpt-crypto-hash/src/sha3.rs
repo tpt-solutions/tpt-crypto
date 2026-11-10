@@ -768,3 +768,55 @@ pub fn kmac256(k: &[u8], data: &[u8], out: &mut [u8], s: &[u8]) {
     h.update(data);
     h.finalize_xof(out);
 }
+
+#[cfg(test)]
+mod encode_tests {
+    //! SP 800-185 §2.3.1 and §2.3.2 worked values. The KATs only reach the one-byte
+    //! case of these encoders, so the multi-byte paths are checked here.
+    use super::*;
+
+    fn left(x: u64) -> alloc::vec::Vec<u8> {
+        let mut out = [0u8; 9];
+        let n = left_encode(x, &mut out);
+        out[..n].to_vec()
+    }
+
+    fn right(x: usize) -> alloc::vec::Vec<u8> {
+        let (n, out) = right_encode(x);
+        out[..n].to_vec()
+    }
+
+    #[test]
+    fn left_encode_matches_sp800_185() {
+        assert_eq!(left(0), [0x01, 0x00]);
+        assert_eq!(left(1), [0x01, 0x01]);
+        assert_eq!(left(255), [0x01, 0xff]);
+        assert_eq!(left(256), [0x02, 0x01, 0x00]);
+        assert_eq!(left(0x0102_0304), [0x04, 0x01, 0x02, 0x03, 0x04]);
+    }
+
+    #[test]
+    fn right_encode_matches_sp800_185() {
+        assert_eq!(right(0), [0x00, 0x01]);
+        assert_eq!(right(1), [0x01, 0x01]);
+        assert_eq!(right(255), [0xff, 0x01]);
+        assert_eq!(right(256), [0x01, 0x00, 0x02]);
+        assert_eq!(right(0x0102_0304), [0x01, 0x02, 0x03, 0x04, 0x04]);
+    }
+
+    #[test]
+    fn bytepad_length_is_a_rate_multiple_of_the_padded_input() {
+        // bytepad(z, w) = left_encode(w) || z || zeros, length a multiple of w.
+        for rate in [136usize, 168] {
+            for len in [0usize, 1, 2, 31, 32, 33, 134, 135, 136, 166, 167, 168, 300] {
+                let z = alloc::vec![0xa5u8; len];
+                let mut out = [0u8; 512];
+                let n = bytepad(&z, rate, &mut out);
+                let le = left(rate as u64).len();
+                let want = (le + len).div_ceil(rate) * rate;
+                assert_eq!(n, want, "rate {rate} len {len}");
+                assert_eq!(&out[le..le + len], &z[..], "payload rate {rate} len {len}");
+            }
+        }
+    }
+}
