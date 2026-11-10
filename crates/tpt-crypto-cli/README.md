@@ -15,6 +15,7 @@ tpt-crypto open <key-file> <in|-> <out>
 tpt-crypto kem-keygen <seed-out> <pub-out>
 tpt-crypto kem-encap <pub-file> <ss-out> <ct-out>
 tpt-crypto kem-decap <seed-file> <ct-file> <ss-out>
+tpt-crypto bench [iterations]
 ```
 
 `kem-*` is the X25519 + ML-KEM-768 hybrid (X-Wing style, see `tpt-crypto-kem::xwing`).
@@ -32,7 +33,10 @@ authentication failure, self-test failure), `2` usage or I/O error.
 The `seal` format is the `easy::seal` wire format: a random 24-byte nonce, the
 ciphertext, then a 16-byte tag. No associated data is used by this CLI.
 
-Scope: no benchmarking command, no PEM/DER import or export.
+`bench` gives quick timings only. For measurements that need to be compared, use the
+criterion suite in `benches/`.
+
+Scope: no PEM/DER import or export.
 Those need a design decision about file formats before they go in here.
 
 ## License

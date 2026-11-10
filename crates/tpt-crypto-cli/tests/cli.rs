@@ -188,3 +188,14 @@ fn kem_decap_rejects_wrong_length_ciphertext() {
     std::fs::write(&ct, "00ff\n").unwrap();
     assert_eq!(code(&run(&["kem-decap", &seed, &ct, &ss])), 2);
 }
+
+#[test]
+fn bench_runs_and_lists_operations() {
+    let o = run(&["bench", "1"]);
+    assert_eq!(code(&o), 0);
+    let out = stdout(&o);
+    for name in ["sha256", "ed25519 sign", "x-wing decapsulate"] {
+        assert!(out.contains(name), "missing {name}: {out}");
+    }
+    assert_eq!(code(&run(&["bench", "0"])), 2);
+}

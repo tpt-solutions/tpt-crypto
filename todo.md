@@ -968,7 +968,8 @@ Each item is its own commit so any can be dropped.
       - [x] `selftest`, `hash`, `random`, `sign-keygen` / `sign` / `verify`, `seal-keygen` / `seal` / `open`
             (`crates/tpt-crypto-cli`, end-to-end tests). Output files are never overwritten.
       - [x] `kem-keygen` / `kem-encap` / `kem-decap` (X-Wing hybrid), end-to-end tested.
-      - [ ] `bench`. PEM/DER import and export need a file-format decision first.
+      - [x] `bench` (quick `Instant` timings; not a substitute for `benches/`).
+      - [ ] PEM/DER import and export. Needs a file-format decision first.
 - [ ] Runnable `cargo run --example` programs: `ml_kem`, `ml_dsa`, `ring_subset`,
       `bls_aggregate`, `hybrid_kem`, `seal_open`.
 - [ ] Docs book (`docs/`): "which primitive should I use?" chooser, feature-flag guide,

@@ -36,6 +36,7 @@ commands:
                                  encapsulate: shared secret and ciphertext (hex)
   kem-decap <seed-file> <ct-file> <ss-out>
                                  decapsulate: shared secret (hex)
+  bench [iterations]             quick timings of the main operations (default 100)
   help                           this message
 
 Output files are created new and never overwritten.";
@@ -171,11 +172,80 @@ fn run(args: &[String]) -> Result<i32, String> {
                 }
             }
         }
+        ("bench", []) => bench(100),
+        ("bench", [n]) => {
+            let n: usize = n
+                .parse()
+                .map_err(|_| format!("not an iteration count: {n}"))?;
+            if n == 0 {
+                return Err("iteration count must be at least 1".into());
+            }
+            bench(n)
+        }
         _ => {
             eprintln!("{USAGE}");
             Err(format!("unknown or malformed command: {cmd}"))
         }
     }
+}
+
+/// Quick timing of the main operations: mean time per call over `n` iterations.
+/// This is a sanity check, not a benchmark. Use `benches/` (criterion) for
+/// measurements that need to be compared.
+fn bench(n: usize) -> Result<i32, String> {
+    use std::hint::black_box;
+    use std::time::Instant;
+
+    let msg = vec![0x5au8; 1024];
+    let seed = [0x11u8; 32];
+    let key = [0x22u8; easy::KEY_LEN];
+
+    let mut rows: Vec<(&str, f64)> = Vec::new();
+    let mut time = |name: &'static str, f: &mut dyn FnMut()| {
+        let start = Instant::now();
+        for _ in 0..n {
+            f();
+        }
+        let per_op = start.elapsed().as_secs_f64() * 1e6 / n as f64;
+        rows.push((name, per_op));
+    };
+
+    time("sha256 (1 KiB)", &mut || {
+        black_box(easy::hash(black_box(&msg)));
+    });
+    time("ed25519 sign (1 KiB)", &mut || {
+        black_box(easy::sign(black_box(&seed), black_box(&msg)));
+    });
+    let public = easy::ed25519_public_key(&seed);
+    let sig = easy::sign(&seed, &msg);
+    time("ed25519 verify (1 KiB)", &mut || {
+        let _ = black_box(easy::verify(
+            black_box(&public),
+            black_box(&msg),
+            black_box(&sig),
+        ));
+    });
+    time("seal (1 KiB)", &mut || {
+        let _ = black_box(easy::seal(black_box(&key), black_box(&msg), b""));
+    });
+    time("x-wing keygen", &mut || {
+        black_box(xwing::keygen_seed(black_box(&seed)));
+    });
+    let (pk, sk) = xwing::keygen_seed(&seed);
+    time("x-wing encapsulate", &mut || {
+        let _ = black_box(xwing::encapsulate(black_box(&pk), &mut OsRng));
+    });
+    let (_, ct) = xwing::encapsulate(&pk, &mut OsRng).map_err(|e| format!("encapsulate: {e:?}"))?;
+    time("x-wing decapsulate", &mut || {
+        let _ = black_box(xwing::decapsulate(black_box(&sk), black_box(&ct)));
+    });
+
+    println!("{:<22} {:>12}", "operation", "us/op");
+    for (name, us) in rows {
+        println!("{name:<22} {us:>12.2}");
+    }
+    println!("({n} iterations each; debug or release build changes these numbers a lot)");
+    Ok(0)
 }
 
 /// Read a file, or all of stdin for `-`.
