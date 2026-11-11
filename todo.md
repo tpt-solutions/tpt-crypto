@@ -1126,8 +1126,15 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       only used messages under 12 bytes, so those bytes are zero either way. Added
       `sha2_multi_block` (FIPS 180-4 896-bit SHA-512 and 448-bit SHA-256). Rerun: 142
       caught, 6 missed. Those 6 are the `^`→`|` mutants in `ch` and `maj`, equivalent by
-      bit-level argument (`ch`'s terms are disjoint; `maj`'s XOR and OR agree). Still not
-      run: BLAKE2b, BLAKE3, K12, Argon2, and the other `-field` files.
+      bit-level argument (`ch`'s terms are disjoint; `maj`'s XOR and OR agree).
+      `-hash::blake2b` (`tests/kat.rs`, blake2b filter): 91 mutants. 13 survived at first.
+      Added `blake2b_var_known_answers` (BLAKE2b-256("abc") and split input),
+      `blake2b_streaming_at_every_split` (every split of every length 0..=260), and
+      `blake2b_reuse_matches_fresh` (`reset` and `finalize_reset`). Rerun: 84 caught, 4
+      missed, all equivalent. Two are the `t >> 64` high word, which is zero for any
+      input under 2^64 bytes. One is `buflen >= 0`, which takes the same branch as the
+      `while` loop. One is `|` vs `^` in `blake2b_var` with no overlapping bits. Still not
+      run: BLAKE3, K12, Argon2, and the other `-field` files.
 - [ ] Triage survivors into new tests (done per survivor so far).
 - [x] Gate against discarded results in tests (`let _ = ...prop_assert...`): checked
       2026-11-11 — no `let _ =` wraps an assertion in any `tests/` or `src/` file; the

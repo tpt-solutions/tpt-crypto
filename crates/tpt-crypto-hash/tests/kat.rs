@@ -259,3 +259,53 @@ fn sha2_multi_block() {
         "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
     );
 }
+
+/// BLAKE2b with a non-64-byte digest length (`blake2b_var`, used by Argon2). Standard
+/// BLAKE2b-256 of "abc", and the 64-byte variant must equal the fixed-size function.
+#[test]
+fn blake2b_var_known_answers() {
+    use tpt_crypto_hash::blake2b::blake2b_var;
+    assert_eq_hex(
+        "blake2b-256(abc)",
+        &blake2b_var(32, &[b"abc"]),
+        "bddd813c634239723171ef3fee98579b94964e3bb1cb3e427262c8c068d52319",
+    );
+    assert_eq!(blake2b_var(64, &[b"abc"]), blake2b(b"abc").to_vec());
+    // Split input must equal the one-shot digest.
+    assert_eq!(blake2b_var(32, &[b"a", b"bc"]), blake2b_var(32, &[b"abc"]));
+}
+
+/// Streaming BLAKE2b split at every position over every short length. The buffer
+/// logic has to hold at each 128-byte boundary, where an exact fit must not flush early.
+#[test]
+fn blake2b_streaming_at_every_split() {
+    use tpt_crypto_hash::blake2b::Blake2b;
+    use tpt_crypto_hash::Hasher;
+    for len in 0..=260usize {
+        let data: Vec<u8> = (0..len).map(|i| (i * 31 + 7) as u8).collect();
+        let want = blake2b(&data);
+        for split in 0..=len {
+            let mut h = Blake2b::<64>::new();
+            h.update(&data[..split]);
+            h.update(&data[split..]);
+            assert_eq!(h.finalize_reset(), want, "len {len} split {split}");
+        }
+    }
+}
+
+/// `reset` and `finalize_reset` return the hasher to its initial state, so a reused
+/// hasher must match a fresh one.
+#[test]
+fn blake2b_reuse_matches_fresh() {
+    use tpt_crypto_hash::blake2b::Blake2b;
+    use tpt_crypto_hash::Hasher;
+    let mut h = Blake2b::<64>::new();
+    h.update(b"first message");
+    let _ = h.finalize_reset();
+    h.update(b"abc");
+    assert_eq!(h.finalize_reset(), blake2b(b"abc"));
+    h.update(b"junk that must be discarded");
+    h.reset();
+    h.update(b"abc");
+    assert_eq!(h.finalize_reset(), blake2b(b"abc"));
+}
