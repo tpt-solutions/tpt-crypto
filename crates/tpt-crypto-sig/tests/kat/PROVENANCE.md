@@ -126,3 +126,21 @@ Checksums (sha256, relative to `crates/tpt-crypto-sig/tests/kat/`):
 | File | Sha256 |
 | --- | --- |
 | `wycheproof.txt` | `9507075c83cecb301bb186aec6c1d9f32dd390fbe61f8ef430155a6db0a1548f` |
+
+# RSA verify vectors — PROVENANCE
+
+## `crates/tpt-crypto-sig/tests/rsa.rs` — OpenSSL-generated, re-verified
+
+Inline constants in the test file, not a separate data file, so no sha256 row applies.
+Message for every vector: `tpt-crypto RSA vector message`. Public values only.
+
+- **Key A** (`N_HEX`, e = 65537, RSA-2048): PKCS#1 v1.5 SHA-256 and SHA-384, and RSASSA-PSS
+  SHA-256 (salt 32), SHA-384 (salt 48), SHA-512 (salt 64). Generated with OpenSSL 1.1.1t, per the file's comment.
+  Re-verified 2026-11-12 with `OpenSSL 1.1.1t  7 Feb 2023`: PKCS#1 SHA-256, PKCS#1 SHA-384 and PSS SHA-256 each returned
+  "Verified OK" via `openssl dgst -verify`. PSS SHA-384, PSS SHA-512 were not re-checked with this command.
+- **Key B** (`N512_HEX`, e = 65537, RSA-2048): PKCS#1 v1.5 SHA-512 (`SIG_P1_512`). A throwaway key
+  generated for this test with `OpenSSL 1.1.1t  7 Feb 2023` (`openssl genrsa 2048`), signed with `openssl dgst -sha512 -sign`
+  and re-verified with `openssl dgst -verify`. The private key is not kept.
+- Negative cases: wrong hash, tampered message, tampered signature, wrong salt length, wrong length,
+  `s >= n`, key validation. PKCS#1 DER encoding negatives (trailing bytes, negative INTEGER, wrong tag,
+  even modulus) are in `pkcs1_der_rejects_malformed_encodings`.

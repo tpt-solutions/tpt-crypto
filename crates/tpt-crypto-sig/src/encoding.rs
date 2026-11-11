@@ -281,7 +281,16 @@ pub fn rsa_public_from_spki(der: &[u8]) -> Result<RsaPublicKey> {
     if unused != 0 {
         return Err(Error::InvalidEncoding);
     }
-    let (rsa_seq, rest) = expect(key_der, TAG_OID_CONSTRUCTED_SEQ)?;
+    rsa_public_from_pkcs1(key_der)
+}
+
+/// Decode a DER PKCS#1 `RSAPublicKey` (RFC 8017 §A.1.1): `SEQUENCE { n INTEGER, e INTEGER }`.
+///
+/// This is the form TLS uses for RSA certificate keys, and the form rustls passes to
+/// signature verifiers. Strict DER: minimal integers, no trailing bytes. The modulus and
+/// exponent are then validated by [`RsaPublicKey::from_components`].
+pub fn rsa_public_from_pkcs1(der: &[u8]) -> Result<RsaPublicKey> {
+    let (rsa_seq, rest) = expect(der, TAG_OID_CONSTRUCTED_SEQ)?;
     exact(rest)?;
     let (n, rest) = read_uint(rsa_seq)?;
     let (e, rest) = read_uint(rest)?;

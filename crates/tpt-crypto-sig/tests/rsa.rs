@@ -130,3 +130,110 @@ fn key_validation() {
     padded.extend_from_slice(&n);
     assert!(PublicKey::from_components(&padded, &[0, 1, 0, 1]).is_ok());
 }
+
+// ---------------------------------------------------------------------------
+// PKCS#1 RSAPublicKey DER (the form TLS certificates carry and rustls passes in).
+// ---------------------------------------------------------------------------
+
+fn der_tlv(tag: u8, body: &[u8]) -> Vec<u8> {
+    let mut out = vec![tag];
+    match body.len() {
+        0..=127 => out.push(body.len() as u8),
+        128..=255 => out.extend_from_slice(&[0x81, body.len() as u8]),
+        _ => out.extend_from_slice(&[0x82, (body.len() >> 8) as u8, body.len() as u8]),
+    }
+    out.extend_from_slice(body);
+    out
+}
+
+/// A minimal DER INTEGER for a non-negative big-endian value.
+fn der_uint(v: &[u8]) -> Vec<u8> {
+    let mut body = Vec::new();
+    if v[0] & 0x80 != 0 {
+        body.push(0);
+    }
+    body.extend_from_slice(v);
+    der_tlv(0x02, &body)
+}
+
+fn pkcs1_der(n: &[u8], e: &[u8]) -> Vec<u8> {
+    let mut body = der_uint(n);
+    body.extend_from_slice(&der_uint(e));
+    der_tlv(0x30, &body)
+}
+
+#[test]
+fn pkcs1_der_key_verifies_existing_signatures() {
+    let der = pkcs1_der(&hx(N_HEX), &[0x01, 0x00, 0x01]);
+    let k = tpt_crypto_sig::encoding::rsa_public_from_pkcs1(&der).unwrap();
+    assert_eq!(k.modulus_be(), &hx(N_HEX)[..]);
+    assert_eq!(k.exponent_be(), &[0x01, 0x00, 0x01]);
+    k.verify_pkcs1v15(RsaHash::Sha256, MSG, &hx(SIG_P1_256))
+        .unwrap();
+    k.verify_pss(RsaHash::Sha256, 32, MSG, &hx(SIG_PSS_256))
+        .unwrap();
+}
+
+#[test]
+fn pkcs1_der_rejects_malformed_encodings() {
+    let n = hx(N_HEX);
+    let e = [0x01u8, 0x00, 0x01];
+    let good = pkcs1_der(&n, &e);
+    assert!(tpt_crypto_sig::encoding::rsa_public_from_pkcs1(&good).is_ok());
+
+    // Trailing bytes after the sequence.
+    let mut trailing = good.clone();
+    trailing.push(0);
+    assert!(tpt_crypto_sig::encoding::rsa_public_from_pkcs1(&trailing).is_err());
+
+    // Modulus with the high bit set and no 0x00 pad: a negative INTEGER.
+    let mut neg_body = der_tlv(0x02, &n);
+    neg_body.extend_from_slice(&der_uint(&e));
+    let negative = der_tlv(0x30, &neg_body);
+    assert!(tpt_crypto_sig::encoding::rsa_public_from_pkcs1(&negative).is_err());
+
+    // Wrong outer tag (SET instead of SEQUENCE).
+    let mut set = good.clone();
+    set[0] = 0x31;
+    assert!(tpt_crypto_sig::encoding::rsa_public_from_pkcs1(&set).is_err());
+
+    // Even modulus is rejected by key validation.
+    let mut even = n.clone();
+    *even.last_mut().unwrap() &= 0xfe;
+    assert!(tpt_crypto_sig::encoding::rsa_public_from_pkcs1(&pkcs1_der(&even, &e)).is_err());
+}
+
+// PKCS#1 v1.5 SHA-512 vector: a separate throwaway RSA-2048 key (e = 65537) generated with
+// OpenSSL 1.1.1t for this test and re-verified with `openssl dgst -verify`. Public values only.
+const N512_HEX: &str = "C7357A80AF11B36A46FC20159F2E5973686E1F1A4ABD56366B28D3853F83C8B776A88C19939D38B799F44BC691AC8AF7A88B3504F686E3AB03391F6A363599C605CDA846B7644FE4690DAF19FC6F383D25D64A892D81AFAFEDC1BFA4086E69FAE6EC2B1331A51106EC7484001EF7258E1E36E029F7CFE06516BBA09985384752FA62F7A798FABA4BD9C576619952539244BDE5D11A716A711DA37D57D3682E38401F718E3DA0C5BB4BE4B3D2B04A7C1270F969362C6A8949D92456D9D9F6A5B867AB23009494D4AF88C5EAE22DDF338FB9F2A37D9C0CA0A7278BFD590EAA128A5DBC4BBA3CAAFB9AE318CDA01AA5867D2549C7A2423E0D71C1849FD179FD8505";
+const SIG_P1_512: &str = "839a12418d205354bdbe663bfa98002f3e27db74161f30d6670404225055df34b83dd6a418ffc841712b29ad7bea5fa4af66dde04ac39f5dfdc6aafc6ccbbf887e81d3b6d8f7784798e8cf7550f057aea425cacf19dab089af8d73f3b3a33a3ea84db9754ccb6d55f294f2880b292172d0d2df96c9ef6dd422020f694a5a34629c58239e2325181cf938b5e43c221123bef617caea4dd78289eee949ddc9c04493347e902d7b8244037aa9abdb15ac362f508829bfc61c71ce850f8aca068ad45ed3d081c26d7e25013d7ffecf136059e048c68d5f93959a443531f1f461c6536363c63f93a14a96406890cb90830675e1d512fcfd2f1badc9a967b94552f8c1";
+
+#[test]
+fn pkcs1v15_sha512_verifies_and_rejects_tampering() {
+    let k = PublicKey::from_components(&hx(N512_HEX), &[0x01, 0x00, 0x01]).unwrap();
+    let sig = hx(SIG_P1_512);
+    k.verify_pkcs1v15(RsaHash::Sha512, MSG, &sig).unwrap();
+    // Wrong hash for this signature.
+    assert_eq!(
+        k.verify_pkcs1v15(RsaHash::Sha256, MSG, &sig),
+        Err(Error::Verification)
+    );
+    // Tampered message and tampered signature.
+    let mut msg = MSG.to_vec();
+    msg[0] ^= 1;
+    assert_eq!(
+        k.verify_pkcs1v15(RsaHash::Sha512, &msg, &sig),
+        Err(Error::Verification)
+    );
+    let mut bad = sig.clone();
+    bad[100] ^= 0x10;
+    assert_eq!(
+        k.verify_pkcs1v15(RsaHash::Sha512, MSG, &bad),
+        Err(Error::Verification)
+    );
+    // Wrong length.
+    assert_eq!(
+        k.verify_pkcs1v15(RsaHash::Sha512, MSG, &sig[1..]),
+        Err(Error::Verification)
+    );
+}
