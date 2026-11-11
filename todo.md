@@ -1160,7 +1160,16 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       missed, all equivalent. Two are the `t >> 64` high word, which is zero for any
       input under 2^64 bytes. One is `buflen >= 0`, which takes the same branch as the
       `while` loop. One is `|` vs `^` in `blake2b_var` with no overlapping bits. Still not
-      run: K12, Argon2, and the other `-field` files.
+      run: Argon2, and the other `-field` files.
+      `-hash::k12` (`tests/kat.rs` + a `k12::tests` unit test for `right_encode`): 213 mutants.
+      Before: 6 missed on the KATs. Added the rate-edge reference test and a unit test
+      (`right_encode` at 4 and 5 value bytes; `right_encode` mutants 19 of 19 caught). Final
+      run: 203 caught, 4 timeouts (counted as caught), 6 missed. Each survivor is equivalent:
+      the `buflen > 0` → `>= 0` absorb branch takes the same path as the block loop; the
+      `(suffix & 0x80)` clause is dead (every call uses 0x06, 0x07 or 0x0B, none with bit 7),
+      which makes its `==`/`-` mutants unreachable; `produced < len` → `<=` only permutes the
+      state after the last output byte; and the `right_encode` mutant at 165 was the one real
+      survivor, now killed.
       `-hash::blake3` (`tests/kat.rs`): 168 mutants. The four short KATs never reached the
       chunk tree. Added `blake3_multi_chunk_reference` (9 lengths from 1023 to 10,000, a keyed
       case, and 64-byte XOF), `blake3_streaming_at_chunk_boundaries`,

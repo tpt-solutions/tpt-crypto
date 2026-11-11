@@ -294,3 +294,21 @@ impl Xof for KangarooTwelve {
         self.m.clear();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::right_encode;
+
+    #[test]
+    fn right_encode_byte_counts() {
+        // SP 800-185 right_encode: big-endian value bytes, then their count.
+        assert_eq!(right_encode(0), (1, [0, 0, 0, 0, 0, 0, 0, 0, 0]));
+        assert_eq!(right_encode(255), (2, [0xff, 1, 0, 0, 0, 0, 0, 0, 0]));
+        assert_eq!(right_encode(256), (3, [1, 0, 2, 0, 0, 0, 0, 0, 0]));
+        assert_eq!(right_encode(0x0102_0304), (5, [1, 2, 3, 4, 4, 0, 0, 0, 0]));
+        assert_eq!(
+            right_encode(0x0102_0304_0506_0708),
+            (9, [1, 2, 3, 4, 5, 6, 7, 8, 8])
+        );
+    }
+}
