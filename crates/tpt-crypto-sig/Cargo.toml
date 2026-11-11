@@ -20,7 +20,7 @@ tpt-crypto-hash = { workspace = true }
 tpt-crypto-field = { workspace = true }
 tpt-crypto-curve = { workspace = true }
 # MIT OR Apache-2.0 — ecosystem trait bridge (`signature::Signer`/`Verifier`)
-signature = { version = "2", optional = true, default-features = false }
+signature = { version = "3", optional = true, default-features = false }
 
 [features]
 default = ["std"]
@@ -46,7 +46,7 @@ tpt-crypto-hash = { path = "../tpt-crypto-hash", default-features = false, featu
 hex = "0.4"
 # MIT OR Apache-2.0 — lets `src/signature_impls.rs` compile under `cfg(test)`
 # without enabling the `signature` feature
-signature = { version = "2", default-features = false }
+signature = { version = "3", default-features = false }
 
 [[test]]
 name = "ml_dsa_kat"
