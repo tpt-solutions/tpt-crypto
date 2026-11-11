@@ -90,9 +90,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v1
-        with:
-          command: check
+      # Install cargo-deny directly rather than via cargo-deny-action@v1, whose
+      # bundled binary predates CVSS 4.0 advisories and fails to load the
+      # RustSec database ("unsupported CVSS version: 4.0").
+      - uses: taiki-e/install-action@cargo-deny
+      - run: cargo deny --all-features check
 
   miri:
     name: miri (tpt-crypto-ct)
@@ -189,6 +191,12 @@ jobs:
   audit:
     name: cargo-audit
     runs-on: ubuntu-latest
+    # rustsec/audit-check posts its result as a check run, which needs
+    # `checks: write`; the default GITHUB_TOKEN lacks it.
+    permissions:
+      contents: read
+      issues: write
+      checks: write
     steps:
       - uses: actions/checkout@v4
       - uses: rustsec/audit-check@v2
