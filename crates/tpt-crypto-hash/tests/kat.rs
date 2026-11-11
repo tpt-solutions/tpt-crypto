@@ -241,3 +241,21 @@ fn k12_kat() {
         "d848c5068ced736f4462159b9867fd4c20b808acc3d5bc48e0b06ba0a3762ec4",
     );
 }
+
+/// FIPS 180-4 two-block messages (896 bits and 448 bits). The one-block KATs above
+/// only put data in the first 12 bytes of a block, so they miss the word loads from
+/// bytes 12 onward. These cover them. Both sets are the standard published digests.
+#[test]
+fn sha2_multi_block() {
+    let msg896 = b"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu";
+    assert_eq_hex(
+        "sha512(896-bit)",
+        &sha512(msg896),
+        "8e959b75dae313da8cf4f72814fc143f8f7779c6eb9f7fa17299aeadb6889018501d289e4900f7e4331b99dec4b5433ac7d329eeb6dd26545e96e55b874be909",
+    );
+    assert_eq_hex(
+        "sha256(448-bit)",
+        &sha256(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
+        "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
+    );
+}

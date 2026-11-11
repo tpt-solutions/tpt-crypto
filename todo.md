@@ -1120,8 +1120,14 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       tests reached none of it (135/135 missed there). The encoders `left_encode`,
       `right_encode` and `bytepad` had 3 survivors, because the KATs only use one-byte
       lengths. `encode_tests` checks SP 800-185 vectors and the `bytepad` length
-      formula. Rerun: 50 caught, 1 timeout. Still not run: the other hash cores (SHA-2,
-      BLAKE2b, BLAKE3, K12, Argon2), the other `-field` files.
+      formula. Rerun: 50 caught, 1 timeout.
+      `-hash::sha2` `compress32`/`compress64`: 148 mutants on `tests/kat.rs`. 9 survived at
+      first. Three `*`→`+` in the 64-bit block load (bytes 12–31) survived because the KATs
+      only used messages under 12 bytes, so those bytes are zero either way. Added
+      `sha2_multi_block` (FIPS 180-4 896-bit SHA-512 and 448-bit SHA-256). Rerun: 142
+      caught, 6 missed. Those 6 are the `^`→`|` mutants in `ch` and `maj`, equivalent by
+      bit-level argument (`ch`'s terms are disjoint; `maj`'s XOR and OR agree). Still not
+      run: BLAKE2b, BLAKE3, K12, Argon2, and the other `-field` files.
 - [ ] Triage survivors into new tests (done per survivor so far).
 - [x] Gate against discarded results in tests (`let _ = ...prop_assert...`): checked
       2026-11-11 — no `let _ =` wraps an assertion in any `tests/` or `src/` file; the
