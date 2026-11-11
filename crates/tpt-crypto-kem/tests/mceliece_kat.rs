@@ -1,20 +1,25 @@
-//! Classic McEliece mceliece348864 against the official reference KAT records.
+//! Classic McEliece against the official reference KAT records, for all five parameter sets.
 //!
-//! `kat/mceliece348864_first3_digests.txt` holds the first three records of the official
+//! `kat/mceliece*_first3_digests.txt` hold the first three records of each official
 //! `kat_kem.rsp` (mceliece-kat-20221023): seeds, ciphertexts and shared secrets in full,
-//! and SHA-256 digests of the public and secret keys (full keys would be 261 KB each; see
+//! and SHA-256 digests of the public and secret keys (full keys are up to 1.3 MB each; see
 //! `kat/PROVENANCE.md`). For each record the test re-derives the randomness the way the
 //! reference KAT harness does, from the seed through the NIST AES-256 CTR-DRBG, and checks
 //! keypair, encapsulation and decapsulation.
+//!
+//! The 348864 set runs in the default test pass. The four 13-bit sets are `#[ignore]`d:
+//! their key generation is far too slow in a debug build. Run them with
+//! `cargo test --release -p tpt-crypto-kem --test mceliece_kat -- --include-ignored`.
 
 use std::collections::BTreeMap;
 
 use tpt_crypto_aead::Aes;
 use tpt_crypto_core::{CryptoRng, Error};
 use tpt_crypto_hash::sha2::sha256;
-use tpt_crypto_kem::mceliece::{decapsulate, encapsulate, keypair};
-
-const DIGESTS: &str = include_str!("kat/mceliece348864_first3_digests.txt");
+use tpt_crypto_kem::mceliece::{
+    decapsulate, encapsulate, keypair, Mc348864, Mc460896, Mc6688128, Mc6960119, Mc8192128,
+    McParams,
+};
 
 /// The NIST PQC `randombytes` (AES-256 CTR-DRBG, no derivation function), as used by the
 /// reference KAT generator.
@@ -119,51 +124,109 @@ fn parse_records(text: &str) -> Vec<Record> {
     out
 }
 
-#[test]
-fn official_records_match() {
-    let records = parse_records(DIGESTS);
-    assert_eq!(records.len(), 3);
+/// Run every record of one set through keypair, encapsulation and decapsulation.
+fn check_set<P: McParams>(name: &str, digests: &str) {
+    let records = parse_records(digests);
+    assert_eq!(records.len(), 3, "{name}: record count");
     for (idx, r) in records.iter().enumerate() {
         let entropy: [u8; 48] = r.seed.clone().try_into().expect("48-byte seed");
         let mut drbg = NistDrbg::new(&entropy);
 
-        let (pk, sk) = keypair(&mut drbg).expect("keypair");
-        assert_eq!(sha256(&pk).to_vec(), r.pk_sha256, "record {idx}: pk digest");
-        assert_eq!(sha256(&sk).to_vec(), r.sk_sha256, "record {idx}: sk digest");
+        let (pk, sk) = keypair::<P>(&mut drbg).expect("keypair");
+        assert_eq!(pk.len(), P::PUBLIC_KEY_LEN, "{name}: pk length");
+        assert_eq!(sk.len(), P::SECRET_KEY_LEN, "{name}: sk length");
+        assert_eq!(
+            sha256(&pk).to_vec(),
+            r.pk_sha256,
+            "{name} record {idx}: pk digest"
+        );
+        assert_eq!(
+            sha256(&sk).to_vec(),
+            r.sk_sha256,
+            "{name} record {idx}: sk digest"
+        );
 
-        let (ct, ss) = encapsulate(&pk, &mut drbg).expect("encapsulate");
-        assert_eq!(ct, r.ct, "record {idx}: ct");
-        assert_eq!(ss.as_slice(), r.ss.as_slice(), "record {idx}: ss");
+        let (ct, ss) = encapsulate::<P>(&pk, &mut drbg).expect("encapsulate");
+        assert_eq!(ct, r.ct, "{name} record {idx}: ct");
+        assert_eq!(ss.as_slice(), r.ss.as_slice(), "{name} record {idx}: ss");
 
-        let got = decapsulate(&sk, &ct).expect("decapsulate");
-        assert_eq!(got.as_slice(), r.ss.as_slice(), "record {idx}: decaps");
+        let got = decapsulate::<P>(&sk, &ct).expect("decapsulate");
+        assert_eq!(
+            got.as_slice(),
+            r.ss.as_slice(),
+            "{name} record {idx}: decaps"
+        );
     }
 }
 
 #[test]
+fn kat_348864() {
+    check_set::<Mc348864>(
+        "348864",
+        include_str!("kat/mceliece348864_first3_digests.txt"),
+    );
+}
+
+#[test]
+#[ignore = "heavy in debug builds; run with --release --include-ignored"]
+fn kat_460896() {
+    check_set::<Mc460896>(
+        "460896",
+        include_str!("kat/mceliece460896_first3_digests.txt"),
+    );
+}
+
+#[test]
+#[ignore = "heavy in debug builds; run with --release --include-ignored"]
+fn kat_6688128() {
+    check_set::<Mc6688128>(
+        "6688128",
+        include_str!("kat/mceliece6688128_first3_digests.txt"),
+    );
+}
+
+#[test]
+#[ignore = "heavy in debug builds; run with --release --include-ignored"]
+fn kat_6960119() {
+    check_set::<Mc6960119>(
+        "6960119",
+        include_str!("kat/mceliece6960119_first3_digests.txt"),
+    );
+}
+
+#[test]
+#[ignore = "heavy in debug builds; run with --release --include-ignored"]
+fn kat_8192128() {
+    check_set::<Mc8192128>(
+        "8192128",
+        include_str!("kat/mceliece8192128_first3_digests.txt"),
+    );
+}
+
+#[test]
 fn tampered_ciphertext_is_implicitly_rejected() {
-    let r = &parse_records(DIGESTS)[0];
+    let r = &parse_records(include_str!("kat/mceliece348864_first3_digests.txt"))[0];
     let entropy: [u8; 48] = r.seed.clone().try_into().unwrap();
     let mut drbg = NistDrbg::new(&entropy);
-    let (_pk, sk) = keypair(&mut drbg).unwrap();
-    let honest = decapsulate(&sk, &r.ct).unwrap();
+    let (_pk, sk) = keypair::<Mc348864>(&mut drbg).unwrap();
+    let honest = decapsulate::<Mc348864>(&sk, &r.ct).unwrap();
     assert_eq!(honest.as_slice(), r.ss.as_slice());
 
     let mut bad = r.ct.clone();
     bad[10] ^= 0x04;
-    let rej1 = decapsulate(&sk, &bad).expect("no error on tamper");
-    let rej2 = decapsulate(&sk, &bad).expect("no error on tamper");
+    let rej1 = decapsulate::<Mc348864>(&sk, &bad).expect("no error on tamper");
+    let rej2 = decapsulate::<Mc348864>(&sk, &bad).expect("no error on tamper");
     assert_ne!(rej1, honest);
     assert_eq!(rej1, rej2);
 }
 
 #[test]
 fn length_checks_reject_malformed_inputs() {
-    let r = &parse_records(DIGESTS)[0];
+    let r = &parse_records(include_str!("kat/mceliece348864_first3_digests.txt"))[0];
     let entropy: [u8; 48] = r.seed.clone().try_into().unwrap();
     let mut drbg = NistDrbg::new(&entropy);
-    let (pk, sk) = keypair(&mut drbg).unwrap();
-    assert!(decapsulate(&sk, &r.ct[..r.ct.len() - 1]).is_err());
-    assert!(decapsulate(&sk[..sk.len() - 1], &r.ct).is_err());
-    assert!(encapsulate(&pk[..pk.len() - 1], &mut drbg).is_err());
+    let (pk, sk) = keypair::<Mc348864>(&mut drbg).unwrap();
+    assert!(decapsulate::<Mc348864>(&sk, &r.ct[..r.ct.len() - 1]).is_err());
+    assert!(decapsulate::<Mc348864>(&sk[..sk.len() - 1], &r.ct).is_err());
+    assert!(encapsulate::<Mc348864>(&pk[..pk.len() - 1], &mut drbg).is_err());
 }

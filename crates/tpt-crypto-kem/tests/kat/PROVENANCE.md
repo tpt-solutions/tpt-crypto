@@ -34,6 +34,10 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
 | `frodokem640_aes_first3.rsp` | `b4a311a5563d2088092c5d2eff413229852446ababe92fabaaff00cddce0d1da` |
 | `frodokem1344_aes_first1.rsp` | `42e3c8dd6da88412a9788ec097a3069df45ce66704baf12e3621c0d3ff2f463e` |
 | `mceliece348864_first3_digests.txt` | `03c4a424f2fffb7cee346d7c75ae329468723427c43b4a9d6825e8e2e531b361` |
+| `mceliece8192128_first3_digests.txt` | `323475a590ebfbd2266cd78605d5110490d5515f3203518cb1aff4e412d22687` |
+| `mceliece6960119_first3_digests.txt` | `dc09ca171193451c59a7543ffca65371033ee8d04d8329362cc714bbb81fb121` |
+| `mceliece6688128_first3_digests.txt` | `2915635e5d172a399913ac92a8fea315d2f7ea2b8d15c4a7eefe532594967d66` |
+| `mceliece460896_first3_digests.txt` | `91d7dd17aaff1d50b51c36193003484ef11400770f71f644d4320811e78ca15f` |
 | `frodokem1344_shake_first1.rsp` | `22ca61576c6aa43dfa68d619780c4226b9de52d4140ce44f9f9f5e03c4ee0526` |
 | `frodokem976_aes_first1.rsp` | `f7985d57fcf2258e40cdb56aa40cb68aec8f8d119ca7a92d558b3177c64cb6cd` |
 | `frodokem976_shake_first1.rsp` | `5deb0a0ac381d61aac5c2059ae5837e27afbcb48101f61530c60fd83151129df` |
@@ -122,3 +126,17 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
   PQC AES-256 CTR-DRBG, as in the reference harness.
 - The implementation is a port of `Reference_Implementation/kem/mceliece348864/` from the
   same archive. Other parameter sets are not implemented.
+
+## `mceliece{460896,6688128,6960119,8192128}_first3_digests.txt` — Classic McEliece 13-bit sets
+
+- Source: the first three records of `KAT/kem/mceliece<set>/kat_kem.rsp` in the same official
+  archive `mceliece-kat-20221023.tar.gz` (see the 348864 section). The archive's sha256 for
+  each extracted `kat_kem.rsp` is not recorded here; the digests were computed from the hex
+  in those files.
+- Same format as the 348864 file: seeds, ciphertexts and shared secrets in full, public and
+  secret keys as SHA-256 digests of the decoded binary values.
+- Field sizes checked against the reference constants: 460896 pk 524160, sk 13608, ct 156;
+  6688128 pk 1044992, sk 13932, ct 208; 6960119 pk 1047319, sk 13948, ct 194; 8192128
+  pk 1357824, sk 14120, ct 208 bytes.
+- Consumed by `crates/tpt-crypto-kem/tests/mceliece_kat.rs`. Those KAT tests are `#[ignore]`d
+  because of their run time in a debug build.

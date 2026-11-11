@@ -466,9 +466,15 @@ variant (feature-gated re-exports instead of steps 3–6).
             ss in full) through the NIST DRBG. Fuzz target `mceliece348864_decaps`. Debug test run
             takes about 46 s. The file uses a few index loops that mirror the C, with clippy
             allowed for those lints.
-      - [ ] Classic McEliece 460896, 6688128, 6960119, 8192128: not implemented. Same code shape
-            with other GF(2^13) parameters; the Benes apply for 13-bit fields needs a 128-word
-            variant, so these are more than a constant change.
+      - [x] Classic McEliece 460896, 6688128, 6960119, 8192128: the same generic code
+            (`McParams`), with the 13-bit field, the two-plane Benes network, and each set's
+            outer reduction terms. Three per-set layout rules are flags: the 8192128 error
+            draw, the 6960119 shifted public-key rows, and its padding checks (which reject a
+            malformed pk on encapsulation, and set the key to all ones on a malformed
+            ciphertext, as the reference does). All five sets match the first three official
+            records. The four 13-bit KATs are `#[ignore]`d for debug builds; run them with
+            `cargo test --release -p tpt-crypto-kem --test mceliece_kat -- --include-ignored`.
+            No fuzz target for the new sets.
       The placeholder modules and `frodo`/`mceliece` features were removed
       (they only returned `Error::Unsupported`). Re-add when the implementations land.
 - [x] KATs: FIPS 203 ACVP vectors + NIST `.rsp` KAT files (all param sets)

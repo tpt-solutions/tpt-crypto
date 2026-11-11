@@ -9,7 +9,7 @@
 use libfuzzer_sys::fuzz_target;
 use std::sync::OnceLock;
 use tpt_crypto_core::{CryptoRng, Error};
-use tpt_crypto_kem::mceliece::{decapsulate, keypair, CIPHERTEXT_LEN, SECRET_KEY_LEN};
+use tpt_crypto_kem::mceliece::{decapsulate, keypair, Mc348864, McParams};
 
 /// xorshift64 generator: deterministic, for the fixed key only.
 struct Xorshift(u64);
@@ -29,16 +29,16 @@ impl CryptoRng for Xorshift {
 fn fixed_sk() -> &'static Vec<u8> {
     static SK: OnceLock<Vec<u8>> = OnceLock::new();
     SK.get_or_init(|| {
-        let (_pk, sk) = keypair(&mut Xorshift(0x9E37_79B9_7F4A_7C15)).expect("keypair");
-        assert_eq!(sk.len(), SECRET_KEY_LEN);
+        let (_pk, sk) = keypair::<Mc348864>(&mut Xorshift(0x9E37_79B9_7F4A_7C15)).expect("keypair");
+        assert_eq!(sk.len(), Mc348864::SECRET_KEY_LEN);
         sk
     })
 }
 
 fuzz_target!(|data: &[u8]| {
-    if data.len() < CIPHERTEXT_LEN {
+    if data.len() < Mc348864::CIPHERTEXT_LEN {
         return;
     }
-    let out = decapsulate(fixed_sk(), &data[..CIPHERTEXT_LEN]).expect("well-sized inputs");
+    let out = decapsulate::<Mc348864>(fixed_sk(), &data[..Mc348864::CIPHERTEXT_LEN]).expect("well-sized inputs");
     assert_eq!(out.len(), 32);
 });
