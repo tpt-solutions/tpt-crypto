@@ -495,3 +495,29 @@ fn k12_streaming_at_every_split() {
         }
     }
 }
+
+/// The KangarooTwelve `Xof` methods that the streaming test does not call: `finalize_xof`
+/// consumes the hasher, and `reset` discards buffered input so a reused hasher matches a fresh one.
+#[test]
+fn k12_xof_finalize_and_reset() {
+    use tpt_crypto_hash::k12::KangarooTwelve;
+    use tpt_crypto_hash::Xof;
+    let c: Vec<u8> = (0..5u8).collect();
+    let m: Vec<u8> = (0..40u8).collect();
+    let mut want = [0u8; 40];
+    kangaroo_twelve(&m, &c, &mut want);
+
+    let mut k = KangarooTwelve::new(&c);
+    Xof::update(&mut k, &m);
+    let mut out = [0u8; 40];
+    Xof::finalize_xof(k, &mut out);
+    assert_eq!(out, want);
+
+    let mut k = KangarooTwelve::new(&c);
+    Xof::update(&mut k, b"junk that must be discarded");
+    Xof::reset(&mut k);
+    Xof::update(&mut k, &m);
+    let mut out2 = [0u8; 40];
+    Xof::finalize_xof_reset(&mut k, &mut out2);
+    assert_eq!(out2, want);
+}
