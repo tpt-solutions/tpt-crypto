@@ -120,6 +120,7 @@ version = "0.1.0"
 dependencies = [
  "libfuzzer-sys",
  "tpt-crypto-aead",
+ "tpt-crypto-core",
  "tpt-crypto-curve",
  "tpt-crypto-hash",
  "tpt-crypto-kem",

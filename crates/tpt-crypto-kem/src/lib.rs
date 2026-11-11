@@ -43,6 +43,8 @@ pub mod frodo;
 #[cfg(feature = "alloc")]
 pub mod hpke;
 #[cfg(feature = "alloc")]
+pub mod mceliece;
+#[cfg(feature = "alloc")]
 pub mod ml_kem;
 pub mod params;
 #[cfg(feature = "alloc")]

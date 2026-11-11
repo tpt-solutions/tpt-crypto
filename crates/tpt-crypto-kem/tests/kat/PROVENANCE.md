@@ -33,6 +33,7 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
 | `frodokem640_shake_first3.rsp` | `cc76e206a63626230cf9e5f1a1572cb721c5f9bebad9d46aea30bdd7401dfbe4` |
 | `frodokem640_aes_first3.rsp` | `b4a311a5563d2088092c5d2eff413229852446ababe92fabaaff00cddce0d1da` |
 | `frodokem1344_aes_first1.rsp` | `42e3c8dd6da88412a9788ec097a3069df45ce66704baf12e3621c0d3ff2f463e` |
+| `mceliece348864_first3_digests.txt` | `03c4a424f2fffb7cee346d7c75ae329468723427c43b4a9d6825e8e2e531b361` |
 | `frodokem1344_shake_first1.rsp` | `22ca61576c6aa43dfa68d619780c4226b9de52d4140ce44f9f9f5e03c4ee0526` |
 | `frodokem976_aes_first1.rsp` | `f7985d57fcf2258e40cdb56aa40cb68aec8f8d119ca7a92d558b3177c64cb6cd` |
 | `frodokem976_shake_first1.rsp` | `5deb0a0ac381d61aac5c2059ae5837e27afbcb48101f61530c60fd83151129df` |
@@ -104,3 +105,20 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
   ss 24 bytes; 1344 pk 21520, sk 43088, ct 21696, ss 32 bytes.
 - Consumed by `crates/tpt-crypto-kem/tests/frodo_kat.rs` through `frodo::{shake,aes}` with
   `Frodo976` and `Frodo1344`.
+
+## `mceliece348864_first3_digests.txt` — Classic McEliece mceliece348864 (official reference KAT)
+
+- Source: the first three records (`count = 0..2`) of `KAT/kem/mceliece348864/kat_kem.rsp`
+  in the official NIST submission archive `mceliece-kat-20221023.tar.gz`, from
+  <https://classic.mceliece.org/nist/mceliece-kat-20221023.tar.gz> (downloaded 2026-11-11).
+  The archive's reference code for the same set is `mceliece-20221023.tar.gz`, from
+  <https://classic.mceliece.org/nist/mceliece-20221023.tar.gz>. The
+  extracted `kat_kem.rsp` (10 records, 5.3 MB) has sha256 `76351ed2e95a616ca76230bac579cead21012d89181c7398381d0bbe904ab92c`.
+- The file keeps seeds, ciphertexts and shared secrets in full. The public key (261120
+  bytes) and secret key (6492 bytes) are kept as SHA-256 digests, of the binary values
+  decoded from the official hex. Storing the full keys would add about 0.5 MB of hex per record.
+- Consumed by `crates/tpt-crypto-kem/tests/mceliece_kat.rs` through `mceliece::{keypair,
+  encapsulate, decapsulate}`. The per-record randomness is derived from `seed` with the NIST
+  PQC AES-256 CTR-DRBG, as in the reference harness.
+- The implementation is a port of `Reference_Implementation/kem/mceliece348864/` from the
+  same archive. Other parameter sets are not implemented.

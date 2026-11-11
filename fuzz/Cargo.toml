@@ -9,6 +9,7 @@ description = "Fuzzing harness for tpt-crypto attacker-controlled decoders"
 publish = false
 
 [dependencies]
+tpt-crypto-core = { path = "../crates/tpt-crypto-core", default-features = false }
 tpt-crypto-hash = { path = "../crates/tpt-crypto-hash", default-features = false, features = ["alloc"] }
 tpt-crypto-aead = { path = "../crates/tpt-crypto-aead", default-features = false, features = ["std"] }
 tpt-crypto-kem = { path = "../crates/tpt-crypto-kem", default-features = false, features = ["std"] }
@@ -101,5 +102,11 @@ doc = false
 [[bin]]
 name = "frodokem640_decaps"
 path = "fuzz_targets/frodokem640_decaps.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "mceliece348864_decaps"
+path = "fuzz_targets/mceliece348864_decaps.rs"
 test = false
 doc = false

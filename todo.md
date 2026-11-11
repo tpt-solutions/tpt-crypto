@@ -460,7 +460,15 @@ variant (feature-gated re-exports instead of steps 3–6).
             `FrodoParams` (`Frodo640`, `Frodo976`, `Frodo1344`). Byte-exact against the first
             official record of each reference file. The KEM hash is SHAKE256 for 976 and 1344.
             Fuzz target covers 640 only.
-      - [ ] Classic McEliece: not started.
+      - [x] Classic McEliece mceliece348864: `tpt-crypto-kem::mceliece`, a port of the official
+            Reference_Implementation (mceliece-20221023). Keypair, encapsulation and decapsulation
+            match the first three official `kat_kem.rsp` records (pk and sk by SHA-256 digest, ct and
+            ss in full) through the NIST DRBG. Fuzz target `mceliece348864_decaps`. Debug test run
+            takes about 46 s. The file uses a few index loops that mirror the C, with clippy
+            allowed for those lints.
+      - [ ] Classic McEliece 460896, 6688128, 6960119, 8192128: not implemented. Same code shape
+            with other GF(2^13) parameters; the Benes apply for 13-bit fields needs a 128-word
+            variant, so these are more than a constant change.
       The placeholder modules and `frodo`/`mceliece` features were removed
       (they only returned `Error::Unsupported`). Re-add when the implementations land.
 - [x] KATs: FIPS 203 ACVP vectors + NIST `.rsp` KAT files (all param sets)
