@@ -228,9 +228,8 @@ fn pack(input: &[u16], lsb: u32, out: &mut [u8]) {
     let mut pos = 0usize;
     for &v in input {
         for b in (0..lsb).rev() {
-            if (v >> b) & 1 == 1 {
-                out[pos / 8] |= 0x80 >> (pos % 8);
-            }
+            // Branch-free: the value may derive from secrets (encaps and keygen pack them).
+            out[pos / 8] |= (((v >> b) & 1) as u8) << (7 - (pos % 8));
             pos += 1;
         }
     }
