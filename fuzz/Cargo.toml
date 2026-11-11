@@ -97,3 +97,9 @@ name = "argon2id_params"
 path = "fuzz_targets/argon2id_params.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "frodokem640_decaps"
+path = "fuzz_targets/frodokem640_decaps.rs"
+test = false
+doc = false

@@ -39,6 +39,8 @@ extern crate alloc;
 
 pub mod encode;
 #[cfg(feature = "alloc")]
+pub mod frodo;
+#[cfg(feature = "alloc")]
 pub mod hpke;
 #[cfg(feature = "alloc")]
 pub mod ml_kem;

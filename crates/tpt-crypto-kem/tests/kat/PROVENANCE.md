@@ -30,6 +30,7 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
 | `fips203_768.rsp` | `6ecab47c229a80b85afd8e9b1b76e604317b2505ac35382b0e288116e1ba860a` |
 | `fips203_1024.rsp` | `ed23c551c53761649a2dd9573eda2f49f58285675d639fe8c0d585e21f37896c` |
 | `hpke_base_x25519.txt` | `702993dd0e57ecd61961a8a33098490fa25a870b7b897f430c52978ec2b7e8e9` |
+| `frodokem640_shake_first3.rsp` | `cc76e206a63626230cf9e5f1a1572cb721c5f9bebad9d46aea30bdd7401dfbe4` |
 
 ## `hpke_base_x25519.txt` — RFC 9180 HPKE base mode (DHKEM(X25519, HKDF-SHA256))
 
@@ -60,3 +61,20 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
 - Checked by `src/hpke.rs`: `rfc9180_sender_matches_vectors_all_modes` and
   `rfc9180_receiver_opens_vectors_all_modes`. The static public key is also
   checked against `skSm`.
+
+## `frodokem640_shake_first3.rsp` — FrodoKEM-640-SHAKE (official reference KAT)
+
+- Source: the first three records (`count = 0..2`) of `PQCkemKAT_19888_shake.rsp`
+  from the Microsoft reference repository `Microsoft/PQCrypto-LWEKE`, path
+  `FrodoKEM/KAT/`. Raw URL:
+  <https://raw.githubusercontent.com/Microsoft/PQCrypto-LWEKE/master/FrodoKEM/KAT/PQCkemKAT_19888_shake.rsp>.
+  Downloaded 2026-11-11, unmodified apart from truncation after record 2. The
+  reference repository is MIT-licensed (its `LICENSE`, Microsoft Corporation).
+- Field sizes checked against the reference constants: pk 9616, sk 19888, ct 9752,
+  ss 16 bytes.
+- Consumed by `crates/tpt-crypto-kem/tests/frodo_kat.rs`. The per-record randomness is
+  derived from `seed` with the NIST PQC AES-256 CTR-DRBG, as in the reference
+  `PQCgenKAT_kem` harness. The test checks keygen, encapsulation and decapsulation
+  byte for byte, and the implementation follows the reference C in `FrodoKEM/src/`.
+- Algorithm source: the same repository's `FrodoKEM/src/{kem,noise,util,frodo_macrify_reference}.c`
+  (fetched 2026-11-11). `crates/tpt-crypto-kem/src/frodo.rs` is a port of that code.

@@ -448,7 +448,14 @@ variant (feature-gated re-exports instead of steps 3–6).
       `XOF(ρ, j, i)` index order (no double forward-NTT). `tests/props.rs`
       round-trips now really assert and pass for 512/768/1024; doctest un-ignored.
 - [x] Spec API: `ml_kem::keygen::<MlKem768>(rng)`, `encapsulate`, `decapsulate`
-- [ ] FrodoKEM and Classic McEliece (long-term secrets) — not implemented.
+- [~] FrodoKEM and Classic McEliece (long-term secrets).
+      - [x] FrodoKEM-640-SHAKE: `tpt-crypto-kem::frodo`, a port of the Microsoft reference C.
+            Byte-exact against the first three official `PQCkemKAT_19888_shake.rsp` records
+            (keygen, encaps, decaps, ss); tamper and length checks in `tests/frodo_kat.rs`.
+            Fuzz target `frodokem640_decaps`. Type-checked only, not run here.
+      - [ ] FrodoKEM-640-AES (AES-128 matrix generator, `PQCkemKAT_19888.rsp`).
+      - [ ] FrodoKEM-976 and -1344 (SHAKE and AES): the same code with other parameters.
+      - [ ] Classic McEliece: not started.
       The placeholder modules and `frodo`/`mceliece` features were removed
       (they only returned `Error::Unsupported`). Re-add when the implementations land.
 - [x] KATs: FIPS 203 ACVP vectors + NIST `.rsp` KAT files (all param sets)
