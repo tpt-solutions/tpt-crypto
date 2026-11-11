@@ -1134,7 +1134,17 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       missed, all equivalent. Two are the `t >> 64` high word, which is zero for any
       input under 2^64 bytes. One is `buflen >= 0`, which takes the same branch as the
       `while` loop. One is `|` vs `^` in `blake2b_var` with no overlapping bits. Still not
-      run: BLAKE3, K12, Argon2, and the other `-field` files.
+      run: K12, Argon2, and the other `-field` files.
+      `-hash::blake3` (`tests/kat.rs`): 168 mutants. The four short KATs never reached the
+      chunk tree. Added `blake3_multi_chunk_reference` (9 lengths from 1023 to 10,000, a keyed
+      case, and 64-byte XOF), `blake3_streaming_at_chunk_boundaries`,
+      `blake3_xof_long_output_and_reset` (65, 100 and 200-byte XOF, which hit the
+      non-multiple-of-64 slicing, plus `reset`). The references come from the upstream
+      `blake3` crate 1.x, run in a scratch project outside the repo, not from the official
+      `test_vectors.json`. The official file was not fetched, so it is not claimed here.
+      Rerun: 156 caught, 6 missed, all equivalent. Those are `counter >> 32` vs `<<` (equal
+      below 2^32 chunks), `|` vs `^` on disjoint flag bits, `i > 0` vs `>= 0` (the value
+      is unused), and `buflen > 0` vs `>= 0` (same branch as the `while` loop).
 - [ ] Triage survivors into new tests (done per survivor so far).
 - [x] Gate against discarded results in tests (`let _ = ...prop_assert...`): checked
       2026-11-11 — no `let _ =` wraps an assertion in any `tests/` or `src/` file; the

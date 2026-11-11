@@ -366,3 +366,39 @@ fn blake3_streaming_at_chunk_boundaries() {
         }
     }
 }
+
+/// BLAKE3 XOF output longer than one 64-byte block, including lengths that are not a
+/// multiple of 64, and the `reset` path. References from the upstream `blake3` crate
+/// 1.x: input is the 5000-byte pattern (byte i = i mod 251) or "abc".
+#[test]
+fn blake3_xof_long_output_and_reset() {
+    use tpt_crypto_hash::blake3::Blake3;
+    use tpt_crypto_hash::Xof;
+    let data: Vec<u8> = (0..5000).map(|i| (i % 251) as u8).collect();
+
+    let mut h = Blake3::new();
+    h.update(&data);
+    let mut out = [0u8; 65];
+    h.finalize_xof_reset(&mut out);
+    assert_eq_hex("blake3-xof(65)", &out, "ee78d92070de3df1c57c37002abf0a6b1a6589acdeef4d8ffac7cf3d9e8f2836a995bc68ef4294ff70100b1695e727c159488a2b4d1150044d2525c4b297a23518");
+
+    let mut h = Blake3::new();
+    h.update(&data);
+    let mut out = [0u8; 100];
+    h.finalize_xof_reset(&mut out);
+    assert_eq_hex("blake3-xof(100)", &out, "ee78d92070de3df1c57c37002abf0a6b1a6589acdeef4d8ffac7cf3d9e8f2836a995bc68ef4294ff70100b1695e727c159488a2b4d1150044d2525c4b297a23518b7a361552c546c36caec6e7e7f280aebb558291ef28fc4e7569af68c39a4c473877051");
+
+    let mut h = Blake3::new();
+    h.update(&data);
+    let mut out = [0u8; 200];
+    h.finalize_xof_reset(&mut out);
+    assert_eq_hex("blake3-xof(200)", &out, "ee78d92070de3df1c57c37002abf0a6b1a6589acdeef4d8ffac7cf3d9e8f2836a995bc68ef4294ff70100b1695e727c159488a2b4d1150044d2525c4b297a23518b7a361552c546c36caec6e7e7f280aebb558291ef28fc4e7569af68c39a4c473877051616caf93e59f6721b9e5bb1bcc73d7db7b77f6222f43b8aa375606badd1d2f96c74c78e0d0b011fd71192c588bf624b6c82fdfb31921fa7c4184304a63c008b73cba0734efcfe94e42dba1fc5ca5e783f8570aa30acba6293744abcd5a527f1a8dfd1f53");
+
+    let mut h = Blake3::new();
+    h.update(b"junk that must be discarded");
+    h.reset();
+    h.update(b"abc");
+    let mut out = [0u8; 100];
+    h.finalize_xof_reset(&mut out);
+    assert_eq_hex("blake3-xof(abc,100) after reset", &out, "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d851fb250ae7393f5d02813b65d521a0d492d9ba09cf7ce7f4cffd900f23374bf0bc08a1fb0b38ed276181ccbd9f7b7edbddf9f86404ad7929605f6ffa3fb1ac87983105f01");
+}
