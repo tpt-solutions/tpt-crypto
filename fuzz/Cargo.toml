@@ -110,3 +110,21 @@ name = "mceliece348864_decaps"
 path = "fuzz_targets/mceliece348864_decaps.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "frodokem976_decaps"
+path = "fuzz_targets/frodokem976_decaps.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "frodokem1344_decaps"
+path = "fuzz_targets/frodokem1344_decaps.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "mceliece6688128_decaps"
+path = "fuzz_targets/mceliece6688128_decaps.rs"
+test = false
+doc = false
