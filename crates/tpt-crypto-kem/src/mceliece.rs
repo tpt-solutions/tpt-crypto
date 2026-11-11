@@ -617,6 +617,63 @@ fn support_gen<P: McParams>(s: &mut [Gf], c: &[u8]) {
 
 // ---- Control bits (controlbits.c) --------------------------------------------------
 
+/// Constant-time bitonic sort of `v` (length a power of two) into ascending order.
+///
+/// The comparison network is fixed by the length, and each compare-exchange selects its
+/// result with a mask, so neither the running time nor the memory access pattern depends on
+/// the values. The values here are secret (they come from the secret permutation), which is
+/// why Rust's data-dependent `sort_unstable` is not used. Values are widened to `i128`, so the
+/// comparison is exact for the full `i64` range.
+fn ct_sort_i64(v: &mut [i64]) {
+    let n = v.len();
+    if n < 2 {
+        return;
+    }
+    debug_assert!(n.is_power_of_two());
+    let mut k = 2usize;
+    while k <= n {
+        let mut j = k / 2;
+        while j > 0 {
+            for i in 0..n {
+                let l = i ^ j;
+                if l > i {
+                    // Public indices decide the direction; the swap decision is masked.
+                    let ascending = (i & k) == 0;
+                    let a = v[i];
+                    let b = v[l];
+                    let lt_ba = (((i128::from(b) - i128::from(a)) >> 127) & 1) as i64; // b < a
+                    let lt_ab = (((i128::from(a) - i128::from(b)) >> 127) & 1) as i64; // a < b
+                    let swap = if ascending { lt_ba } else { lt_ab };
+                    let mask = 0i64.wrapping_sub(swap);
+                    let diff = (a ^ b) & mask;
+                    v[i] = a ^ diff;
+                    v[l] = b ^ diff;
+                }
+            }
+            j /= 2;
+        }
+        k *= 2;
+    }
+}
+
+/// Constant-time ascending sort of `i32` values (see [`ct_sort_i64`]).
+fn ct_sort_i32(v: &mut [i32]) {
+    let mut w: Vec<i64> = v.iter().map(|&x| i64::from(x)).collect();
+    ct_sort_i64(&mut w);
+    for (dst, src) in v.iter_mut().zip(w) {
+        *dst = src as i32;
+    }
+}
+
+/// Constant-time ascending sort of `u64` values below 2^63 (see [`ct_sort_i64`]).
+fn ct_sort_u64(v: &mut [u64]) {
+    let mut w: Vec<i64> = v.iter().map(|&x| x as i64).collect();
+    ct_sort_i64(&mut w);
+    for (dst, src) in v.iter_mut().zip(w) {
+        *dst = src as u64;
+    }
+}
+
 fn i32_min(a: i32, b: i32) -> i32 {
     if a < b {
         a
@@ -639,7 +696,7 @@ fn cbrecursion(out: &mut [u8], mut pos: i64, step: i64, pi: &[i16], w: i64, n: u
     for x in 0..n {
         a[x] = ((i32::from(pi[x]) ^ 1) << 16) | i32::from(pi[x ^ 1]);
     }
-    a.sort_unstable();
+    ct_sort_i32(&mut a);
 
     for x in 0..n {
         let ax = a[x];
@@ -651,12 +708,12 @@ fn cbrecursion(out: &mut [u8], mut pos: i64, step: i64, pi: &[i16], w: i64, n: u
     for x in 0..n {
         a[x] = (a[x] << 16) | x as i32;
     }
-    a.sort_unstable();
+    ct_sort_i32(&mut a);
 
     for x in 0..n {
         a[x] = (a[x] << 16).wrapping_add(b[x] >> 16);
     }
-    a.sort_unstable();
+    ct_sort_i32(&mut a);
 
     if w <= 10 {
         for x in 0..n {
@@ -666,11 +723,11 @@ fn cbrecursion(out: &mut [u8], mut pos: i64, step: i64, pi: &[i16], w: i64, n: u
             for x in 0..n {
                 a[x] = ((b[x] & !0x3ff) << 6) | x as i32;
             }
-            a.sort_unstable();
+            ct_sort_i32(&mut a);
             for x in 0..n {
                 a[x] = (a[x] << 20) | b[x];
             }
-            a.sort_unstable();
+            ct_sort_i32(&mut a);
             for x in 0..n {
                 let ppcpx = a[x] & 0xfffff;
                 let ppcx = (a[x] & 0xffc00) | (b[x] & 0x3ff);
@@ -688,7 +745,7 @@ fn cbrecursion(out: &mut [u8], mut pos: i64, step: i64, pi: &[i16], w: i64, n: u
             for x in 0..n {
                 a[x] = (b[x] & !0xffff) | x as i32;
             }
-            a.sort_unstable();
+            ct_sort_i32(&mut a);
             for x in 0..n {
                 a[x] = (a[x] << 16) | (b[x] & 0xffff);
             }
@@ -696,12 +753,12 @@ fn cbrecursion(out: &mut [u8], mut pos: i64, step: i64, pi: &[i16], w: i64, n: u
                 for x in 0..n {
                     b[x] = (a[x] & !0xffff) | (b[x] >> 16);
                 }
-                b.sort_unstable();
+                ct_sort_i32(&mut b);
                 for x in 0..n {
                     b[x] = (b[x] << 16) | (a[x] & 0xffff);
                 }
             }
-            a.sort_unstable();
+            ct_sort_i32(&mut a);
             for x in 0..n {
                 let cpx = (b[x] & !0xffff) | (a[x] & 0xffff);
                 b[x] = i32_min(b[x], cpx);
@@ -715,7 +772,7 @@ fn cbrecursion(out: &mut [u8], mut pos: i64, step: i64, pi: &[i16], w: i64, n: u
     for x in 0..n {
         a[x] = (i32::from(pi[x]) << 16).wrapping_add(x as i32);
     }
-    a.sort_unstable();
+    ct_sort_i32(&mut a);
 
     let half = n / 2;
     for j in 0..half {
@@ -729,7 +786,7 @@ fn cbrecursion(out: &mut [u8], mut pos: i64, step: i64, pi: &[i16], w: i64, n: u
         b[x + 1] = (a[x + 1] << 16) | fx1;
     }
 
-    b.sort_unstable();
+    ct_sort_i32(&mut b);
 
     pos += (2 * w - 3) * step * half as i64;
 
@@ -744,7 +801,7 @@ fn cbrecursion(out: &mut [u8], mut pos: i64, step: i64, pi: &[i16], w: i64, n: u
         a[y + 1] = (ly1 << 16) | (b[y + 1] & 0xffff);
     }
 
-    a.sort_unstable();
+    ct_sort_i32(&mut a);
 
     pos -= (2 * w - 2) * step * half as i64;
 
@@ -821,7 +878,7 @@ fn pk_gen<P: McParams>(pk: &mut [u8], irr: &[u8], perm: &[u32], pi: &mut [i16]) 
     for i in 0..q {
         buf[i] = (u64::from(perm[i]) << 31) | i as u64;
     }
-    buf.sort_unstable();
+    ct_sort_u64(&mut buf);
     for i in 1..q {
         if (buf[i - 1] >> 31) == (buf[i] >> 31) {
             return None;
