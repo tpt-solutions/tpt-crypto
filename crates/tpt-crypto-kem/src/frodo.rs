@@ -1,11 +1,13 @@
-//! FrodoKEM-640-SHAKE (plain-LWE KEM, NIST round-3 parameter set, SHAKE128 for `A`).
+//! FrodoKEM-640 (plain-LWE KEM, NIST round-3 parameter set).
 //!
 //! Transcribed from the reference C in `FrodoKEM/src/{kem,noise,util,frodo_macrify_reference}.c`
-//! of the Microsoft reference repository (MIT). The KEM is checked byte-for-byte
-//! against the official `PQCkemKAT_19888_shake.rsp` records (see `tests/frodo_kat.rs`).
+//! of the Microsoft reference repository (MIT). Two variants share one implementation:
 //!
-//! Scope: only the 640 parameter set with the SHAKE128 matrix generator. The 976/1344
-//! sets and the AES-128 matrix generator are not implemented.
+//! - [`shake`]: the public matrix `A` is expanded with SHAKE128 (`FrodoKEM-640-SHAKE`).
+//! - [`aes`]: `A` is expanded with AES-128-ECB (`FrodoKEM-640-AES`).
+//!
+//! Both are checked byte-for-byte against the official reference KAT records
+//! (`tests/frodo_kat.rs`). The 976 and 1344 sets are not implemented.
 //!
 //! Secret-dependent work: the noise sampler is a fixed-length comparison sum, the
 //! decapsulation selector and output select are branch-free (`ct_verify` / `ct_select`
@@ -14,6 +16,7 @@
 
 use alloc::vec;
 use alloc::vec::Vec;
+use tpt_crypto_aead::Aes;
 use tpt_crypto_core::{CryptoRng, Error, Result, Zeroize};
 
 // ---- Parameters (FrodoKEM-640) ----------------------------------------------------
@@ -53,7 +56,7 @@ pub const SECRET_KEY_LEN: usize = SS_LEN + PUBLIC_KEY_LEN + 2 * N * NBAR + PKH_L
 pub const CIPHERTEXT_LEN: usize = C1_LEN + C2_LEN + SALT_LEN;
 /// Shared-secret length.
 pub const SHARED_SECRET_LEN: usize = SS_LEN;
-/// Length of the randomness consumed by [`keygen_derand`]: `s || seedSE || z`.
+/// Length of the randomness consumed by key generation: `s || seedSE || z`.
 pub const KEYGEN_RANDOM_LEN: usize = SS_LEN + SEED_SE_LEN + SEED_A_LEN;
 
 /// Noise CDF table (13 entries) for the 640 set.
@@ -66,16 +69,25 @@ const DOMAIN_KEYGEN: u8 = 0x5F;
 /// Domain-separation prefix for the `S', E'` expansion in encaps and decaps.
 const DOMAIN_ENCAPS: u8 = 0x96;
 
+/// Which construction expands the public matrix `A` from `seedA`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MatrixGen {
+    /// Row `i` of `A` is `SHAKE128(i_le16 || seedA)`.
+    Shake128,
+    /// `A` is AES-128-ECB under `seedA`, applied to blocks `(i_le16, j_le16, 0...)`.
+    Aes128,
+}
+
 // ---- Public types ------------------------------------------------------------------
 
-/// FrodoKEM-640-SHAKE public key: `seedA || pk_b`.
+/// FrodoKEM-640 public key: `seedA || pk_b`.
 #[derive(Clone, PartialEq, Eq)]
 pub struct PublicKey {
     /// Encoded public key bytes ([`PUBLIC_KEY_LEN`]).
     pub bytes: Vec<u8>,
 }
 
-/// FrodoKEM-640-SHAKE secret key: `s || pk || S || H(pk)`. Zeroed on drop.
+/// FrodoKEM-640 secret key: `s || pk || S || H(pk)`. Zeroed on drop.
 pub struct SecretKey {
     /// Encoded secret key bytes ([`SECRET_KEY_LEN`]).
     pub bytes: Vec<u8>,
@@ -110,7 +122,7 @@ fn sample_n(s: &mut [u16]) {
     }
 }
 
-/// Expand the seed into `out`, a flat vector of `n` u16 values read little-endian.
+/// Expand the seed into `out`, a flat vector of u16 values read little-endian.
 fn shake_to_u16(out: &mut [u16], input: &[u8]) {
     let mut bytes = vec![0u8; 2 * out.len()];
     shake(&mut bytes, input);
@@ -119,17 +131,37 @@ fn shake_to_u16(out: &mut [u16], input: &[u8]) {
     }
 }
 
-/// Generate matrix `A` (`n x n`, row-major). Row `i` is `SHAKE128(i_le16 || seedA)`.
-fn gen_a(seed_a: &[u8]) -> Vec<u16> {
+/// Generate the `n x n` matrix `A` (row-major) with the chosen construction.
+fn gen_a(m: MatrixGen, seed_a: &[u8]) -> Vec<u16> {
     let mut a = vec![0u16; N * N];
-    let mut input = [0u8; 2 + SEED_A_LEN];
-    input[2..].copy_from_slice(seed_a);
-    let mut row_bytes = vec![0u8; 2 * N];
-    for i in 0..N {
-        input[..2].copy_from_slice(&(i as u16).to_le_bytes());
-        shake(&mut row_bytes, &input);
-        for j in 0..N {
-            a[i * N + j] = u16::from_le_bytes([row_bytes[2 * j], row_bytes[2 * j + 1]]);
+    match m {
+        MatrixGen::Shake128 => {
+            let mut input = [0u8; 2 + SEED_A_LEN];
+            input[2..].copy_from_slice(seed_a);
+            let mut row_bytes = vec![0u8; 2 * N];
+            for i in 0..N {
+                input[..2].copy_from_slice(&(i as u16).to_le_bytes());
+                shake(&mut row_bytes, &input);
+                for j in 0..N {
+                    a[i * N + j] = u16::from_le_bytes([row_bytes[2 * j], row_bytes[2 * j + 1]]);
+                }
+            }
+        }
+        MatrixGen::Aes128 => {
+            // Each 16-byte block is (i_le16, j_le16, 0...), encrypted in ECB mode under
+            // seedA. The 8 output words fill A[i][j..j+8].
+            let aes = Aes::new_128(seed_a);
+            for i in 0..N {
+                for j in (0..N).step_by(8) {
+                    let mut block = [0u8; 16];
+                    block[..2].copy_from_slice(&(i as u16).to_le_bytes());
+                    block[2..4].copy_from_slice(&(j as u16).to_le_bytes());
+                    let enc = aes.encrypt_block(&block);
+                    for t in 0..8 {
+                        a[i * N + j + t] = u16::from_le_bytes([enc[2 * t], enc[2 * t + 1]]);
+                    }
+                }
+            }
         }
     }
     a
@@ -196,8 +228,8 @@ fn key_decode(w: &[u16; NBAR * NBAR]) -> [u8; MU_LEN] {
 
 /// `out = e + A*s` with `s` of shape `NBAR x N` and `out` of shape `N x NBAR`
 /// (`frodo_mul_add_as_plus_e`). Not reduced modulo `q`; packing takes the low bits.
-fn mul_add_as_plus_e(seed_a: &[u8], s: &[u16], e: &[u16]) -> Vec<u16> {
-    let a = gen_a(seed_a);
+fn mul_add_as_plus_e(m: MatrixGen, seed_a: &[u8], s: &[u16], e: &[u16]) -> Vec<u16> {
+    let a = gen_a(m, seed_a);
     let mut out = e.to_vec();
     for i in 0..N {
         for k in 0..NBAR {
@@ -213,8 +245,8 @@ fn mul_add_as_plus_e(seed_a: &[u8], s: &[u16], e: &[u16]) -> Vec<u16> {
 
 /// `out = e + s*A` with `s` of shape `NBAR x N` and `out` of shape `NBAR x N`
 /// (`frodo_mul_add_sa_plus_e`).
-fn mul_add_sa_plus_e(seed_a: &[u8], s: &[u16], e: &[u16]) -> Vec<u16> {
-    let a = gen_a(seed_a);
+fn mul_add_sa_plus_e(m: MatrixGen, seed_a: &[u8], s: &[u16], e: &[u16]) -> Vec<u16> {
+    let a = gen_a(m, seed_a);
     let mut out = e.to_vec();
     for i in 0..N {
         for k in 0..NBAR {
@@ -260,7 +292,7 @@ fn mul_add_sb_plus_e(b: &[u16], s: &[u16], e: &[u16; NBAR * NBAR]) -> [u16; NBAR
     out
 }
 
-// ---- Constant-time comparison and selection ----------------------------------------
+// ---- Constant-time comparison -------------------------------------------------------
 
 /// `0xff` if the two slices differ, `0x00` if equal, without branching on the data.
 fn differs_mask(a: &[u16], b: &[u16]) -> u8 {
@@ -273,46 +305,42 @@ fn differs_mask(a: &[u16], b: &[u16]) -> u8 {
     0u8.wrapping_sub(nonzero)
 }
 
-// ---- KEM ---------------------------------------------------------------------------
+// ---- KEM core ----------------------------------------------------------------------
 
-/// Expand `S` (`NBAR x N`, raw) and `E` (`N x NBAR`, raw) from `seed_se` with the given
-/// domain prefix. Returns the sampled `(S, E)`.
+/// Expand `S` (`NBAR x N`) and `E` (`N x NBAR`) from `seed_se` with the keygen domain.
 fn sample_s_e_from_seed(domain: u8, seed_se: &[u8]) -> (Vec<u16>, Vec<u16>) {
     let mut input = [0u8; 1 + SEED_SE_LEN];
     input[0] = domain;
     input[1..].copy_from_slice(seed_se);
     let mut raw = vec![0u16; 2 * N * NBAR];
     shake_to_u16(&mut raw, &input);
-    let e = raw.split_off(N * NBAR);
+    let mut e = raw.split_off(N * NBAR);
     let mut s = raw;
     sample_n(&mut s);
-    let mut e = e;
     sample_n(&mut e);
     (s, e)
 }
 
-/// Like [`sample_s_e_from_seed`], plus the extra `NBAR^2` values `E''` used by encaps
-/// and decaps. Returns `(S', E', E'')`.
+/// Expand `S'` (`NBAR x N`), `E'` (`N x NBAR`) and `E''` (`NBAR x NBAR`) from `seed_se`
+/// with the encaps domain.
 fn sample_sp_ep_epp(seed_se: &[u8]) -> (Vec<u16>, Vec<u16>, [u16; NBAR * NBAR]) {
     let mut input = [0u8; 1 + SEED_SE_LEN];
     input[0] = DOMAIN_ENCAPS;
     input[1..].copy_from_slice(seed_se);
     let mut raw = vec![0u16; (2 * N + NBAR) * NBAR];
     shake_to_u16(&mut raw, &input);
-    let mut epp_raw = [0u16; NBAR * NBAR];
-    epp_raw.copy_from_slice(&raw[2 * N * NBAR..]);
+    let mut epp = [0u16; NBAR * NBAR];
+    epp.copy_from_slice(&raw[2 * N * NBAR..]);
     raw.truncate(2 * N * NBAR);
-    let e = raw.split_off(N * NBAR);
+    let mut ep = raw.split_off(N * NBAR);
     let mut sp = raw;
     sample_n(&mut sp);
-    let mut ep = e;
     sample_n(&mut ep);
-    sample_n(&mut epp_raw);
-    (sp, ep, epp_raw)
+    sample_n(&mut epp);
+    (sp, ep, epp)
 }
 
-/// Derandomized FrodoKEM-640-SHAKE key generation. `randomness` is `s || seedSE || z`.
-pub fn keygen_derand(randomness: &[u8; KEYGEN_RANDOM_LEN]) -> (PublicKey, SecretKey) {
+fn keygen_with(m: MatrixGen, randomness: &[u8; KEYGEN_RANDOM_LEN]) -> (PublicKey, SecretKey) {
     let s_rand = &randomness[..SS_LEN];
     let seed_se = &randomness[SS_LEN..SS_LEN + SEED_SE_LEN];
     let z = &randomness[SS_LEN + SEED_SE_LEN..];
@@ -321,7 +349,7 @@ pub fn keygen_derand(randomness: &[u8; KEYGEN_RANDOM_LEN]) -> (PublicKey, Secret
     shake(&mut seed_a, z);
 
     let (mut s_mat, mut e_mat) = sample_s_e_from_seed(DOMAIN_KEYGEN, seed_se);
-    let b = mul_add_as_plus_e(&seed_a, &s_mat, &e_mat);
+    let b = mul_add_as_plus_e(m, &seed_a, &s_mat, &e_mat);
 
     let mut pk = vec![0u8; PUBLIC_KEY_LEN];
     pk[..SEED_A_LEN].copy_from_slice(&seed_a);
@@ -344,25 +372,8 @@ pub fn keygen_derand(randomness: &[u8; KEYGEN_RANDOM_LEN]) -> (PublicKey, Secret
     (PublicKey { bytes: pk }, SecretKey { bytes: sk })
 }
 
-/// FrodoKEM-640-SHAKE key generation from the RNG.
-///
-/// # Errors
-///
-/// Returns the RNG's error if it fails.
-pub fn keygen(rng: &mut impl CryptoRng) -> Result<(PublicKey, SecretKey)> {
-    let mut randomness = [0u8; KEYGEN_RANDOM_LEN];
-    rng.try_fill_bytes(&mut randomness)?;
-    let out = keygen_derand(&randomness);
-    randomness.zeroize();
-    Ok(out)
-}
-
-/// Derandomized encapsulation with message `mu` and salt. Returns `(ciphertext, ss)`.
-///
-/// # Errors
-///
-/// [`Error::InvalidLength`] if `pk` has the wrong length.
-pub fn encapsulate_derand(
+fn encapsulate_with(
+    m: MatrixGen,
     pk: &[u8],
     mu: &[u8; MU_LEN],
     salt: &[u8; SALT_LEN],
@@ -384,15 +395,12 @@ pub fn encapsulate_derand(
     let (seed_se, k) = g2out.split_at(SEED_SE_LEN);
 
     let (mut sp, mut ep, mut epp) = sample_sp_ep_epp(seed_se);
-    let bp = mul_add_sa_plus_e(seed_a, &sp, &ep);
+    let bp = mul_add_sa_plus_e(m, seed_a, &sp, &ep);
     let mut c1 = vec![0u8; C1_LEN];
     pack(&bp, LOGQ, &mut c1);
 
-    let b = {
-        let mut b = vec![0u16; N * NBAR];
-        unpack(pk_b, LOGQ, &mut b);
-        b
-    };
+    let mut b = vec![0u16; N * NBAR];
+    unpack(pk_b, LOGQ, &mut b);
     let v = mul_add_sb_plus_e(&b, &sp, &epp);
     let enc = key_encode(mu);
     let mut c = [0u16; NBAR * NBAR];
@@ -412,40 +420,17 @@ pub fn encapsulate_derand(
     fin[CIPHERTEXT_LEN..].copy_from_slice(k);
     let mut ss = [0u8; SHARED_SECRET_LEN];
     shake(&mut ss, &fin);
+
     fin.zeroize();
+    g2out.zeroize();
     sp.zeroize();
     ep.zeroize();
     epp.zeroize();
+    b.zeroize();
     Ok((ct, ss))
 }
 
-/// FrodoKEM-640-SHAKE encapsulation to `pk` drawing `mu` and the salt from the RNG.
-///
-/// # Errors
-///
-/// [`Error::InvalidLength`] for a malformed `pk`, or the RNG's error.
-pub fn encapsulate(
-    pk: &PublicKey,
-    rng: &mut impl CryptoRng,
-) -> Result<(Vec<u8>, [u8; SHARED_SECRET_LEN])> {
-    let mut mu = [0u8; MU_LEN];
-    let mut salt = [0u8; SALT_LEN];
-    rng.try_fill_bytes(&mut mu)?;
-    rng.try_fill_bytes(&mut salt)?;
-    let out = encapsulate_derand(&pk.bytes, &mu, &salt);
-    mu.zeroize();
-    out
-}
-
-/// FrodoKEM-640-SHAKE decapsulation with implicit rejection.
-///
-/// A ciphertext that does not re-encrypt to itself yields `F(ct || s)` rather than an
-/// error, so the caller cannot tell rejection from success.
-///
-/// # Errors
-///
-/// [`Error::InvalidLength`] if `sk` or `ct` has the wrong length.
-pub fn decapsulate(sk: &SecretKey, ct: &[u8]) -> Result<[u8; SHARED_SECRET_LEN]> {
+fn decapsulate_with(m: MatrixGen, sk: &SecretKey, ct: &[u8]) -> Result<[u8; SHARED_SECRET_LEN]> {
     if sk.bytes.len() != SECRET_KEY_LEN || ct.len() != CIPHERTEXT_LEN {
         return Err(Error::InvalidLength);
     }
@@ -468,11 +453,7 @@ pub fn decapsulate(sk: &SecretKey, ct: &[u8]) -> Result<[u8; SHARED_SECRET_LEN]>
     let mut bp = vec![0u16; N * NBAR];
     unpack(c1, LOGQ, &mut bp);
     let mut c = [0u16; NBAR * NBAR];
-    {
-        let mut tmp = [0u16; NBAR * NBAR];
-        unpack(c2, LOGQ, &mut tmp);
-        c.copy_from_slice(&tmp);
-    }
+    unpack(c2, LOGQ, &mut c);
 
     // W = C - B'*S, then recover mu'.
     let bs = mul_bs(&bp, &s_mat);
@@ -492,12 +473,9 @@ pub fn decapsulate(sk: &SecretKey, ct: &[u8]) -> Result<[u8; SHARED_SECRET_LEN]>
     let (seed_se_p, k_p) = g2out.split_at(SEED_SE_LEN);
 
     let (mut sp, mut ep, mut epp) = sample_sp_ep_epp(seed_se_p);
-    let mut bbp = mul_add_sa_plus_e(seed_a, &sp, &ep);
-    let b = {
-        let mut b = vec![0u16; N * NBAR];
-        unpack(pk_b, LOGQ, &mut b);
-        b
-    };
+    let mut bbp = mul_add_sa_plus_e(m, seed_a, &sp, &ep);
+    let mut b = vec![0u16; N * NBAR];
+    unpack(pk_b, LOGQ, &mut b);
     let wv = mul_add_sb_plus_e(&b, &sp, &epp);
     let enc = key_encode(&mu_p);
     let mut cc = [0u16; NBAR * NBAR];
@@ -529,6 +507,136 @@ pub fn decapsulate(sk: &SecretKey, ct: &[u8]) -> Result<[u8; SHARED_SECRET_LEN]>
     sp.zeroize();
     ep.zeroize();
     epp.zeroize();
+    b.zeroize();
     w.zeroize();
     Ok(ss)
+}
+
+fn keygen_from_rng(m: MatrixGen, rng: &mut impl CryptoRng) -> Result<(PublicKey, SecretKey)> {
+    let mut randomness = [0u8; KEYGEN_RANDOM_LEN];
+    rng.try_fill_bytes(&mut randomness)?;
+    let out = keygen_with(m, &randomness);
+    randomness.zeroize();
+    Ok(out)
+}
+
+fn encapsulate_from_rng(
+    m: MatrixGen,
+    pk: &PublicKey,
+    rng: &mut impl CryptoRng,
+) -> Result<(Vec<u8>, [u8; SHARED_SECRET_LEN])> {
+    let mut mu = [0u8; MU_LEN];
+    let mut salt = [0u8; SALT_LEN];
+    rng.try_fill_bytes(&mut mu)?;
+    rng.try_fill_bytes(&mut salt)?;
+    let out = encapsulate_with(m, &pk.bytes, &mu, &salt);
+    mu.zeroize();
+    out
+}
+
+/// FrodoKEM-640-SHAKE: the matrix `A` is expanded with SHAKE128.
+pub mod shake {
+    use super::*;
+
+    /// Derandomized key generation. `randomness` is `s || seedSE || z`.
+    pub fn keygen_derand(randomness: &[u8; KEYGEN_RANDOM_LEN]) -> (PublicKey, SecretKey) {
+        keygen_with(MatrixGen::Shake128, randomness)
+    }
+
+    /// Key generation from the RNG.
+    ///
+    /// # Errors
+    ///
+    /// Returns the RNG's error if it fails.
+    pub fn keygen(rng: &mut impl CryptoRng) -> Result<(PublicKey, SecretKey)> {
+        keygen_from_rng(MatrixGen::Shake128, rng)
+    }
+
+    /// Derandomized encapsulation with message `mu` and salt. Returns `(ciphertext, ss)`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidLength`] if `pk` has the wrong length.
+    pub fn encapsulate_derand(
+        pk: &[u8],
+        mu: &[u8; MU_LEN],
+        salt: &[u8; SALT_LEN],
+    ) -> Result<(Vec<u8>, [u8; SHARED_SECRET_LEN])> {
+        encapsulate_with(MatrixGen::Shake128, pk, mu, salt)
+    }
+
+    /// Encapsulation to `pk`, drawing `mu` and the salt from the RNG.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidLength`] for a malformed `pk`, or the RNG's error.
+    pub fn encapsulate(
+        pk: &PublicKey,
+        rng: &mut impl CryptoRng,
+    ) -> Result<(Vec<u8>, [u8; SHARED_SECRET_LEN])> {
+        encapsulate_from_rng(MatrixGen::Shake128, pk, rng)
+    }
+
+    /// Decapsulation with implicit rejection: a ciphertext that does not re-encrypt to
+    /// itself yields `F(ct || s)` rather than an error.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidLength`] if `sk` or `ct` has the wrong length.
+    pub fn decapsulate(sk: &SecretKey, ct: &[u8]) -> Result<[u8; SHARED_SECRET_LEN]> {
+        decapsulate_with(MatrixGen::Shake128, sk, ct)
+    }
+}
+
+/// FrodoKEM-640-AES: the matrix `A` is expanded with AES-128-ECB.
+pub mod aes {
+    use super::*;
+
+    /// Derandomized key generation. `randomness` is `s || seedSE || z`.
+    pub fn keygen_derand(randomness: &[u8; KEYGEN_RANDOM_LEN]) -> (PublicKey, SecretKey) {
+        keygen_with(MatrixGen::Aes128, randomness)
+    }
+
+    /// Key generation from the RNG.
+    ///
+    /// # Errors
+    ///
+    /// Returns the RNG's error if it fails.
+    pub fn keygen(rng: &mut impl CryptoRng) -> Result<(PublicKey, SecretKey)> {
+        keygen_from_rng(MatrixGen::Aes128, rng)
+    }
+
+    /// Derandomized encapsulation with message `mu` and salt. Returns `(ciphertext, ss)`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidLength`] if `pk` has the wrong length.
+    pub fn encapsulate_derand(
+        pk: &[u8],
+        mu: &[u8; MU_LEN],
+        salt: &[u8; SALT_LEN],
+    ) -> Result<(Vec<u8>, [u8; SHARED_SECRET_LEN])> {
+        encapsulate_with(MatrixGen::Aes128, pk, mu, salt)
+    }
+
+    /// Encapsulation to `pk`, drawing `mu` and the salt from the RNG.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidLength`] for a malformed `pk`, or the RNG's error.
+    pub fn encapsulate(
+        pk: &PublicKey,
+        rng: &mut impl CryptoRng,
+    ) -> Result<(Vec<u8>, [u8; SHARED_SECRET_LEN])> {
+        encapsulate_from_rng(MatrixGen::Aes128, pk, rng)
+    }
+
+    /// Decapsulation with implicit rejection.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidLength`] if `sk` or `ct` has the wrong length.
+    pub fn decapsulate(sk: &SecretKey, ct: &[u8]) -> Result<[u8; SHARED_SECRET_LEN]> {
+        decapsulate_with(MatrixGen::Aes128, sk, ct)
+    }
 }

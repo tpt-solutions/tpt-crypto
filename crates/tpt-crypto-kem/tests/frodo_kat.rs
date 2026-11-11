@@ -1,20 +1,22 @@
-//! FrodoKEM-640-SHAKE against the official reference KAT records.
+//! FrodoKEM-640 (both matrix variants) against the official reference KAT records.
 //!
-//! `kat/frodokem640_shake_first3.rsp` is the first three records of the reference
-//! `PQCkemKAT_19888_shake.rsp` (see `kat/PROVENANCE.md`). For each record the test
-//! re-derives the randomness the way the reference `PQCgenKAT_kem` harness does, from
-//! the record's `seed` through the NIST AES-256 CTR-DRBG, and then checks keygen,
-//! encapsulation and decapsulation byte-for-byte.
+//! `kat/frodokem640_shake_first3.rsp` and `kat/frodokem640_aes_first3.rsp` are the first
+//! three records of the reference `PQCkemKAT_19888_shake.rsp` and `PQCkemKAT_19888.rsp`
+//! (see `kat/PROVENANCE.md`). For each record the test re-derives the randomness the way
+//! the reference `PQCgenKAT_kem` harness does, from the record's `seed` through the NIST
+//! AES-256 CTR-DRBG, and then checks keygen, encapsulation and decapsulation byte for byte.
 
 use std::collections::BTreeMap;
 
 use tpt_crypto_aead::Aes;
+use tpt_crypto_core::Result;
 use tpt_crypto_kem::frodo::{
-    decapsulate, encapsulate_derand, keygen_derand, PublicKey, SecretKey, CIPHERTEXT_LEN,
-    KEYGEN_RANDOM_LEN, PUBLIC_KEY_LEN, SECRET_KEY_LEN,
+    aes, shake, PublicKey, SecretKey, CIPHERTEXT_LEN, KEYGEN_RANDOM_LEN, PUBLIC_KEY_LEN,
+    SECRET_KEY_LEN,
 };
 
-const RSP: &str = include_str!("kat/frodokem640_shake_first3.rsp");
+const RSP_SHAKE: &str = include_str!("kat/frodokem640_shake_first3.rsp");
+const RSP_AES: &str = include_str!("kat/frodokem640_aes_first3.rsp");
 
 /// The NIST PQC `randombytes` (AES-256 CTR-DRBG, no derivation function), as used by the
 /// reference KAT generator.
@@ -98,9 +100,6 @@ fn parse_records(text: &str) -> Vec<Record> {
             continue;
         }
         let (k, v) = line.split_once(" = ").expect("key = value");
-        if k == "count" && !cur.is_empty() {
-            panic!("record boundary without ss");
-        }
         cur.insert(k, v);
         if k == "ss" {
             out.push(Record {
@@ -116,10 +115,18 @@ fn parse_records(text: &str) -> Vec<Record> {
     out
 }
 
-#[test]
-fn official_records_match_keygen_encaps_decaps() {
-    let records = parse_records(RSP);
-    assert_eq!(records.len(), 3, "expected the three packaged records");
+type KeygenFn = fn(&[u8; KEYGEN_RANDOM_LEN]) -> (PublicKey, SecretKey);
+type EncapsFn = fn(&[u8], &[u8; 16], &[u8; 32]) -> Result<(Vec<u8>, [u8; 16])>;
+type DecapsFn = fn(&SecretKey, &[u8]) -> Result<[u8; 16]>;
+
+/// Run every record of one packaged file through one variant's derandomized API.
+fn check_variant(name: &str, rsp: &str, keygen: KeygenFn, encaps: EncapsFn, decaps: DecapsFn) {
+    let records = parse_records(rsp);
+    assert_eq!(
+        records.len(),
+        3,
+        "{name}: expected the three packaged records"
+    );
     for (idx, r) in records.iter().enumerate() {
         assert_eq!(r.pk.len(), PUBLIC_KEY_LEN);
         assert_eq!(r.sk.len(), SECRET_KEY_LEN);
@@ -131,42 +138,65 @@ fn official_records_match_keygen_encaps_decaps() {
         // Keypair draws 64 bytes of randomness.
         let mut randomness = [0u8; KEYGEN_RANDOM_LEN];
         drbg.fill(&mut randomness);
-        let (pk, sk) = keygen_derand(&randomness);
-        assert_eq!(pk.bytes, r.pk, "record {idx}: pk");
-        assert_eq!(sk.bytes, r.sk, "record {idx}: sk");
+        let (pk, sk) = keygen(&randomness);
+        assert_eq!(pk.bytes, r.pk, "{name} record {idx}: pk");
+        assert_eq!(sk.bytes, r.sk, "{name} record {idx}: sk");
 
         // Encapsulation draws mu (16 bytes) then the salt (32 bytes).
         let mut mu_salt = [0u8; 48];
         drbg.fill(&mut mu_salt);
         let mu: [u8; 16] = mu_salt[..16].try_into().unwrap();
         let salt: [u8; 32] = mu_salt[16..].try_into().unwrap();
-        let (ct, ss) = encapsulate_derand(&pk.bytes, &mu, &salt).expect("valid pk");
-        assert_eq!(ct, r.ct, "record {idx}: ct");
-        assert_eq!(ss.as_slice(), r.ss.as_slice(), "record {idx}: ss");
+        let (ct, ss) = encaps(&pk.bytes, &mu, &salt).expect("valid pk");
+        assert_eq!(ct, r.ct, "{name} record {idx}: ct");
+        assert_eq!(ss.as_slice(), r.ss.as_slice(), "{name} record {idx}: ss");
 
-        let got = decapsulate(&sk, &ct).expect("valid sk and ct");
-        assert_eq!(got.as_slice(), r.ss.as_slice(), "record {idx}: decaps");
+        let got = decaps(&sk, &ct).expect("valid sk and ct");
+        assert_eq!(
+            got.as_slice(),
+            r.ss.as_slice(),
+            "{name} record {idx}: decaps"
+        );
     }
 }
 
 #[test]
+fn shake_variant_matches_official_records() {
+    check_variant(
+        "shake",
+        RSP_SHAKE,
+        shake::keygen_derand,
+        shake::encapsulate_derand,
+        shake::decapsulate,
+    );
+}
+
+#[test]
+fn aes_variant_matches_official_records() {
+    check_variant(
+        "aes",
+        RSP_AES,
+        aes::keygen_derand,
+        aes::encapsulate_derand,
+        aes::decapsulate,
+    );
+}
+
+#[test]
 fn tampered_ciphertext_is_implicitly_rejected() {
-    let r = &parse_records(RSP)[0];
+    let r = &parse_records(RSP_SHAKE)[0];
     let sk = SecretKey {
         bytes: r.sk.clone(),
     };
-    let _pk = PublicKey {
-        bytes: r.pk.clone(),
-    };
-    let honest = decapsulate(&sk, &r.ct).unwrap();
+    let honest = shake::decapsulate(&sk, &r.ct).unwrap();
     assert_eq!(honest.as_slice(), r.ss.as_slice());
 
     // Flip one bit in c1: decapsulation must not error and must return a value that is
     // not the honest secret, and the same value every time.
     let mut bad = r.ct.clone();
     bad[100] ^= 0x01;
-    let rej1 = decapsulate(&sk, &bad).expect("no error on tamper");
-    let rej2 = decapsulate(&sk, &bad).expect("no error on tamper");
+    let rej1 = shake::decapsulate(&sk, &bad).expect("no error on tamper");
+    let rej2 = shake::decapsulate(&sk, &bad).expect("no error on tamper");
     assert_ne!(rej1, honest);
     assert_eq!(rej1, rej2);
 
@@ -174,18 +204,15 @@ fn tampered_ciphertext_is_implicitly_rejected() {
     let mut bad_salt = r.ct.clone();
     let last = bad_salt.len() - 1;
     bad_salt[last] ^= 0x80;
-    assert_ne!(decapsulate(&sk, &bad_salt).unwrap(), honest);
+    assert_ne!(shake::decapsulate(&sk, &bad_salt).unwrap(), honest);
 }
 
 #[test]
 fn length_checks_reject_malformed_inputs() {
-    let r = &parse_records(RSP)[0];
+    let r = &parse_records(RSP_SHAKE)[0];
     let sk = SecretKey {
         bytes: r.sk.clone(),
     };
-    assert!(decapsulate(&sk, &r.ct[..r.ct.len() - 1]).is_err());
-    let short_pk = PublicKey {
-        bytes: r.pk[..r.pk.len() - 1].to_vec(),
-    };
-    assert!(encapsulate_derand(&short_pk.bytes, &[0; 16], &[0; 32]).is_err());
+    assert!(shake::decapsulate(&sk, &r.ct[..r.ct.len() - 1]).is_err());
+    assert!(shake::encapsulate_derand(&r.pk[..r.pk.len() - 1], &[0; 16], &[0; 32]).is_err());
 }

@@ -453,7 +453,9 @@ variant (feature-gated re-exports instead of steps 3–6).
             Byte-exact against the first three official `PQCkemKAT_19888_shake.rsp` records
             (keygen, encaps, decaps, ss); tamper and length checks in `tests/frodo_kat.rs`.
             Fuzz target `frodokem640_decaps`. Type-checked only, not run here.
-      - [ ] FrodoKEM-640-AES (AES-128 matrix generator, `PQCkemKAT_19888.rsp`).
+      - [x] FrodoKEM-640-AES: `frodo::aes`, same code with an AES-128-ECB matrix generator.
+            Byte-exact against the first three official `PQCkemKAT_19888.rsp` records.
+            `frodo::shake` and `frodo::aes` share one implementation.
       - [ ] FrodoKEM-976 and -1344 (SHAKE and AES): the same code with other parameters.
       - [ ] Classic McEliece: not started.
       The placeholder modules and `frodo`/`mceliece` features were removed

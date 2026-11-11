@@ -31,6 +31,7 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
 | `fips203_1024.rsp` | `ed23c551c53761649a2dd9573eda2f49f58285675d639fe8c0d585e21f37896c` |
 | `hpke_base_x25519.txt` | `702993dd0e57ecd61961a8a33098490fa25a870b7b897f430c52978ec2b7e8e9` |
 | `frodokem640_shake_first3.rsp` | `cc76e206a63626230cf9e5f1a1572cb721c5f9bebad9d46aea30bdd7401dfbe4` |
+| `frodokem640_aes_first3.rsp` | `b4a311a5563d2088092c5d2eff413229852446ababe92fabaaff00cddce0d1da` |
 
 ## `hpke_base_x25519.txt` — RFC 9180 HPKE base mode (DHKEM(X25519, HKDF-SHA256))
 
@@ -78,3 +79,12 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
   byte for byte, and the implementation follows the reference C in `FrodoKEM/src/`.
 - Algorithm source: the same repository's `FrodoKEM/src/{kem,noise,util,frodo_macrify_reference}.c`
   (fetched 2026-11-11). `crates/tpt-crypto-kem/src/frodo.rs` is a port of that code.
+
+## `frodokem640_aes_first3.rsp` — FrodoKEM-640-AES (official reference KAT)
+
+- Source: the first three records (`count = 0..2`) of `PQCkemKAT_19888.rsp` from the
+  same reference repository, path `FrodoKEM/KAT/`. Raw URL:
+  <https://raw.githubusercontent.com/Microsoft/PQCrypto-LWEKE/master/FrodoKEM/KAT/PQCkemKAT_19888.rsp>.
+  Downloaded 2026-11-11, truncated after record 2.
+- Consumed by `crates/tpt-crypto-kem/tests/frodo_kat.rs` through `frodo::aes`, which
+  uses AES-128-ECB for the matrix `A`. The other steps match the SHAKE variant.

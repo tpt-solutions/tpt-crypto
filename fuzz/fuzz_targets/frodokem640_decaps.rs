@@ -1,4 +1,4 @@
-//! Fuzz target for `frodo::decapsulate` (FrodoKEM-640-SHAKE).
+//! Fuzz target for `frodo::shake::decapsulate` (FrodoKEM-640-SHAKE).
 //!
 //! The secret key is fixed (derived from a constant randomness); every fuzz byte is a
 //! candidate ciphertext. Exercises the full implicit-rejection path. Must never panic,
@@ -8,7 +8,8 @@
 
 use libfuzzer_sys::fuzz_target;
 use std::sync::OnceLock;
-use tpt_crypto_kem::frodo::{decapsulate, keygen_derand, SecretKey, CIPHERTEXT_LEN, KEYGEN_RANDOM_LEN};
+use tpt_crypto_kem::frodo::shake::{decapsulate, keygen_derand};
+use tpt_crypto_kem::frodo::{SecretKey, CIPHERTEXT_LEN, KEYGEN_RANDOM_LEN};
 
 fn fixed_sk() -> &'static SecretKey {
     static SK: OnceLock<SecretKey> = OnceLock::new();
