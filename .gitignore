@@ -6,3 +6,5 @@ tmp_test.*
 **/*.rs.bk
 .DS_Store
 __pycache__/
+/mutants.out/
+/mutants.out.old/
