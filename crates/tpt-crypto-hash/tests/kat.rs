@@ -473,6 +473,33 @@ fn k12_rate_boundaries_and_long_output() {
     assert_eq_hex("k12 xof 500", &long, "bb0dc9ebca92864370dd7bebe03ace14a95d377fc3295d721ed188134d8359b35353f103768701e89f1d035ebd3147a9895b00948450ce0e9659fa1ab78fad1d4032a6cf1513a21e98bf25dc668c4cca635dc83cd2a3e717c9a568731e45e39778e529eb0095634a8c841e470e67fa7b48fc17fe2d3eba6f8649b53b28576a3dc314ab8115907d691e8df15bd0aa9f52ac179551b4d3925d13c0cbd133cd217c188cd2e245937a07dcb1551ce9bbb95f4a78c4a68863eaf3db0a165f0ac719b9920cb5cf0a252112ef06b4d951af4b75dacede16110d573fd3cad2f3aed636b3630090d28b236d715181e7a78d4ec4b32fec151b88f2b4e7d26175514096bf93454fa47a9f04af279b3bd98f8c9d4eb5e31b8feae07b260d167b78c4738ea6f73c709b9c80fd00ea61a537f9e67e8df37948408e404f7f86ef3bfae426ab9f2dbb7776a4dcc49ce16fe816ab6d5e25530cec9cff870798d320aabb29366100c38b51de732c63750a085a26ddd5194c4e6b16f5a13cb8d5bf58f2584cfa65fd50538593f0a58fc998129149652f6e41ab2c067d190ab12425505f788e94591d9a9756ebaf9a8683bed133a67a1ab4edab641915ab369288db6e41fa36a254cb5d10f56f73e32402b827eb69e669329efa334e8d068f4f7e658608d1ee5add9388b50635579b55a611748e95247ec198e53a1fc6ea");
 }
 
+/// KangarooTwelve states the rate-boundary cases that the tests above do not reach. A
+/// single-leaf message of 166 bytes with an empty customization absorbs 167 bytes (the
+/// one-byte `right_encode(0)` included), so the suffix byte lands on the last rate byte and
+/// no extra permutation may run. A 60000-byte message has seven chunk values, so the
+/// TurboShake buffer reaches 160 bytes before a 32-byte absorb, which must split at the
+/// rate boundary. References from the `tiny-keccak` crate 2.x, as above.
+#[test]
+fn k12_rate_edge_states_reference() {
+    let m: Vec<u8> = (0..166usize).map(|i| (i % 251) as u8).collect();
+    let mut out = [0u8; 32];
+    kangaroo_twelve(&m, b"", &mut out);
+    assert_eq_hex(
+        "k12(len 166, empty c)",
+        &out,
+        "cbbe9dd1e423f20003fba7bb219491c8d1f445fa5c4199d6c6c70c9fdc101964",
+    );
+
+    let c7: Vec<u8> = (0..7u8).collect();
+    let m: Vec<u8> = (0..60000usize).map(|i| (i % 251) as u8).collect();
+    kangaroo_twelve(&m, &c7, &mut out);
+    assert_eq_hex(
+        "k12(len 60000, c7)",
+        &out,
+        "1cb0a10d78bd56cf40074743f5eca80b97eb6e69c10e02d2f93d66c07b295acb",
+    );
+}
+
 /// Streaming KangarooTwelve split at every position over every length up to 400 bytes,
 /// so each absorb boundary (partial buffer, exact block fill) is exercised against the
 /// one-shot result.
