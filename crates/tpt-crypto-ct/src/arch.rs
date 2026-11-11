@@ -346,19 +346,55 @@ pub(crate) unsafe fn clmul(a: Block128, b: Block128, ctrl: u8) -> Block128 {
     }
 }
 
+/// Portable 64×64 carry-less multiply (no branches on operand bits).
+///
+/// Used when `pclmulqdq` is not available at runtime (including under Miri,
+/// where CPU feature detection reports nothing). Returns the 128-bit product
+/// as `Block128 { lo, hi }`.
+#[cfg(all(target_arch = "x86_64", feature = "std"))]
+#[inline]
+#[must_use]
+fn clmul64_soft(a: u64, b: u64) -> Block128 {
+    let mut lo = 0u64;
+    let mut hi = 0u64;
+    let mut i = 0u32;
+    while i < 64 {
+        // All-ones when bit `i` of `b` is set, zero otherwise.
+        let m = 0u64.wrapping_sub((b >> i) & 1);
+        let p = (a as u128) << i;
+        lo ^= (p as u64) & m;
+        hi ^= ((p >> 64) as u64) & m;
+        i += 1;
+    }
+    Block128 { lo, hi }
+}
+
 /// Full 128×128 carry-less product, returned as `(low, high)` 128-bit halves.
+///
+/// Uses `pclmulqdq` when the CPU has it and a portable software multiply
+/// otherwise, so the result is always the true GF(2)[x] product.
 #[cfg(all(target_arch = "x86_64", feature = "std"))]
 #[inline]
 #[must_use]
 pub fn clmul128_raw(a: &Block128, b: &Block128) -> (Block128, Block128) {
-    if !has_pclmulqdq() {
-        return (Block128 { lo: 0, hi: 0 }, Block128 { lo: 0, hi: 0 });
-    }
-    // SAFETY: `has_pclmulqdq` confirmed; `clmul` only touches registers.
-    let c00 = unsafe { clmul(*a, *b, 0x00) };
-    let c01 = unsafe { clmul(*a, *b, 0x10) };
-    let c10 = unsafe { clmul(*a, *b, 0x01) };
-    let c11 = unsafe { clmul(*a, *b, 0x11) };
+    let (c00, c01, c10, c11) = if has_pclmulqdq() {
+        // SAFETY: `has_pclmulqdq` confirmed; `clmul` only touches registers.
+        unsafe {
+            (
+                clmul(*a, *b, 0x00),
+                clmul(*a, *b, 0x10),
+                clmul(*a, *b, 0x01),
+                clmul(*a, *b, 0x11),
+            )
+        }
+    } else {
+        (
+            clmul64_soft(a.lo, b.lo),
+            clmul64_soft(a.lo, b.hi),
+            clmul64_soft(a.hi, b.lo),
+            clmul64_soft(a.hi, b.hi),
+        )
+    };
     let mid = Block128 {
         lo: c01.lo ^ c10.lo,
         hi: c01.hi ^ c10.hi,
@@ -418,5 +454,42 @@ mod tests {
         let lo_v = lo.lo as u128 | ((lo.hi as u128) << 64);
         let hi_v = hi.lo as u128 | ((hi.hi as u128) << 64);
         assert_eq!((lo_v, hi_v), (0, 1));
+    }
+
+    #[test]
+    fn clmul64_soft_basic() {
+        // 0xb * 0xd = 0x7f over GF(2); x^63 * x^63 = x^126.
+        let p = clmul64_soft(0xb, 0xd);
+        assert_eq!((p.lo, p.hi), (0x7f, 0));
+        let p = clmul64_soft(1u64 << 63, 1u64 << 63);
+        assert_eq!((p.lo, p.hi), (0, 1u64 << 62));
+    }
+
+    #[test]
+    fn clmul128_raw_matches_soft_path() {
+        // Cross-check the dispatching entry point against the portable
+        // 128×128 assembly on a spread of operands (hardware path when present).
+        let vals = [
+            (0x0123_4567_89ab_cdef_u64, 0xfedc_ba98_7654_3210_u64),
+            (u64::MAX, u64::MAX),
+            (0x8000_0000_0000_0001, 0x0000_0000_0000_0003),
+        ];
+        for &(alo, ahi) in &vals {
+            for &(blo, bhi) in &vals {
+                let a = Block128 { lo: alo, hi: ahi };
+                let b = Block128 { lo: blo, hi: bhi };
+                let (lo, hi) = clmul128_raw(&a, &b);
+                let c00 = clmul64_soft(alo, blo);
+                let c01 = clmul64_soft(alo, bhi);
+                let c10 = clmul64_soft(ahi, blo);
+                let c11 = clmul64_soft(ahi, bhi);
+                let mid_lo = c01.lo ^ c10.lo;
+                let mid_hi = c01.hi ^ c10.hi;
+                assert_eq!(lo.lo, c00.lo);
+                assert_eq!(lo.hi, c00.hi ^ mid_lo);
+                assert_eq!(hi.lo, c11.lo ^ mid_hi);
+                assert_eq!(hi.hi, c11.hi);
+            }
+        }
     }
 }
