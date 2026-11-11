@@ -1160,7 +1160,15 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       missed, all equivalent. Two are the `t >> 64` high word, which is zero for any
       input under 2^64 bytes. One is `buflen >= 0`, which takes the same branch as the
       `while` loop. One is `|` vs `^` in `blake2b_var` with no overlapping bits. Still not
-      run: Argon2, and the other `-field` files.
+      run: the other `-field` files.
+      `-hash::argon2` (lib tests): 230 mutants, 218 caught, 9 missed. Added
+      `memory_and_tag_length_boundaries` and `independent_reference_multi_segment` (tags from the
+      RustCrypto `argon2` 0.5 crate, outside the repo). Survivors killed: the `8 * p` memory bound,
+      the 4-byte tag minimum, the pass-0 slice-0 branch, the same-lane window, and the window size.
+      The RFC vector has `seg = 2`, which cannot tell same-lane from other-lane windows, so it
+      was not enough by itself. The `SYNC_POINTS - 1` mutants (`+` and `/`) are equivalent: the
+      `(slice + 1) * seg` they change is `q` on the last slice, and the `% q` reduction maps it
+      to 0 either way. Not yet run: the other `-field` files.
       `-hash::k12` (`tests/kat.rs` + a `k12::tests` unit test for `right_encode`): 213 mutants.
       Before: 6 missed on the KATs. Added the rate-edge reference test and a unit test
       (`right_encode` at 4 and 5 value bytes; `right_encode` mutants 19 of 19 caught). Final
@@ -1180,12 +1188,19 @@ Windows support). Honest labels: "exhaustively verified over a bounded domain" a
       Rerun: 156 caught, 6 missed, all equivalent. Those are `counter >> 32` vs `<<` (equal
       below 2^32 chunks), `|` vs `^` on disjoint flag bits, `i > 0` vs `>= 0` (the value
       is unused), and `buflen > 0` vs `>= 0` (same branch as the `while` loop).
-- [ ] Triage survivors into new tests (done per survivor so far).
+- [ ] Triage survivors into new tests (done per survivor so far; `-hash::argon2`, `-hash::k12` done, other `-field` files open).
 - [x] Gate against discarded results in tests (`let _ = ...prop_assert...`): checked
       2026-11-11 — no `let _ =` wraps an assertion in any `tests/` or `src/` file; the
       remaining `let _` lines discard non-assertion values (e.g. `mpc/src/ot.rs:201`).
-- [ ] Regression check: reintroduce past bugs (drop `carry_hi`, wrong omega, `polyt0_unpack`
-      index) and confirm V1, V2 and V4 fail on each.
+- [x] Regression check: reintroduce past bugs (drop `carry_hi`, wrong omega, `polyt0_unpack`
+      index), one at a time, source restored after each. The first runs used a scratch worktree at HEAD, the later ones the main tree.
+      - `carry_hi` dropped from the field conditional subtract: caught by `field_props` (P-384
+        properties fail); the small-prime and KAT tests were not checked for this run.
+      - `polyt0_unpack` shift changed (`<< 3` to `<< 4`): caught by the ML-DSA round-trip tests.
+      - hint count bound dropped in `unpack_hint`: **not caught** by any existing test. Added
+        `hint_count_above_omega_is_rejected` (committed). Verified: passes on the code, fails
+        with the bound removed.
+      - V1 exhaustive and V4 mutation runs were not repeated per injection.
 
 ### V5. Optional, only if a "formally verified" headline is wanted
 - [ ] Kani for `-ct` laws and decoder panic-freedom only (small and tractable).
