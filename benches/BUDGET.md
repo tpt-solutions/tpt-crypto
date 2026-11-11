@@ -168,6 +168,6 @@ range, and that gap is recorded here, not hidden.
 | `frodokem-640-shake/keygen` | — | 1.92 ms (~520 ops/s) — recorded (portable, table-free) |
 | `frodokem-640-shake/encaps` | — | 3.46 ms (~290 ops/s) — recorded |
 | `frodokem-640-shake/decaps` | — | 3.27 ms (~306 ops/s) — recorded |
-| `mceliece-348864/keygen` | — | 1.57 s (~0.6 ops/s) — recorded; slow: generic GF(2^m) multiply, Vec-of-Vec elimination |
+| `mceliece-348864/keygen` | — | 0.40 s (~2.5 ops/s) — recorded; word-packed elimination (was 1.57 s); remaining cost in the constant-time bitonic sorts and field inversions |
 | `mceliece-348864/encaps` | — | 38 µs (~26 kops/s) — recorded |
 | `mceliece-348864/decaps` | — | 17.4 ms (~57 ops/s) — recorded; slow: bit-serial GF multiply in synd and bm |

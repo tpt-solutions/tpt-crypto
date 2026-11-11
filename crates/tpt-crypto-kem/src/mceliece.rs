@@ -917,7 +917,21 @@ fn pk_gen<P: McParams>(pk: &mut [u8], irr: &[u8], perm: &[u32], pi: &mut [i16]) 
     }
 
     // Gaussian elimination to systematic form.
+    // The rows are packed into 64-bit words for the elimination. Each masked byte operation
+    // of the reference is the same masked operation on words, so the result is identical.
     let nrows = P::PK_NROWS;
+    let nb = n / 8;
+    let nw = nb.div_ceil(8);
+    let mut words = vec![vec![0u64; nw]; nrows];
+    for r in 0..nrows {
+        for c in 0..nb {
+            words[r][c / 8] |= u64::from(mat[r][c]) << (8 * (c % 8));
+        }
+    }
+    // Bit `j` of byte `col` of row `r`.
+    let bit = |w: &Vec<Vec<u64>>, r: usize, col: usize, j: usize| -> u64 {
+        (w[r][col / 8] >> (8 * (col % 8) + j)) & 1
+    };
     for i in 0..nrows.div_ceil(8) {
         for j in 0..8 {
             let row = i * 8 + j;
@@ -925,29 +939,29 @@ fn pk_gen<P: McParams>(pk: &mut [u8], irr: &[u8], perm: &[u32], pi: &mut [i16]) 
                 break;
             }
             for k in row + 1..nrows {
-                let mut mask = mat[row][i] ^ mat[k][i];
-                mask >>= j;
-                mask &= 1;
-                mask = 0u8.wrapping_sub(mask);
-                for c in 0..n / 8 {
-                    let v = mat[k][c] & mask;
-                    mat[row][c] ^= v;
+                let mask = 0u64.wrapping_sub(bit(&words, row, i, j) ^ bit(&words, k, i, j));
+                for c in 0..nw {
+                    let v = words[k][c] & mask;
+                    words[row][c] ^= v;
                 }
             }
-            if (mat[row][i] >> j) & 1 == 0 {
+            if bit(&words, row, i, j) == 0 {
                 return None;
             }
             for k in 0..nrows {
                 if k != row {
-                    let mut mask = mat[k][i] >> j;
-                    mask &= 1;
-                    mask = 0u8.wrapping_sub(mask);
-                    for c in 0..n / 8 {
-                        let v = mat[row][c] & mask;
-                        mat[k][c] ^= v;
+                    let mask = 0u64.wrapping_sub(bit(&words, k, i, j));
+                    for c in 0..nw {
+                        let v = words[row][c] & mask;
+                        words[k][c] ^= v;
                     }
                 }
             }
+        }
+    }
+    for r in 0..nrows {
+        for c in 0..nb {
+            mat[r][c] = (words[r][c / 8] >> (8 * (c % 8))) as u8;
         }
     }
 
