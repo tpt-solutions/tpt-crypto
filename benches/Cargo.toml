@@ -44,3 +44,7 @@ harness = false
 [[bench]]
 name = "sig"
 harness = false
+
+[[bench]]
+name = "kem_frodo_mceliece"
+harness = false

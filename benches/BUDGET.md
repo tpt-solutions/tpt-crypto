@@ -156,3 +156,18 @@ SIMD follow-up lands.
   are expressed as absolute cycle counts in `benches/embedded/BUDGET.md`.
 - `cargo xtask check` runs `bench-smoke` (compile-only); full benchmark runs
   are gated behind the `bench` CI job triggered on `main` weekly.
+
+## KEM (new, measured 2026-11-11, x86_64 Windows, release, short windows)
+
+Measured with `cargo bench -p tpt-crypto-benches --bench kem_frodo_mceliece -- --warm-up-time 1 --measurement-time 3`.
+No targets are set for these yet. The McEliece keygen figure is well above the C reference's
+range, and that gap is recorded here, not hidden.
+
+| Benchmark | Target | Status |
+| --- | --- | --- |
+| `frodokem-640-shake/keygen` | — | 1.92 ms (~520 ops/s) — recorded (portable, table-free) |
+| `frodokem-640-shake/encaps` | — | 3.46 ms (~290 ops/s) — recorded |
+| `frodokem-640-shake/decaps` | — | 3.27 ms (~306 ops/s) — recorded |
+| `mceliece-348864/keygen` | — | 1.57 s (~0.6 ops/s) — recorded; slow: generic GF(2^m) multiply, Vec-of-Vec elimination |
+| `mceliece-348864/encaps` | — | 38 µs (~26 kops/s) — recorded |
+| `mceliece-348864/decaps` | — | 17.4 ms (~57 ops/s) — recorded; slow: bit-serial GF multiply in synd and bm |
