@@ -8,6 +8,9 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -202,3 +205,62 @@ jobs:
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  nightly-fuzz:
+    # Long fuzz runs of every target, only on the nightly schedule or a manual dispatch.
+    name: nightly fuzz (${{ matrix.target }})
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aes_gcm_decrypt
+          - argon2id_params
+          - chacha20poly1305_decrypt
+          - ecdsa_der_parse
+          - ecdsa_public_key_parse
+          - frodokem640_decaps
+          - frodokem976_decaps
+          - frodokem1344_decaps
+          - key_der_parse
+          - mceliece348864_decaps
+          - mceliece6688128_decaps
+          - ml_kem_decaps
+          - point_decompress
+          - range_proof_parse
+          - signature_verify
+          - hybrid_verify
+          - xwing_decapsulate
+          - xwing_encapsulate_pk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz --locked
+      - run: cd fuzz && cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=900
+
+  nightly-leakage:
+    # Longer dudect run than the per-push job.
+    name: nightly leakage (long)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo xtask leakage
+
+  coverage:
+    # Line and region coverage with cargo-llvm-cov, uploaded as an artifact.
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - run: cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lcov.info
+          path: lcov.info
