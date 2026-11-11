@@ -509,4 +509,68 @@ mod tests {
         assert_ne!(base, run(b"password", b"saltsalt", b"x", b""));
         assert_ne!(base, run(b"password", b"saltsalt", b"", b"x"));
     }
+
+    #[test]
+    fn memory_and_tag_length_boundaries() {
+        let salt = [0u8; 8];
+        let mut tag = [0u8; 32];
+        // m_kib must be at least 8 * p: one KiB below is rejected, the bound itself is accepted.
+        let with_m = |m_kib| Params { m_kib, t: 1, p: 4 };
+        assert!(argon2id(b"pw", &salt, &[], &[], with_m(31), &mut tag).is_err());
+        assert!(argon2id(b"pw", &salt, &[], &[], with_m(32), &mut tag).is_ok());
+        // The shortest tag is 4 bytes: 3 is rejected, 4 is accepted.
+        let ok = Params {
+            m_kib: 32,
+            t: 1,
+            p: 4,
+        };
+        let mut t3 = [0u8; 3];
+        let mut t4 = [0u8; 4];
+        assert!(argon2id(b"pw", &salt, &[], &[], ok, &mut t3).is_err());
+        assert!(argon2id(b"pw", &salt, &[], &[], ok, &mut t4).is_ok());
+    }
+
+    /// Geometries the RFC 9106 vector does not reach: with `seg = 2` the same-lane and
+    /// other-lane reference windows coincide, so these need longer segments (up to 16
+    /// blocks) and more passes. Tags are from the RustCrypto `argon2` 0.5 crate, run in a
+    /// scratch project outside the repository.
+    #[test]
+    fn independent_reference_multi_segment() {
+        let cases: [(Params, &str); 3] = [
+            (
+                Params {
+                    m_kib: 64,
+                    t: 2,
+                    p: 1,
+                },
+                "e74503f7bcb438e4d537b71ad25022224c4015b2683bc218324a48dcea3a6a46",
+            ),
+            (
+                Params {
+                    m_kib: 96,
+                    t: 3,
+                    p: 2,
+                },
+                "d2ede8c7f9215fd484995ad5238db376c4196de462ba2aaf7b518031d4a353ef",
+            ),
+            (
+                Params {
+                    m_kib: 128,
+                    t: 1,
+                    p: 1,
+                },
+                "53b65f3e297bfcba32905fc5b25a82cbbc868bc5397c39bc37ac825da3863d97",
+            ),
+        ];
+        for (params, expected) in cases {
+            let mut tag = [0u8; 32];
+            argon2id(b"password", b"saltsalt", &[], &[], params, &mut tag).unwrap();
+            assert_eq!(
+                tag.to_vec(),
+                hex(expected),
+                "params {:?}",
+                (params.m_kib, params.t, params.p)
+            );
+        }
+    }
 }
