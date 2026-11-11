@@ -63,7 +63,7 @@ pq = [
     "tpt-crypto-kem",
     "tpt-crypto-sig",
 ]
-bls = ["tpt-crypto-curve"]
+bls = ["alloc", "tpt-crypto-curve", "tpt-crypto-sig"]
 zk = ["tpt-crypto-zk"]
 mpc = ["tpt-crypto-mpc"]
 # Trait-compat pass-through: ecosystem `signature::Signer`/`Verifier` impls
