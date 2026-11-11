@@ -203,17 +203,17 @@ fn gf_iszero(a: Gf) -> Gf {
 /// Product in GF(2^m).
 fn gf_mul<P: McParams>(in0: Gf, in1: Gf) -> Gf {
     let m = P::GFBITS;
+    // Mask form, not `if`: the operands are secret during decoding, so no branch may depend
+    // on their bits.
     let mut acc: u32 = 0;
     for i in 0..m {
-        if (in1 >> i) & 1 == 1 {
-            acc ^= u32::from(in0) << i;
-        }
+        let mask = 0u32.wrapping_sub((u32::from(in1) >> i) & 1);
+        acc ^= (u32::from(in0) << i) & mask;
     }
     let poly = field_poly::<P>();
     for d in (m..=2 * m - 2).rev() {
-        if (acc >> d) & 1 == 1 {
-            acc ^= poly << (d - m);
-        }
+        let mask = 0u32.wrapping_sub((acc >> d) & 1);
+        acc ^= (poly << (d - m)) & mask;
     }
     (acc & ((1u32 << m) - 1)) as Gf
 }
@@ -1211,7 +1211,8 @@ pub fn decapsulate<P: McParams>(sk: &[u8], ct: &[u8]) -> Result<[u8; SHARED_SECR
     // m = 0xFF on success, 0 on failure: selects e or s byte by byte.
     let mut pre = vec![0u8; 1 + P::SYS_N / 8 + P::SYND_BYTES];
     pre[0] = u8::from(ok);
-    let mm = if ok { 0xFFu8 } else { 0u8 };
+    // Mask from the success flag without a branch: 0xFF when the word decoded.
+    let mm = 0u8.wrapping_sub(u8::from(ok));
     for i in 0..P::SYS_N / 8 {
         pre[1 + i] = (!mm & s[i]) | (mm & e[i]);
     }
