@@ -309,3 +309,60 @@ fn blake2b_reuse_matches_fresh() {
     h.update(b"abc");
     assert_eq!(h.finalize_reset(), blake2b(b"abc"));
 }
+
+/// BLAKE3 inputs longer than one 1024-byte chunk, so the chunk-tree code runs. The
+/// digests and 64-byte XOF outputs come from the upstream `blake3` crate 1.x, which
+/// was run on the same byte pattern (byte i = i mod 251). The four short vectors
+/// above never reach the tree logic.
+#[test]
+fn blake3_multi_chunk_reference() {
+    use tpt_crypto_hash::blake3::Blake3;
+    use tpt_crypto_hash::Xof;
+    let cases: [(usize, &str, &str); 9] = [
+        (1023, "10108970eeda3eb932baac1428c7a2163b0e924c9a9e25b35bba72b28f70bd11", "10108970eeda3eb932baac1428c7a2163b0e924c9a9e25b35bba72b28f70bd11a182d27a591b05592b15607500e1e8dd56bc6c7fc063715b7a1d737df5bad333"),
+        (1024, "42214739f095a406f3fc83deb889744ac00df831c10daa55189b5d121c855af7", "42214739f095a406f3fc83deb889744ac00df831c10daa55189b5d121c855af71cf8107265ecdaf8505b95d8fcec83a98a6a96ea5109d2c179c47a387ffbb404"),
+        (1025, "d00278ae47eb27b34faecf67b4fe263f82d5412916c1ffd97c8cb7fb814b8444", "d00278ae47eb27b34faecf67b4fe263f82d5412916c1ffd97c8cb7fb814b8444f4c4a22b4b399155358a994e52bf255de60035742ec71bd08ac275a1b51cc6bf"),
+        (2048, "e776b6028c7cd22a4d0ba182a8bf62205d2ef576467e838ed6f2529b85fba24a", "e776b6028c7cd22a4d0ba182a8bf62205d2ef576467e838ed6f2529b85fba24a9a60bf80001410ec9eea6698cd537939fad4749edd484cb541aced55cd9bf547"),
+        (3000, "5fade288bf27444bee55ba2babb98c3c922c1e84c2e445e7d1f6da24756f5060", "5fade288bf27444bee55ba2babb98c3c922c1e84c2e445e7d1f6da24756f50604a5137265e81e5154685535a7e45a6cf8fcdd0e47eba71f39401a315734b215b"),
+        (4096, "015094013f57a5277b59d8475c0501042c0b642e531b0a1c8f58d2163229e969", "015094013f57a5277b59d8475c0501042c0b642e531b0a1c8f58d2163229e9690289e9409ddb1b99768eafe1623da896faf7e1114bebeadc1be30829b6f8af70"),
+        (4097, "9b4052b38f1c5fc8b1f9ff7ac7b27cd242487b3d890d15c96a1c25b8aa0fb995", "9b4052b38f1c5fc8b1f9ff7ac7b27cd242487b3d890d15c96a1c25b8aa0fb99505f91b0b5600a11251652eacfa9497b31cd3c409ce2e45cfe6c0a016967316c4"),
+        (8192, "aae792484c8efe4f19e2ca7d371d8c467ffb10748d8a5a1ae579948f718a2a63", "aae792484c8efe4f19e2ca7d371d8c467ffb10748d8a5a1ae579948f718a2a635fe51a27db045a567c1ad51be5aa34c01c6651c4d9b5b5ac5d0fd58cf18dd61a"),
+        (10_000, "5f81f9e4ab67627b6b036d5d4e3bc40d9d3daa6fcc2b6dd07ab2bbf0a877da54", "5f81f9e4ab67627b6b036d5d4e3bc40d9d3daa6fcc2b6dd07ab2bbf0a877da5443eae36a6686feb8cf715071b892c67d7e32412dd9ea6afcda419464c146cf1e"),
+    ];
+    for (len, want_hash, want_xof) in cases {
+        let data: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+        assert_eq_hex(&format!("blake3({len})"), &blake3(&data), want_hash);
+        let mut h = Blake3::new();
+        h.update(&data);
+        let mut out = [0u8; 64];
+        h.finalize_xof_reset(&mut out);
+        assert_eq_hex(&format!("blake3-xof64({len})"), &out, want_xof);
+    }
+    let key = b"whats the Elvish word for friend";
+    let data: Vec<u8> = (0..5000).map(|i| (i % 251) as u8).collect();
+    assert_eq_hex(
+        "blake3_keyed(5000)",
+        &blake3_keyed(&data, key),
+        "27dc394fb01f055606c3aedde3a8c3694c34a8c514cc61a27279f1417cc385e0",
+    );
+}
+
+/// BLAKE3 streaming split at chunk boundaries (1023..=1025, 2048, 2049) at every
+/// position near each boundary. The buffer flush must not fire early on an exact fit.
+#[test]
+fn blake3_streaming_at_chunk_boundaries() {
+    use tpt_crypto_hash::blake3::Blake3;
+    use tpt_crypto_hash::Xof;
+    for len in [1023usize, 1024, 1025, 2048, 2049] {
+        let data: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+        let want = blake3(&data);
+        for split in (0..=len).step_by(7).chain((len.saturating_sub(3))..=len) {
+            let mut h = Blake3::new();
+            h.update(&data[..split]);
+            h.update(&data[split..]);
+            let mut out = [0u8; 32];
+            h.finalize_xof_reset(&mut out);
+            assert_eq!(out, want, "len {len} split {split}");
+        }
+    }
+}
