@@ -459,7 +459,7 @@ variant (feature-gated re-exports instead of steps 3–6).
       - [x] FrodoKEM-976 and -1344 (SHAKE and AES): `frodo::{shake,aes}` generic over
             `FrodoParams` (`Frodo640`, `Frodo976`, `Frodo1344`). Byte-exact against the first
             official record of each reference file. The KEM hash is SHAKE256 for 976 and 1344.
-            Fuzz target covers 640 only.
+            Fuzz targets: frodokem640, frodokem976 and frodokem1344 decapsulation (type-checked only).
       - [x] Classic McEliece mceliece348864: `tpt-crypto-kem::mceliece`, a port of the official
             Reference_Implementation (mceliece-20221023). Keypair, encapsulation and decapsulation
             match the first three official `kat_kem.rsp` records (pk and sk by SHA-256 digest, ct and
@@ -1024,8 +1024,8 @@ Each item is its own commit so any can be dropped.
       `cargo-audit` / `cargo-vet`, coverage upload, scheduled long fuzz and leakage runs.
       — added (not yet run on GitHub; no remote here): `.github/dependabot.yml` (cargo +
       github-actions, weekly), `msrv` job (`dtolnay/rust-toolchain@1.84.0`, `cargo check`),
-      `ct-asm` job (`cargo xtask ct-asm`), `audit` job (`rustsec/audit-check`). Still open:
-      release workflow, `cargo-vet`, coverage upload, scheduled fuzz and leakage runs.
+      `ct-asm` job (`cargo xtask ct-asm`), `audit` job (`rustsec/audit-check`). Added since: nightly fuzz (each target 15 min), nightly long leakage, coverage job (lcov artifact). Still open:
+      release workflow (publishing, left for the owner) and `cargo-vet`. The new jobs are not yet run on GitHub.
 - [ ] Cross-repo: switch `../tpt-crypto-rustls` adapter to
       `verify_prehash_allow_high_s` and its RSA path to `PublicKey::verify_*`.
 

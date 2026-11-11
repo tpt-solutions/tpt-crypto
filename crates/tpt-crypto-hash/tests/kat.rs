@@ -402,3 +402,37 @@ fn blake3_xof_long_output_and_reset() {
     h.finalize_xof_reset(&mut out);
     assert_eq_hex("blake3-xof(abc,100) after reset", &out, "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d851fb250ae7393f5d02813b65d521a0d492d9ba09cf7ce7f4cffd900f23374bf0bc08a1fb0b38ed276181ccbd9f7b7edbddf9f86404ad7929605f6ffa3fb1ac87983105f01");
 }
+
+/// KangarooTwelve on inputs past one 8192-byte leaf, so the tree-hashing path runs (the RFC
+/// vectors above are short). The digests come from the `tiny-keccak` crate 2.x (its K12),
+/// run in a scratch project outside the repository. Input is the byte pattern i mod 251 and
+/// the customization is the pattern 0..7.
+#[test]
+fn k12_long_inputs_reference() {
+    let c: Vec<u8> = (0..7u8).collect();
+    let cases: [(usize, &str); 8] = [
+        (8191, "cd8baf0b2ddc3589006a6dbfe1bf286c88c7e90163a590528bd5154a89246b68"),
+        (8192, "248101a4dec830ffcab633a37d16f0633bbff2813a0476828981e06c8f816ded"),
+        (8193, "cbbf597e392251dacd3941d091351b43a61aee82588ff52ab7718022d170c4e5"),
+        (8200, "b2b38990282320c049edab4eabddbe6efdd7b32ef8ccf78eb765fcb10782608f"),
+        (16384, "90bdd4a0ef76d74d8ebd1e32db1d68252e564a43de2c2b0b5644eeda6bb17f08"),
+        (16385, "a91c4722c60380ce1bf7c61c9a7f9babcca07570485740ed8749b24d7d7ef291"),
+        (20000, "255fdaf49aa83dbd64245832b9cdce8bbf7dbd1cd91909c9b94e1dadd5cab55f"),
+        (50000, "125dc18fe1edabc341219db0bdc5fc34c6714f83547940666245f0daf06b8b4a"),
+    ];
+    for (len, want) in cases {
+        let m: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+        let mut out = [0u8; 32];
+        kangaroo_twelve(&m, &c, &mut out);
+        assert_eq_hex(&format!("k12(len {len}, c7)"), &out, want);
+    }
+    // Long output from a short message: 100 bytes.
+    let m3: Vec<u8> = (0..3u8).collect();
+    let mut out = [0u8; 100];
+    kangaroo_twelve(&m3, b"", &mut out);
+    assert_eq_hex(
+        "k12(len 3, out 100)",
+        &out,
+        "bb0dc9ebca92864370dd7bebe03ace14a95d377fc3295d721ed188134d8359b35353f103768701e89f1d035ebd3147a9895b00948450ce0e9659fa1ab78fad1d4032a6cf1513a21e98bf25dc668c4cca635dc83cd2a3e717c9a568731e45e39778e529eb",
+    );
+}
