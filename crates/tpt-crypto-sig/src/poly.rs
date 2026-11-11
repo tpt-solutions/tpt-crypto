@@ -359,11 +359,10 @@ pub fn decompose_impl(gamma2: i32, a: i32) -> (i32, i32) {
     }
     let mut a0 = a - a1 * 2 * gamma2;
     a0 -= (((Q - 1) / 2 - a0) >> 31) & Q;
-    if a1 * 2 * gamma2 == Q - 1 {
-        (0, a0 - 1)
-    } else {
-        (a1, a0)
-    }
+    // a1 is in 0..=43 (88) or 0..=15 (32) after the clamps above, so 2*gamma2*a1 can never
+    // equal q - 1 (that needs a1 = 44 or 16). The wrap branch of FIPS 204 Algorithm 36 is
+    // therefore unreachable and is omitted.
+    (a1, a0)
 }
 
 /// `MakeHint(z, r)` (FIPS 204 Algorithm 39): `1` iff `HighBits(r)` and
