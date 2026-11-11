@@ -436,3 +436,62 @@ fn k12_long_inputs_reference() {
         "bb0dc9ebca92864370dd7bebe03ace14a95d377fc3295d721ed188134d8359b35353f103768701e89f1d035ebd3147a9895b00948450ce0e9659fa1ab78fad1d4032a6cf1513a21e98bf25dc668c4cca635dc83cd2a3e717c9a568731e45e39778e529eb",
     );
 }
+
+/// KangarooTwelve at the sponge rate boundary (message lengths 167, 168, 169, 335, 336, one
+/// byte short of or past a full block), with a 300-byte customization (two-byte length
+/// encoding), and with a 500-byte output (more than one rate block). References from the
+/// tiny-keccak crate's K12, as in the test above.
+#[test]
+fn k12_rate_boundaries_and_long_output() {
+    use tpt_crypto_hash::k12::KangarooTwelve;
+    use tpt_crypto_hash::Xof;
+    let c7: Vec<u8> = (0..7u8).collect();
+    let cases: [(usize, &str); 5] = [
+        (167, "8fba4292095007d349edec415d1f14a6509d62247aee794bb3fc1158e1d833df"),
+        (168, "9d22ee29b6e0dbf4bcebf3c1677451971edb9c64fe02edd30e0433bcfb674584"),
+        (169, "20a7ebc7362176f93426e147f3c92f9f6445228b9e0282cc391625205d344442"),
+        (335, "f93223452769df2df85f63a826c4c93f5529aacb7daff66e35cfb5553d1bc6ba"),
+        (336, "19b86a4f4037d985e009d63177e985737d87b9bf1f3fbb2854258da01a0ac195"),    ];
+    for (len, want) in cases {
+        let m: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
+        let mut out = [0u8; 32];
+        kangaroo_twelve(&m, &c7, &mut out);
+        assert_eq_hex(&format!("k12 rate len {len}"), &out, want);
+    }
+
+    let big_c: Vec<u8> = (0..300usize).map(|i| (i % 251) as u8).collect();
+    let m5: Vec<u8> = (0..5usize).map(|i| (i % 251) as u8).collect();
+    let mut out = [0u8; 32];
+    kangaroo_twelve(&m5, &big_c, &mut out);
+    assert_eq_hex("k12 customization 300", &out, "3f98988f72fafbac34f42f174de1ab2a06f1ce8eed79bc17c42f92407a37f889");
+
+    let m3: Vec<u8> = (0..3usize).map(|i| (i % 251) as u8).collect();
+    let mut k = KangarooTwelve::new(b"");
+    Xof::update(&mut k, &m3);
+    let mut long = [0u8; 500];
+    Xof::finalize_xof_reset(&mut k, &mut long);
+    assert_eq_hex("k12 xof 500", &long, "bb0dc9ebca92864370dd7bebe03ace14a95d377fc3295d721ed188134d8359b35353f103768701e89f1d035ebd3147a9895b00948450ce0e9659fa1ab78fad1d4032a6cf1513a21e98bf25dc668c4cca635dc83cd2a3e717c9a568731e45e39778e529eb0095634a8c841e470e67fa7b48fc17fe2d3eba6f8649b53b28576a3dc314ab8115907d691e8df15bd0aa9f52ac179551b4d3925d13c0cbd133cd217c188cd2e245937a07dcb1551ce9bbb95f4a78c4a68863eaf3db0a165f0ac719b9920cb5cf0a252112ef06b4d951af4b75dacede16110d573fd3cad2f3aed636b3630090d28b236d715181e7a78d4ec4b32fec151b88f2b4e7d26175514096bf93454fa47a9f04af279b3bd98f8c9d4eb5e31b8feae07b260d167b78c4738ea6f73c709b9c80fd00ea61a537f9e67e8df37948408e404f7f86ef3bfae426ab9f2dbb7776a4dcc49ce16fe816ab6d5e25530cec9cff870798d320aabb29366100c38b51de732c63750a085a26ddd5194c4e6b16f5a13cb8d5bf58f2584cfa65fd50538593f0a58fc998129149652f6e41ab2c067d190ab12425505f788e94591d9a9756ebaf9a8683bed133a67a1ab4edab641915ab369288db6e41fa36a254cb5d10f56f73e32402b827eb69e669329efa334e8d068f4f7e658608d1ee5add9388b50635579b55a611748e95247ec198e53a1fc6ea");
+}
+
+/// Streaming KangarooTwelve split at every position over every length up to 400 bytes,
+/// so each absorb boundary (partial buffer, exact block fill) is exercised against the
+/// one-shot result.
+#[test]
+fn k12_streaming_at_every_split() {
+    use tpt_crypto_hash::k12::KangarooTwelve;
+    use tpt_crypto_hash::Xof;
+    let c: Vec<u8> = (0..5u8).collect();
+    for len in 0..=400usize {
+        let m: Vec<u8> = (0..len).map(|i| (i * 13 + 1) as u8).collect();
+        let mut one = [0u8; 40];
+        kangaroo_twelve(&m, &c, &mut one);
+        for split in 0..=len {
+            let mut k = KangarooTwelve::new(&c);
+            Xof::update(&mut k, &m[..split]);
+            Xof::update(&mut k, &m[split..]);
+            let mut out = [0u8; 40];
+            Xof::finalize_xof_reset(&mut k, &mut out);
+            assert_eq!(out, one, "len {len} split {split}");
+        }
+    }
+}
