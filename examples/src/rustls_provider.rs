@@ -330,7 +330,7 @@ struct TptRandom;
 
 impl SecureRandom for TptRandom {
     fn fill(&self, buf: &mut [u8]) -> Result<(), GetRandomFailed> {
-        getrandom::getrandom(buf).map_err(|_| GetRandomFailed)
+        getrandom::fill(buf).map_err(|_| GetRandomFailed)
     }
 }
 
