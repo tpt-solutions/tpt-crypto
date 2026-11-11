@@ -1140,4 +1140,33 @@ mod tests {
         let sig2 = Signature::<MlDsa44>::from_bytes(&sig.bytes).unwrap();
         assert!(verify::<MlDsa44>(&pk2, msg, &sig2, &[]).is_ok());
     }
+
+    /// A hint count above ω is malformed (FIPS 204 HintBitUnpack). The index section
+    /// below is strictly increasing, so only the count bound can reject it.
+    #[test]
+    fn hint_count_above_omega_is_rejected() {
+        fn check<P: MlDsaParams>() {
+            let mut inp = vec![0u8; P::OMEGA + P::K];
+            for (k, b) in inp.iter_mut().enumerate().take(P::OMEGA) {
+                *b = k as u8;
+            }
+            for c in inp[P::OMEGA..].iter_mut() {
+                *c = (P::OMEGA + 1) as u8;
+            }
+            let mut h = vec![Poly::ZERO; P::K];
+            assert!(unpack_hint::<P>(&inp, &mut h).is_none());
+
+            // Control: a legal single hint (index 5 in section 0, zero tail) is accepted.
+            let mut ok = vec![0u8; P::OMEGA + P::K];
+            ok[0] = 5;
+            for c in ok[P::OMEGA..].iter_mut() {
+                *c = 1; // cumulative counts must not decrease
+            }
+            let mut h = vec![Poly::ZERO; P::K];
+            assert!(unpack_hint::<P>(&ok, &mut h).is_some());
+        }
+        check::<MlDsa44>();
+        check::<MlDsa65>();
+        check::<MlDsa87>();
+    }
 }
