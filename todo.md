@@ -456,7 +456,10 @@ variant (feature-gated re-exports instead of steps 3–6).
       - [x] FrodoKEM-640-AES: `frodo::aes`, same code with an AES-128-ECB matrix generator.
             Byte-exact against the first three official `PQCkemKAT_19888.rsp` records.
             `frodo::shake` and `frodo::aes` share one implementation.
-      - [ ] FrodoKEM-976 and -1344 (SHAKE and AES): the same code with other parameters.
+      - [x] FrodoKEM-976 and -1344 (SHAKE and AES): `frodo::{shake,aes}` generic over
+            `FrodoParams` (`Frodo640`, `Frodo976`, `Frodo1344`). Byte-exact against the first
+            official record of each reference file. The KEM hash is SHAKE256 for 976 and 1344.
+            Fuzz target covers 640 only.
       - [ ] Classic McEliece: not started.
       The placeholder modules and `frodo`/`mceliece` features were removed
       (they only returned `Error::Unsupported`). Re-add when the implementations land.

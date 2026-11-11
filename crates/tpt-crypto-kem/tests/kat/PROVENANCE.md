@@ -32,6 +32,10 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
 | `hpke_base_x25519.txt` | `702993dd0e57ecd61961a8a33098490fa25a870b7b897f430c52978ec2b7e8e9` |
 | `frodokem640_shake_first3.rsp` | `cc76e206a63626230cf9e5f1a1572cb721c5f9bebad9d46aea30bdd7401dfbe4` |
 | `frodokem640_aes_first3.rsp` | `b4a311a5563d2088092c5d2eff413229852446ababe92fabaaff00cddce0d1da` |
+| `frodokem1344_aes_first1.rsp` | `42e3c8dd6da88412a9788ec097a3069df45ce66704baf12e3621c0d3ff2f463e` |
+| `frodokem1344_shake_first1.rsp` | `22ca61576c6aa43dfa68d619780c4226b9de52d4140ce44f9f9f5e03c4ee0526` |
+| `frodokem976_aes_first1.rsp` | `f7985d57fcf2258e40cdb56aa40cb68aec8f8d119ca7a92d558b3177c64cb6cd` |
+| `frodokem976_shake_first1.rsp` | `5deb0a0ac381d61aac5c2059ae5837e27afbcb48101f61530c60fd83151129df` |
 
 ## `hpke_base_x25519.txt` — RFC 9180 HPKE base mode (DHKEM(X25519, HKDF-SHA256))
 
@@ -88,3 +92,15 @@ Checksums (sha256, relative to `crates/tpt-crypto-kem/tests/kat/`):
   Downloaded 2026-11-11, truncated after record 2.
 - Consumed by `crates/tpt-crypto-kem/tests/frodo_kat.rs` through `frodo::aes`, which
   uses AES-128-ECB for the matrix `A`. The other steps match the SHAKE variant.
+
+## FrodoKEM-976 and FrodoKEM-1344 (official reference KAT, first record only)
+
+- Source: the first record (`count = 0`) of each reference file in `FrodoKEM/KAT/` of
+  `Microsoft/PQCrypto-LWEKE`: `PQCkemKAT_31296_shake.rsp`, `PQCkemKAT_31296.rsp`
+  (976, SHAKE and AES) and `PQCkemKAT_43088_shake.rsp`, `PQCkemKAT_43088.rsp`
+  (1344, SHAKE and AES). Downloaded 2026-11-11, truncated after record 0. Only one record
+  per file is kept, to limit the size of the repository.
+- Field sizes checked against the reference constants: 976 pk 15632, sk 31296, ct 15792,
+  ss 24 bytes; 1344 pk 21520, sk 43088, ct 21696, ss 32 bytes.
+- Consumed by `crates/tpt-crypto-kem/tests/frodo_kat.rs` through `frodo::{shake,aes}` with
+  `Frodo976` and `Frodo1344`.

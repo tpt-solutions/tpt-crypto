@@ -1,22 +1,20 @@
-//! FrodoKEM-640 (both matrix variants) against the official reference KAT records.
+//! FrodoKEM (sets 640, 976, 1344; both matrix variants) against official reference KAT
+//! records.
 //!
-//! `kat/frodokem640_shake_first3.rsp` and `kat/frodokem640_aes_first3.rsp` are the first
-//! three records of the reference `PQCkemKAT_19888_shake.rsp` and `PQCkemKAT_19888.rsp`
-//! (see `kat/PROVENANCE.md`). For each record the test re-derives the randomness the way
-//! the reference `PQCgenKAT_kem` harness does, from the record's `seed` through the NIST
-//! AES-256 CTR-DRBG, and then checks keygen, encapsulation and decapsulation byte for byte.
+//! The `kat/frodokem*_first*.rsp` files are the first records of the reference KAT files
+//! in `FrodoKEM/KAT/` of the Microsoft reference repository (see `kat/PROVENANCE.md`).
+//! 640 has three records per file, 976 and 1344 one. For each record the test re-derives
+//! the randomness the way the reference `PQCgenKAT_kem` harness does, from the record's
+//! `seed` through the NIST AES-256 CTR-DRBG, and then checks keygen, encapsulation and
+//! decapsulation byte for byte.
 
 use std::collections::BTreeMap;
 
 use tpt_crypto_aead::Aes;
 use tpt_crypto_core::Result;
 use tpt_crypto_kem::frodo::{
-    aes, shake, PublicKey, SecretKey, CIPHERTEXT_LEN, KEYGEN_RANDOM_LEN, PUBLIC_KEY_LEN,
-    SECRET_KEY_LEN,
+    aes, shake, Frodo1344, Frodo640, Frodo976, FrodoParams, PublicKey, SecretKey,
 };
-
-const RSP_SHAKE: &str = include_str!("kat/frodokem640_shake_first3.rsp");
-const RSP_AES: &str = include_str!("kat/frodokem640_aes_first3.rsp");
 
 /// The NIST PQC `randombytes` (AES-256 CTR-DRBG, no derivation function), as used by the
 /// reference KAT generator.
@@ -115,88 +113,136 @@ fn parse_records(text: &str) -> Vec<Record> {
     out
 }
 
-type KeygenFn = fn(&[u8; KEYGEN_RANDOM_LEN]) -> (PublicKey, SecretKey);
-type EncapsFn = fn(&[u8], &[u8; 16], &[u8; 32]) -> Result<(Vec<u8>, [u8; 16])>;
-type DecapsFn = fn(&SecretKey, &[u8]) -> Result<[u8; 16]>;
+type KeygenFn = fn(&[u8]) -> Result<(PublicKey, SecretKey)>;
+type EncapsFn = fn(&[u8], &[u8], &[u8]) -> Result<(Vec<u8>, Vec<u8>)>;
+type DecapsFn = fn(&SecretKey, &[u8]) -> Result<Vec<u8>>;
 
 /// Run every record of one packaged file through one variant's derandomized API.
-fn check_variant(name: &str, rsp: &str, keygen: KeygenFn, encaps: EncapsFn, decaps: DecapsFn) {
+fn check_variant<P: FrodoParams>(
+    name: &str,
+    rsp: &str,
+    expected_records: usize,
+    keygen: KeygenFn,
+    encaps: EncapsFn,
+    decaps: DecapsFn,
+) {
     let records = parse_records(rsp);
-    assert_eq!(
-        records.len(),
-        3,
-        "{name}: expected the three packaged records"
-    );
+    assert_eq!(records.len(), expected_records, "{name}: record count");
     for (idx, r) in records.iter().enumerate() {
-        assert_eq!(r.pk.len(), PUBLIC_KEY_LEN);
-        assert_eq!(r.sk.len(), SECRET_KEY_LEN);
-        assert_eq!(r.ct.len(), CIPHERTEXT_LEN);
+        assert_eq!(r.pk.len(), P::PUBLIC_KEY_LEN, "{name}: pk length");
+        assert_eq!(r.sk.len(), P::SECRET_KEY_LEN, "{name}: sk length");
+        assert_eq!(r.ct.len(), P::CIPHERTEXT_LEN, "{name}: ct length");
 
         let entropy: [u8; 48] = r.seed.clone().try_into().expect("48-byte seed");
         let mut drbg = NistDrbg::new(&entropy);
 
-        // Keypair draws 64 bytes of randomness.
-        let mut randomness = [0u8; KEYGEN_RANDOM_LEN];
+        // Keypair draws the key-generation randomness.
+        let mut randomness = vec![0u8; P::KEYGEN_RANDOM_LEN];
         drbg.fill(&mut randomness);
-        let (pk, sk) = keygen(&randomness);
+        let (pk, sk) = keygen(&randomness).expect("keygen");
         assert_eq!(pk.bytes, r.pk, "{name} record {idx}: pk");
         assert_eq!(sk.bytes, r.sk, "{name} record {idx}: sk");
 
-        // Encapsulation draws mu (16 bytes) then the salt (32 bytes).
-        let mut mu_salt = [0u8; 48];
+        // Encapsulation draws mu, then the salt.
+        let mut mu_salt = vec![0u8; P::MU_LEN + P::SALT_LEN];
         drbg.fill(&mut mu_salt);
-        let mu: [u8; 16] = mu_salt[..16].try_into().unwrap();
-        let salt: [u8; 32] = mu_salt[16..].try_into().unwrap();
-        let (ct, ss) = encaps(&pk.bytes, &mu, &salt).expect("valid pk");
+        let (mu, salt) = mu_salt.split_at(P::MU_LEN);
+        let (ct, ss) = encaps(&pk.bytes, mu, salt).expect("valid pk");
         assert_eq!(ct, r.ct, "{name} record {idx}: ct");
-        assert_eq!(ss.as_slice(), r.ss.as_slice(), "{name} record {idx}: ss");
+        assert_eq!(ss, r.ss, "{name} record {idx}: ss");
 
         let got = decaps(&sk, &ct).expect("valid sk and ct");
-        assert_eq!(
-            got.as_slice(),
-            r.ss.as_slice(),
-            "{name} record {idx}: decaps"
-        );
+        assert_eq!(got, r.ss, "{name} record {idx}: decaps");
     }
 }
 
 #[test]
-fn shake_variant_matches_official_records() {
-    check_variant(
-        "shake",
-        RSP_SHAKE,
-        shake::keygen_derand,
-        shake::encapsulate_derand,
-        shake::decapsulate,
+fn kat_640_shake() {
+    check_variant::<Frodo640>(
+        "640-shake",
+        include_str!("kat/frodokem640_shake_first3.rsp"),
+        3,
+        shake::keygen_derand::<Frodo640>,
+        shake::encapsulate_derand::<Frodo640>,
+        shake::decapsulate::<Frodo640>,
     );
 }
 
 #[test]
-fn aes_variant_matches_official_records() {
-    check_variant(
-        "aes",
-        RSP_AES,
-        aes::keygen_derand,
-        aes::encapsulate_derand,
-        aes::decapsulate,
+fn kat_640_aes() {
+    check_variant::<Frodo640>(
+        "640-aes",
+        include_str!("kat/frodokem640_aes_first3.rsp"),
+        3,
+        aes::keygen_derand::<Frodo640>,
+        aes::encapsulate_derand::<Frodo640>,
+        aes::decapsulate::<Frodo640>,
+    );
+}
+
+#[test]
+fn kat_976_shake() {
+    check_variant::<Frodo976>(
+        "976-shake",
+        include_str!("kat/frodokem976_shake_first1.rsp"),
+        1,
+        shake::keygen_derand::<Frodo976>,
+        shake::encapsulate_derand::<Frodo976>,
+        shake::decapsulate::<Frodo976>,
+    );
+}
+
+#[test]
+fn kat_976_aes() {
+    check_variant::<Frodo976>(
+        "976-aes",
+        include_str!("kat/frodokem976_aes_first1.rsp"),
+        1,
+        aes::keygen_derand::<Frodo976>,
+        aes::encapsulate_derand::<Frodo976>,
+        aes::decapsulate::<Frodo976>,
+    );
+}
+
+#[test]
+fn kat_1344_shake() {
+    check_variant::<Frodo1344>(
+        "1344-shake",
+        include_str!("kat/frodokem1344_shake_first1.rsp"),
+        1,
+        shake::keygen_derand::<Frodo1344>,
+        shake::encapsulate_derand::<Frodo1344>,
+        shake::decapsulate::<Frodo1344>,
+    );
+}
+
+#[test]
+fn kat_1344_aes() {
+    check_variant::<Frodo1344>(
+        "1344-aes",
+        include_str!("kat/frodokem1344_aes_first1.rsp"),
+        1,
+        aes::keygen_derand::<Frodo1344>,
+        aes::encapsulate_derand::<Frodo1344>,
+        aes::decapsulate::<Frodo1344>,
     );
 }
 
 #[test]
 fn tampered_ciphertext_is_implicitly_rejected() {
-    let r = &parse_records(RSP_SHAKE)[0];
+    let r = &parse_records(include_str!("kat/frodokem640_shake_first3.rsp"))[0];
     let sk = SecretKey {
         bytes: r.sk.clone(),
     };
-    let honest = shake::decapsulate(&sk, &r.ct).unwrap();
-    assert_eq!(honest.as_slice(), r.ss.as_slice());
+    let honest = shake::decapsulate::<Frodo640>(&sk, &r.ct).unwrap();
+    assert_eq!(honest, r.ss);
 
     // Flip one bit in c1: decapsulation must not error and must return a value that is
     // not the honest secret, and the same value every time.
     let mut bad = r.ct.clone();
     bad[100] ^= 0x01;
-    let rej1 = shake::decapsulate(&sk, &bad).expect("no error on tamper");
-    let rej2 = shake::decapsulate(&sk, &bad).expect("no error on tamper");
+    let rej1 = shake::decapsulate::<Frodo640>(&sk, &bad).expect("no error on tamper");
+    let rej2 = shake::decapsulate::<Frodo640>(&sk, &bad).expect("no error on tamper");
     assert_ne!(rej1, honest);
     assert_eq!(rej1, rej2);
 
@@ -204,15 +250,21 @@ fn tampered_ciphertext_is_implicitly_rejected() {
     let mut bad_salt = r.ct.clone();
     let last = bad_salt.len() - 1;
     bad_salt[last] ^= 0x80;
-    assert_ne!(shake::decapsulate(&sk, &bad_salt).unwrap(), honest);
+    assert_ne!(
+        shake::decapsulate::<Frodo640>(&sk, &bad_salt).unwrap(),
+        honest
+    );
 }
 
 #[test]
 fn length_checks_reject_malformed_inputs() {
-    let r = &parse_records(RSP_SHAKE)[0];
+    let r = &parse_records(include_str!("kat/frodokem640_shake_first3.rsp"))[0];
     let sk = SecretKey {
         bytes: r.sk.clone(),
     };
-    assert!(shake::decapsulate(&sk, &r.ct[..r.ct.len() - 1]).is_err());
-    assert!(shake::encapsulate_derand(&r.pk[..r.pk.len() - 1], &[0; 16], &[0; 32]).is_err());
+    assert!(shake::decapsulate::<Frodo640>(&sk, &r.ct[..r.ct.len() - 1]).is_err());
+    assert!(
+        shake::encapsulate_derand::<Frodo640>(&r.pk[..r.pk.len() - 1], &[0; 16], &[0; 32]).is_err()
+    );
+    assert!(shake::keygen_derand::<Frodo640>(&[0u8; 5]).is_err());
 }
