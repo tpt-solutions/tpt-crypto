@@ -27,8 +27,8 @@ mpc         on field + hash
 tpt-crypto  (facade) on everything
 ```
 
-Every crate is `#![no_std]` (plus `alloc` where needed) and opts into the
-workspace lints. `unsafe_code = "forbid"` across the workspace **except**
+Every primitive crate is `#![no_std]` (plus `alloc` where needed) and opts into the
+workspace lints. The `tpt-crypto-cli` binary and `tpt-crypto-wasm` bindings use `std`. `unsafe_code = "forbid"` across the workspace **except**
 `tpt-crypto-ct` (and the `zeroize` submodule of `tpt-crypto-core`), which
 document and localize every `unsafe` block with a `// SAFETY:` comment.
 
@@ -42,11 +42,13 @@ document and localize every `unsafe` block with a `// SAFETY:` comment.
 | `tpt-crypto-field` | Prime field arithmetic over `tpt-math-exact` / `tpt-math-linalg-fixed`. |
 | `tpt-crypto-curve` | Ed25519, X25519, P-256/384, BLS12-381 G1/G2 + pairing, RFC 9380 hash-to-curve. |
 | `tpt-crypto-aead` | AES-GCM, ChaCha20-Poly1305, AES-GCM-SIV, `CtrDrbg`. |
-| `tpt-crypto-kem` | ML-KEM (FIPS 203). FrodoKEM and Classic McEliece are planned. |
-| `tpt-crypto-sig` | ML-DSA (FIPS 204), SLH-DSA, Ed25519, ECDSA (P-256/384), RSA verify (PKCS#1 v1.5 / PSS), BLS12-381. |
+| `tpt-crypto-kem` | ML-KEM (FIPS 203), FrodoKEM, Classic McEliece, X-Wing hybrid KEM, HPKE (RFC 9180). |
+| `tpt-crypto-sig` | ML-DSA (FIPS 204), SLH-DSA, Ed25519, hybrid Ed25519 + ML-DSA-65, ECDSA (P-256/384), RSA verify (PKCS#1 v1.5 / PSS), BLS12-381. |
 | `tpt-crypto-zk` | Bulletproofs, minimal PLONK verifier, Pedersen commitments. |
 | `tpt-crypto-mpc` | Additive secret sharing, Beaver triples, OT primitives. |
 | `tpt-crypto` | Facade re-exporting the substrate behind feature gates. |
+| `tpt-crypto-cli` | `tpt-crypto` command-line tool: hashing, random bytes, Ed25519 sign/verify (hex or PEM keys), seal/open, X-Wing KEM. |
+| `tpt-crypto-wasm` | wasm-bindgen bindings for the `easy` API: seal/open, hash, HMAC, HKDF, Ed25519. npm packaging is not included. |
 
 ### TLS (rustls)
 
@@ -67,6 +69,10 @@ Pick a subset or take everything with `full`:
 | `bls` | BLS12-381 signatures (aggregation, proof-of-possession) |
 | `zk` | Bulletproofs, Pedersen commitments |
 | `mpc` | secret sharing, Beaver triples, OT |
+| `cnsa2` | approved-only module `tpt_crypto::cnsa2`: AES-256-GCM, SHA-384/512, ML-KEM-1024, ML-DSA-87 (not a compliance claim) |
+| `os-rng` | `OsRng`, an operating-system CSPRNG (requires `std`) |
+| `signature` | `signature` crate trait impls for Ed25519, ECDSA, ML-DSA and BLS |
+| `profile-modern`, `profile-cnsa2` | raise the minimum RSA modulus to 2048 / 3072 bits |
 | `full` | all of the above |
 
 The `ml_kem`, `ml_dsa`, `bulletproofs`, `bls`, `ct` and `prelude` modules expose
@@ -83,7 +89,7 @@ migration from `ring` / RustCrypto / `aws-lc-rs`) are in [`docs/`](./docs/README
   Secret-dependent selection goes through `ct_select` / masking, whose
   execution trace is independent of the secret (see
   `tpt-crypto-core::constant_time` and the `*.spec` contracts under `specs/`).
-- **`no_std` everywhere** (plus `alloc` where a heap is needed). Builds for
+- **`no_std` for the primitive crates** (plus `alloc` where a heap is needed). Builds for
   `thumbv6m-none-eabi`, `thumbv7em-none-eabihf`, `wasm32-unknown-unknown`.
 - **100% MIT/Apache dependency chain.** Enforced by `deny.toml` (C-FFI,
   OpenSSL, and `ring` are banned).
@@ -101,7 +107,8 @@ not just self-consistency. Each vector file is pinned by sha256 in the crate's
 | HMAC, HKDF, cSHAKE, KMAC, HMAC-DRBG | RFC 4231, RFC 5869, SP 800-185, NIST ACVP | `crates/tpt-crypto-hash/tests/` |
 | AES-GCM, ChaCha20-Poly1305, AES-GCM-SIV | Wycheproof, RFC 8452 | `crates/tpt-crypto-aead/tests/kat/` |
 | ML-KEM | NIST FIPS 203 vectors (512/768/1024) | `crates/tpt-crypto-kem/tests/kat/` |
-| FrodoKEM, Classic McEliece | official reference KATs (`.rsp`) | `crates/tpt-crypto-kem/tests/kat/` |
+| FrodoKEM | official reference KATs (`.rsp`) | `crates/tpt-crypto-kem/tests/kat/` |
+| Classic McEliece | official reference KAT digests (first vectors) | `crates/tpt-crypto-kem/tests/kat/` |
 | HPKE (X25519) | RFC 9180 vectors | `crates/tpt-crypto-kem/tests/kat/` |
 | ML-DSA, SLH-DSA | NIST ACVP | `crates/tpt-crypto-sig/tests/kat/` |
 | Signature verification edge cases | Wycheproof | `crates/tpt-crypto-sig/tests/kat/` |

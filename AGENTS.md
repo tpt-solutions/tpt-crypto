@@ -28,12 +28,14 @@ kem / sig   on field + curve + hash  (kem's `hpke` module also uses aead)
 zk          on curve + hash
 mpc         on field + hash
 tpt-crypto  (facade) on everything
+tpt-crypto-cli, tpt-crypto-wasm   leaf consumers of the facade (std; not layered below anything)
 ```
 
 ## Hard rules
 
-- Every crate is `#![no_std]` (plus `alloc` where needed) and opts into workspace
-  lints (`[lints] workspace = true`).
+- Every primitive and facade crate is `#![no_std]` (plus `alloc` where needed).
+  The leaf crates `tpt-crypto-cli` (binary) and `tpt-crypto-wasm` (bindings) use
+  `std`. Every crate opts into workspace lints (`[lints] workspace = true`).
 - `unsafe_code = "forbid"` for the whole workspace **except** `tpt-crypto-ct`,
   which overrides it locally and documents every `unsafe` block with `// SAFETY:`.
 - No `*-sys`, OpenSSL, or `ring` dependencies — pure Rust only (enforced by
@@ -55,7 +57,8 @@ tpt-crypto  (facade) on everything
 
 ## Workspace layout
 
-- `crates/*` — the 11 library crates (10 primitives + facade).
+- `crates/*` — 12 library crates: 10 primitives, the `tpt-crypto` facade, and the
+  `tpt-crypto-wasm` bindings. Plus the `tpt-crypto-cli` binary.
 - `xtask/` — developer tooling (no-std, kat-check, leakage, verify, release-dry-run, sbom).
 - `examples/` — end-to-end usage samples (one per `spec.txt` §4 snippet).
 - `fuzz/` — `cargo-fuzz` libfuzzer targets for attacker-controlled decoders

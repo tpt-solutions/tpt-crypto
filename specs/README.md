@@ -9,6 +9,8 @@ checks:
 ```
 evidence:
   cargo-test: -p tpt-crypto-hash --test kat sha2_      # runs `cargo test <args>`
+  exhaustive: tpt-crypto-ct exhaustive u8_select_swap_eq_exhaustive  # one #[ignore]d test, release mode
+  ct-asm: tpt-crypto-ct ct_asm_probe                    # binary scan of a probe target for branches
   pending: reason the contract has no tests yet         # reported, not failed
 ```
 
