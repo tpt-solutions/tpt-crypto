@@ -14,9 +14,8 @@ keywords = ["cryptography", "no-std", "constant-time", "secret", "crypto"]
 categories = ["cryptography", "no-std"]
 
 [dependencies]
-serde = { version = "1", optional = true, default-features = false, features = ["derive"] }
 rand_core_06 = { package = "rand_core", version = "0.6", optional = true, default-features = false }
-# MIT OR Apache-2.0. Already in Cargo.lock as a transitive dependency (0.3.4).
+# MIT OR Apache-2.0. Resolved to 0.4.3 in Cargo.lock.
 getrandom = { version = "0.4", optional = true }
 
 [dev-dependencies]
@@ -28,7 +27,6 @@ criterion = "0.5"
 default = ["std"]
 std = ["alloc"]
 alloc = []
-serde = ["dep:serde"]
 rand_core = ["dep:rand_core_06"]
 # Operating-system CSPRNG (`OsRng`). Requires std; opt-in so the default
 # no_std build gains no dependency.

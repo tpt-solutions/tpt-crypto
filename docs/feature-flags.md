@@ -41,7 +41,7 @@ Sub-crates can be used directly when you want less than the facade offers.
 
 | Crate | Notable features |
 | --- | --- |
-| `tpt-crypto-core` | `std`, `alloc`, `os-rng`, `serde`, `rand_core` |
+| `tpt-crypto-core` | `std`, `alloc`, `os-rng`, `rand_core` |
 | `tpt-crypto-hash` | `std`, `alloc`, `digest` (RustCrypto `digest` trait impls) |
 | `tpt-crypto-aead` | `std`, `alloc`, `aead-trait` (RustCrypto `aead` trait impls) |
 | `tpt-crypto-sig` | `std`, `alloc`, `signature`, `rand_core`, `slh-dsa`, `profile-modern`, `profile-cnsa2` |
