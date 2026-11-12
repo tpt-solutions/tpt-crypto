@@ -86,6 +86,11 @@ pub mod ml_dsa {
     pub use tpt_crypto_sig::ml_dsa::*;
 }
 
+#[cfg(feature = "cnsa2")]
+#[doc = "CNSA 2.0 approved-only recipes: AES-256-GCM, SHA-384/512, ML-KEM-1024, ML-DSA-87."]
+#[cfg_attr(docsrs, doc(cfg(feature = "cnsa2")))]
+pub mod cnsa2;
+
 #[cfg(feature = "bls")]
 #[doc = "BLS12-381 signatures (minimal-pubkey-size; POP ciphersuite by default)."]
 #[cfg_attr(docsrs, doc(cfg(feature = "bls")))]

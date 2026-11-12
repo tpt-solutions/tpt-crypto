@@ -19,6 +19,7 @@ dependencies.
 | `signature` | no | `signature`-crate trait impls for the sig types. |
 | `profile-modern` | no | Policy: RSA public keys need at least 2048-bit moduli. Implies `classical`. |
 | `profile-cnsa2` | no | Policy: RSA public keys need at least 3072-bit moduli. Implies `profile-modern`. |
+| `cnsa2` | no | Approved-only recipes in `tpt_crypto::cnsa2`: AES-256-GCM, SHA-384/512, ML-KEM-1024, ML-DSA-87. Additive: it disables nothing, so `--all-features` still builds. Not a compliance claim. |
 | `full` | no | `classical`, `pq`, `bls`, `zk`, `mpc`. |
 
 A typical setup:

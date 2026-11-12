@@ -72,6 +72,9 @@ signature = ["tpt-crypto-sig/signature"]
 # Policy profiles: raise the minimum RSA modulus (2048 / 3072 bits). See tpt-crypto-sig.
 profile-modern = ["classical", "tpt-crypto-sig/profile-modern"]
 profile-cnsa2 = ["profile-modern", "tpt-crypto-sig/profile-cnsa2"]
+# CNSA 2.0 approved-only recipes (AES-256-GCM, SHA-384/512, ML-KEM-1024, ML-DSA-87).
+# Additive: nothing else is disabled, so --all-features still builds.
+cnsa2 = ["classical", "pq", "os-rng", "alloc"]
 full = ["classical", "pq", "bls", "zk", "mpc"]
 
 [lints.clippy]
