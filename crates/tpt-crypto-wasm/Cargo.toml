@@ -1,0 +1,28 @@
+[package]
+name = "tpt-crypto-wasm"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "WebAssembly bindings for the tpt-crypto easy API (wasm-bindgen): hashing, AEAD, Ed25519, HKDF."
+readme = "README.md"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/tpt-crypto-wasm"
+keywords = ["cryptography", "wasm", "aead", "signature"]
+categories = ["cryptography", "wasm"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+tpt-crypto = { workspace = true, features = ["std", "classical", "os-rng"] }
+wasm-bindgen = "0.2.126"
+
+[lints]
+workspace = true
+
+# The browser RNG for wasm32-unknown-unknown (getrandom needs its `wasm_js` backend there).
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+getrandom = { version = "0.4", features = ["wasm_js"] }
