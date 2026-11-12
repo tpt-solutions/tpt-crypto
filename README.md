@@ -1,5 +1,7 @@
 # tpt-crypto — the high-assurance, constant-time cryptographic substrate
 
+[![CI](https://github.com/tpt-solutions/tpt-crypto/actions/workflows/ci.yml/badge.svg)](https://github.com/tpt-solutions/tpt-crypto/actions/workflows/ci.yml)
+
 Pure Rust, `no_std`-first, hand-rolled primitives with a 100% MIT/Apache
 compatible dependency chain. No OpenSSL, no `ring`, no `*-sys` C-FFI.
 
@@ -72,11 +74,53 @@ migration from `ring` / RustCrypto / `aws-lc-rs`) are in [`docs/`](./docs/README
 - **Constant-time by construction.** No secret-dependent branches or indexing.
   Secret-dependent selection goes through `ct_select` / masking, whose
   execution trace is independent of the secret (see
-  `tpt-crypto-core::constant_time` and the `*.telos` contracts under `specs/`).
+  `tpt-crypto-core::constant_time` and the `*.spec` contracts under `specs/`).
 - **`no_std` everywhere** (plus `alloc` where a heap is needed). Builds for
   `thumbv6m-none-eabi`, `thumbv7em-none-eabihf`, `wasm32-unknown-unknown`.
 - **100% MIT/Apache dependency chain.** Enforced by `deny.toml` (C-FFI,
   OpenSSL, and `ring` are banned).
+
+## Evidence it works
+
+Correctness is checked against published, independently produced test vectors,
+not just self-consistency. Each vector file is pinned by sha256 in the crate's
+`tests/kat/PROVENANCE.md`, and `cargo xtask kat-check` fails if one is altered.
+
+| Area | Checked against | Where |
+| --- | --- | --- |
+| SHA-2, SHA-3, SHAKE | FIPS 180-4 / FIPS 202 (NIST CAVP) | `crates/tpt-crypto-hash/tests/kat.rs` |
+| BLAKE2b, BLAKE3, KangarooTwelve | RFC 7693, official BLAKE3 vectors, RFC 9861 | `crates/tpt-crypto-hash/tests/kat.rs` |
+| HMAC, HKDF, cSHAKE, KMAC, HMAC-DRBG | RFC 4231, RFC 5869, SP 800-185, NIST ACVP | `crates/tpt-crypto-hash/tests/` |
+| AES-GCM, ChaCha20-Poly1305, AES-GCM-SIV | Wycheproof, RFC 8452 | `crates/tpt-crypto-aead/tests/kat/` |
+| ML-KEM | NIST FIPS 203 vectors (512/768/1024) | `crates/tpt-crypto-kem/tests/kat/` |
+| FrodoKEM, Classic McEliece | official reference KATs (`.rsp`) | `crates/tpt-crypto-kem/tests/kat/` |
+| HPKE (X25519) | RFC 9180 vectors | `crates/tpt-crypto-kem/tests/kat/` |
+| ML-DSA, SLH-DSA | NIST ACVP | `crates/tpt-crypto-sig/tests/kat/` |
+| Signature verification edge cases | Wycheproof | `crates/tpt-crypto-sig/tests/kat/` |
+
+Beyond vectors, the repo also runs property tests, fuzz targets for
+attacker-controlled decoders, mutation testing, `miri` on the unsafe crate, a
+dudect-style timing-leakage harness, and `no_std` builds for embedded and wasm
+targets in CI. See [`todo.md`](./todo.md) for the current status of each.
+
+To reproduce it yourself:
+
+```sh
+cargo test --workspace --all-features
+cargo test -p tpt-crypto-sig --features alloc,profile-modern  # RSA KATs (see note)
+cargo xtask kat-check     # vector files match their recorded sha256
+cargo xtask verify        # specs/*.spec contracts bound to test evidence
+cargo xtask leakage       # timing-leakage harness
+```
+
+Note: `--all-features` enables `profile-cnsa2`, which compiles out the 2048-bit
+RSA KATs, so CI runs the sig crate separately under `profile-modern`.
+
+**What this does and does not show.** Passing these checks shows the code agrees
+with the published vectors and behaves consistently under the listed tests. It
+is not a proof of security, it does not rule out side channels on every
+platform, and it is not a substitute for an independent audit (see the warning
+above).
 
 ## Build & check
 
