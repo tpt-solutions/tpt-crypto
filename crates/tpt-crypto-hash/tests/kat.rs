@@ -411,14 +411,38 @@ fn blake3_xof_long_output_and_reset() {
 fn k12_long_inputs_reference() {
     let c: Vec<u8> = (0..7u8).collect();
     let cases: [(usize, &str); 8] = [
-        (8191, "cd8baf0b2ddc3589006a6dbfe1bf286c88c7e90163a590528bd5154a89246b68"),
-        (8192, "248101a4dec830ffcab633a37d16f0633bbff2813a0476828981e06c8f816ded"),
-        (8193, "cbbf597e392251dacd3941d091351b43a61aee82588ff52ab7718022d170c4e5"),
-        (8200, "b2b38990282320c049edab4eabddbe6efdd7b32ef8ccf78eb765fcb10782608f"),
-        (16384, "90bdd4a0ef76d74d8ebd1e32db1d68252e564a43de2c2b0b5644eeda6bb17f08"),
-        (16385, "a91c4722c60380ce1bf7c61c9a7f9babcca07570485740ed8749b24d7d7ef291"),
-        (20000, "255fdaf49aa83dbd64245832b9cdce8bbf7dbd1cd91909c9b94e1dadd5cab55f"),
-        (50000, "125dc18fe1edabc341219db0bdc5fc34c6714f83547940666245f0daf06b8b4a"),
+        (
+            8191,
+            "cd8baf0b2ddc3589006a6dbfe1bf286c88c7e90163a590528bd5154a89246b68",
+        ),
+        (
+            8192,
+            "248101a4dec830ffcab633a37d16f0633bbff2813a0476828981e06c8f816ded",
+        ),
+        (
+            8193,
+            "cbbf597e392251dacd3941d091351b43a61aee82588ff52ab7718022d170c4e5",
+        ),
+        (
+            8200,
+            "b2b38990282320c049edab4eabddbe6efdd7b32ef8ccf78eb765fcb10782608f",
+        ),
+        (
+            16384,
+            "90bdd4a0ef76d74d8ebd1e32db1d68252e564a43de2c2b0b5644eeda6bb17f08",
+        ),
+        (
+            16385,
+            "a91c4722c60380ce1bf7c61c9a7f9babcca07570485740ed8749b24d7d7ef291",
+        ),
+        (
+            20000,
+            "255fdaf49aa83dbd64245832b9cdce8bbf7dbd1cd91909c9b94e1dadd5cab55f",
+        ),
+        (
+            50000,
+            "125dc18fe1edabc341219db0bdc5fc34c6714f83547940666245f0daf06b8b4a",
+        ),
     ];
     for (len, want) in cases {
         let m: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
@@ -447,11 +471,27 @@ fn k12_rate_boundaries_and_long_output() {
     use tpt_crypto_hash::Xof;
     let c7: Vec<u8> = (0..7u8).collect();
     let cases: [(usize, &str); 5] = [
-        (167, "8fba4292095007d349edec415d1f14a6509d62247aee794bb3fc1158e1d833df"),
-        (168, "9d22ee29b6e0dbf4bcebf3c1677451971edb9c64fe02edd30e0433bcfb674584"),
-        (169, "20a7ebc7362176f93426e147f3c92f9f6445228b9e0282cc391625205d344442"),
-        (335, "f93223452769df2df85f63a826c4c93f5529aacb7daff66e35cfb5553d1bc6ba"),
-        (336, "19b86a4f4037d985e009d63177e985737d87b9bf1f3fbb2854258da01a0ac195"),    ];
+        (
+            167,
+            "8fba4292095007d349edec415d1f14a6509d62247aee794bb3fc1158e1d833df",
+        ),
+        (
+            168,
+            "9d22ee29b6e0dbf4bcebf3c1677451971edb9c64fe02edd30e0433bcfb674584",
+        ),
+        (
+            169,
+            "20a7ebc7362176f93426e147f3c92f9f6445228b9e0282cc391625205d344442",
+        ),
+        (
+            335,
+            "f93223452769df2df85f63a826c4c93f5529aacb7daff66e35cfb5553d1bc6ba",
+        ),
+        (
+            336,
+            "19b86a4f4037d985e009d63177e985737d87b9bf1f3fbb2854258da01a0ac195",
+        ),
+    ];
     for (len, want) in cases {
         let m: Vec<u8> = (0..len).map(|i| (i % 251) as u8).collect();
         let mut out = [0u8; 32];
@@ -463,7 +503,11 @@ fn k12_rate_boundaries_and_long_output() {
     let m5: Vec<u8> = (0..5usize).map(|i| (i % 251) as u8).collect();
     let mut out = [0u8; 32];
     kangaroo_twelve(&m5, &big_c, &mut out);
-    assert_eq_hex("k12 customization 300", &out, "3f98988f72fafbac34f42f174de1ab2a06f1ce8eed79bc17c42f92407a37f889");
+    assert_eq_hex(
+        "k12 customization 300",
+        &out,
+        "3f98988f72fafbac34f42f174de1ab2a06f1ce8eed79bc17c42f92407a37f889",
+    );
 
     let m3: Vec<u8> = (0..3usize).map(|i| (i % 251) as u8).collect();
     let mut k = KangarooTwelve::new(b"");

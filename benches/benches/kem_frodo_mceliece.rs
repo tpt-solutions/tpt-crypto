@@ -3,9 +3,13 @@
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use tpt_crypto_core::{CryptoRng, Error};
-use tpt_crypto_kem::frodo::shake::{decapsulate as frodo_decaps, encapsulate as frodo_encaps, keygen as frodo_keygen};
+use tpt_crypto_kem::frodo::shake::{
+    decapsulate as frodo_decaps, encapsulate as frodo_encaps, keygen as frodo_keygen,
+};
 use tpt_crypto_kem::frodo::Frodo640;
-use tpt_crypto_kem::mceliece::{decapsulate as mc_decaps, encapsulate as mc_encaps, keypair as mc_keypair, Mc348864};
+use tpt_crypto_kem::mceliece::{
+    decapsulate as mc_decaps, encapsulate as mc_encaps, keypair as mc_keypair, Mc348864,
+};
 
 /// A cheap deterministic `CryptoRng` for benchmarking (not for production use).
 struct BenchRng(u64);
