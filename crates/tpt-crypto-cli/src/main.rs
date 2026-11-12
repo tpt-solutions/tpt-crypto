@@ -1,7 +1,8 @@
 //! `tpt-crypto`: command-line front end to the tpt-crypto recipes.
 //!
 //! Dependency-free: arguments, hex and file handling are written out by hand.
-//! Key files are hex text. Output files are never overwritten. `-` means stdin
+//! Key files are hex text, or PEM for Ed25519 keys (PKCS#8 private, SPKI public).
+//! Output files are never overwritten. `-` means stdin
 //! for input and stdout for `random`.
 //!
 //! Exit codes: `0` success, `1` a check failed (signature, authentication or
@@ -12,7 +13,7 @@ use std::io::{self, Read, Write};
 use tpt_crypto::easy;
 use tpt_crypto::kem::xwing;
 use tpt_crypto::prelude::OsRng;
-use tpt_crypto::sig::ed25519;
+use tpt_crypto::sig::{ed25519, encoding};
 
 const USAGE: &str = "\
 usage: tpt-crypto <command> [args]
@@ -21,12 +22,15 @@ commands:
   selftest                       run the power-on known-answer tests
   hash <in|->                    SHA-256 of the input, as hex
   random <bytes>                 OS-RNG bytes, as hex (to stdout)
-  sign-keygen <seed-out> <pub-out>
-                                 new Ed25519 key pair (hex files)
+  sign-keygen [--pem] <seed-out> <pub-out>
+                                 new Ed25519 key pair (hex files, or PEM with --pem)
   sign <seed-file> <in|-> <sig-out>
-                                 Ed25519 signature (hex)
+                                 Ed25519 signature (hex); seed file may be hex or PEM
   verify <pub-file> <in|-> <sig-file>
-                                 check a signature; prints OK or FAIL
+                                 check a signature; prints OK or FAIL; key may be hex or PEM
+  pem-export <private|public> <hex-in> <pem-out>
+                                 convert an Ed25519 hex key file to PEM
+  pem-import <pem-in> <hex-out>  convert an Ed25519 PEM key file to hex
   seal-keygen <key-out>          new 256-bit symmetric key (hex file)
   seal <key-file> <in|-> <out>   XChaCha20-Poly1305 encrypt (random nonce)
   open <key-file> <in|-> <out>   decrypt and authenticate
@@ -80,23 +84,19 @@ fn run(args: &[String]) -> Result<i32, String> {
             println!("{}", to_hex(&bytes));
             Ok(0)
         }
-        ("sign-keygen", [seed_out, pub_out]) => {
-            let seed = easy::ed25519_generate().map_err(|e| format!("rng: {e:?}"))?;
-            let public = easy::ed25519_public_key(seed.expose_secret());
-            write_secret_text_new(seed_out, &to_hex(seed.expose_secret()))?;
-            write_text_new(pub_out, &to_hex(&public))?;
-            println!("wrote {seed_out} (secret) and {pub_out}");
-            Ok(0)
+        ("sign-keygen", [seed_out, pub_out]) => sign_keygen(seed_out, pub_out, false),
+        ("sign-keygen", [flag, seed_out, pub_out]) if flag == "--pem" => {
+            sign_keygen(seed_out, pub_out, true)
         }
         ("sign", [seed_file, input, sig_out]) => {
-            let seed: [u8; ed25519::SEED_LEN] = read_hex_key(seed_file)?;
+            let seed = load_ed25519_seed(seed_file)?;
             let sig = easy::sign(&seed, &read_input(input)?);
             write_text_new(sig_out, &to_hex(&sig))?;
             println!("wrote {sig_out}");
             Ok(0)
         }
         ("verify", [pub_file, input, sig_file]) => {
-            let public: [u8; ed25519::PUBLIC_KEY_LEN] = read_hex_key(pub_file)?;
+            let public = load_ed25519_public(pub_file)?;
             let sig: [u8; ed25519::SIGNATURE_LEN] = read_hex_key(sig_file)?;
             match easy::verify(&public, &read_input(input)?, &sig) {
                 Ok(()) => {
@@ -108,6 +108,52 @@ fn run(args: &[String]) -> Result<i32, String> {
                     Ok(1)
                 }
             }
+        }
+        ("pem-export", [kind, hex_in, pem_out]) => {
+            let (label, der, secret) = match kind.as_str() {
+                "private" => {
+                    let seed: [u8; ed25519::SEED_LEN] = read_hex_key(hex_in)?;
+                    (
+                        "PRIVATE KEY",
+                        encoding::ed25519_seed_to_pkcs8(&seed).to_vec(),
+                        true,
+                    )
+                }
+                "public" => {
+                    let public: [u8; ed25519::PUBLIC_KEY_LEN] = read_hex_key(hex_in)?;
+                    (
+                        "PUBLIC KEY",
+                        encoding::ed25519_public_to_spki(&public).to_vec(),
+                        false,
+                    )
+                }
+                _ => return Err("pem-export: kind must be `private` or `public`".into()),
+            };
+            let pem = encoding::pem_encode(label, &der);
+            if secret {
+                write_secret_new(pem_out, pem.as_bytes())?;
+            } else {
+                write_new(pem_out, pem.as_bytes())?;
+            }
+            println!("wrote {pem_out}");
+            Ok(0)
+        }
+        ("pem-import", [pem_in, hex_out]) => {
+            let text = read_key_text(pem_in)?;
+            if text.trim_start().starts_with("-----BEGIN PRIVATE KEY-----") {
+                let seed = load_ed25519_seed(pem_in)?;
+                write_secret_text_new(hex_out, &to_hex(&seed))?;
+                println!("wrote {hex_out} (secret)");
+            } else if text.trim_start().starts_with("-----BEGIN PUBLIC KEY-----") {
+                let public = load_ed25519_public(pem_in)?;
+                write_text_new(hex_out, &to_hex(&public))?;
+                println!("wrote {hex_out}");
+            } else {
+                return Err(format!(
+                    "{pem_in}: not a PEM PRIVATE KEY or PUBLIC KEY block"
+                ));
+            }
+            Ok(0)
         }
         ("seal-keygen", [key_out]) => {
             let key = easy::generate_key().map_err(|e| format!("rng: {e:?}"))?;
@@ -262,12 +308,64 @@ fn read_input(path: &str) -> Result<Vec<u8>, String> {
 
 /// Read a hex key file into a fixed-size array.
 fn read_hex_key<const N: usize>(path: &str) -> Result<[u8; N], String> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e:?}"))?;
+    let text = read_key_text(path)?;
     let bytes = from_hex(text.trim()).ok_or_else(|| format!("{path}: not hex"))?;
     bytes
         .as_slice()
         .try_into()
         .map_err(|_| format!("{path}: expected {N} bytes, found {}", bytes.len()))
+}
+
+fn read_key_text(path: &str) -> Result<String, String> {
+    std::fs::read_to_string(path).map_err(|e| format!("{path}: {e:?}"))
+}
+
+fn is_pem(text: &str) -> bool {
+    text.trim_start().starts_with("-----BEGIN ")
+}
+
+/// Ed25519 seed from a hex file or a PKCS#8 PEM file.
+fn load_ed25519_seed(path: &str) -> Result<[u8; ed25519::SEED_LEN], String> {
+    let text = read_key_text(path)?;
+    if is_pem(&text) {
+        let der =
+            encoding::pem_decode("PRIVATE KEY", &text).map_err(|e| format!("{path}: {e:?}"))?;
+        encoding::ed25519_seed_from_pkcs8(&der).map_err(|e| format!("{path}: {e:?}"))
+    } else {
+        read_hex_key(path)
+    }
+}
+
+/// Ed25519 public key from a hex file or an SPKI PEM file.
+fn load_ed25519_public(path: &str) -> Result<[u8; ed25519::PUBLIC_KEY_LEN], String> {
+    let text = read_key_text(path)?;
+    if is_pem(&text) {
+        let der =
+            encoding::pem_decode("PUBLIC KEY", &text).map_err(|e| format!("{path}: {e:?}"))?;
+        encoding::ed25519_public_from_spki(&der).map_err(|e| format!("{path}: {e:?}"))
+    } else {
+        read_hex_key(path)
+    }
+}
+
+fn sign_keygen(seed_out: &str, pub_out: &str, pem: bool) -> Result<i32, String> {
+    let seed = easy::ed25519_generate().map_err(|e| format!("rng: {e:?}"))?;
+    let public = easy::ed25519_public_key(seed.expose_secret());
+    if pem {
+        let secret_pem = encoding::pem_encode(
+            "PRIVATE KEY",
+            &encoding::ed25519_seed_to_pkcs8(seed.expose_secret()),
+        );
+        let public_pem =
+            encoding::pem_encode("PUBLIC KEY", &encoding::ed25519_public_to_spki(&public));
+        write_secret_new(seed_out, secret_pem.as_bytes())?;
+        write_new(pub_out, public_pem.as_bytes())?;
+    } else {
+        write_secret_text_new(seed_out, &to_hex(seed.expose_secret()))?;
+        write_text_new(pub_out, &to_hex(&public))?;
+    }
+    println!("wrote {seed_out} (secret) and {pub_out}");
+    Ok(0)
 }
 
 /// Create a new file and write `data` to it exactly. Refuses to overwrite.
@@ -288,6 +386,11 @@ fn write_text_new(path: &str, hex: &str) -> Result<(), String> {
 
 /// Like [`write_text_new`], but on Unix the file is created readable only by its owner.
 fn write_secret_text_new(path: &str, hex: &str) -> Result<(), String> {
+    write_secret_new(path, format!("{hex}\n").as_bytes())
+}
+
+/// Like [`write_new`], but on Unix the file is created readable only by its owner.
+fn write_secret_new(path: &str, data: &[u8]) -> Result<(), String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -297,12 +400,11 @@ fn write_secret_text_new(path: &str, hex: &str) -> Result<(), String> {
             .mode(0o600)
             .open(path)
             .map_err(|e| format!("{path}: {e:?}"))?;
-        f.write_all(format!("{hex}\n").as_bytes())
-            .map_err(|e| format!("{path}: {e:?}"))
+        f.write_all(data).map_err(|e| format!("{path}: {e:?}"))
     }
     #[cfg(not(unix))]
     {
-        write_text_new(path, hex)
+        write_new(path, data)
     }
 }
 

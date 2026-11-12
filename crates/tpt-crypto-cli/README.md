@@ -6,7 +6,9 @@ Command-line front end to the tpt-crypto recipes. Binary name: `tpt-crypto`.
 tpt-crypto selftest
 tpt-crypto hash <in|->
 tpt-crypto random <bytes>
-tpt-crypto sign-keygen <seed-out> <pub-out>
+tpt-crypto sign-keygen [--pem] <seed-out> <pub-out>
+tpt-crypto pem-export <private|public> <hex-in> <pem-out>
+tpt-crypto pem-import <pem-in> <hex-out>
 tpt-crypto sign <seed-file> <in|-> <sig-out>
 tpt-crypto verify <pub-file> <in|-> <sig-file>
 tpt-crypto seal-keygen <key-out>
@@ -23,7 +25,10 @@ The wire format follows an unpublished draft, so treat its files as unstable.
 A tampered ciphertext is not an error: `kem-decap` prints a different secret, as
 implicit rejection requires.
 
-Key and signature files are hex text. Output files are created new and never
+Key and signature files are hex text by default. Ed25519 keys can also be PEM
+(PKCS#8 private, SPKI public): `sign-keygen --pem` writes PEM, `sign` and `verify`
+accept either format, and `pem-export` / `pem-import` convert between them. PEM
+files are readable by OpenSSL. Output files are created new and never
 overwritten. On Unix, secret key files are created with mode `0600`; on other
 platforms the default permissions apply.
 

@@ -199,3 +199,102 @@ fn bench_runs_and_lists_operations() {
     }
     assert_eq!(code(&run(&["bench", "0"])), 2);
 }
+
+#[test]
+fn pem_keys_sign_and_verify_round_trip() {
+    let dir = scratch("pem-sign");
+    let seed = p(&dir, "seed.pem");
+    let public = p(&dir, "pub.pem");
+    let msg = p(&dir, "msg.txt");
+    let sig = p(&dir, "msg.sig");
+    std::fs::write(&msg, b"hello pem").unwrap();
+
+    assert_eq!(code(&run(&["sign-keygen", "--pem", &seed, &public])), 0);
+    let seed_text = std::fs::read_to_string(&seed).unwrap();
+    let pub_text = std::fs::read_to_string(&public).unwrap();
+    assert!(seed_text.starts_with("-----BEGIN PRIVATE KEY-----"));
+    assert!(pub_text.starts_with("-----BEGIN PUBLIC KEY-----"));
+
+    assert_eq!(code(&run(&["sign", &seed, &msg, &sig])), 0);
+    assert_eq!(stdout(&run(&["verify", &public, &msg, &sig])), "OK");
+
+    std::fs::write(&msg, b"hello pEM").unwrap();
+    assert_eq!(code(&run(&["verify", &public, &msg, &sig])), 1);
+}
+
+#[test]
+fn pem_export_and_import_round_trip_matches_hex_signatures() {
+    let dir = scratch("pem-roundtrip");
+    let seed_hex = p(&dir, "seed.hex");
+    let pub_hex = p(&dir, "pub.hex");
+    let seed_pem = p(&dir, "seed.pem");
+    let pub_pem = p(&dir, "pub.pem");
+    let seed_back = p(&dir, "seed-back.hex");
+    let pub_back = p(&dir, "pub-back.hex");
+    let msg = p(&dir, "msg.txt");
+    let sig_hex = p(&dir, "hex.sig");
+    let sig_pem = p(&dir, "pem.sig");
+    std::fs::write(&msg, b"same message").unwrap();
+
+    assert_eq!(code(&run(&["sign-keygen", &seed_hex, &pub_hex])), 0);
+    assert_eq!(
+        code(&run(&["pem-export", "private", &seed_hex, &seed_pem])),
+        0
+    );
+    assert_eq!(code(&run(&["pem-export", "public", &pub_hex, &pub_pem])), 0);
+    assert_eq!(code(&run(&["pem-import", &seed_pem, &seed_back])), 0);
+    assert_eq!(code(&run(&["pem-import", &pub_pem, &pub_back])), 0);
+
+    // Hex round trip is exact, and Ed25519 is deterministic: both signatures match.
+    assert_eq!(
+        std::fs::read_to_string(&seed_hex).unwrap(),
+        std::fs::read_to_string(&seed_back).unwrap()
+    );
+    assert_eq!(
+        std::fs::read_to_string(&pub_hex).unwrap(),
+        std::fs::read_to_string(&pub_back).unwrap()
+    );
+    assert_eq!(code(&run(&["sign", &seed_hex, &msg, &sig_hex])), 0);
+    assert_eq!(code(&run(&["sign", &seed_pem, &msg, &sig_pem])), 0);
+    assert_eq!(
+        std::fs::read_to_string(&sig_hex).unwrap(),
+        std::fs::read_to_string(&sig_pem).unwrap()
+    );
+    assert_eq!(stdout(&run(&["verify", &pub_pem, &msg, &sig_hex])), "OK");
+}
+
+#[test]
+fn pem_commands_reject_bad_input() {
+    let dir = scratch("pem-bad");
+    let hex = p(&dir, "k.hex");
+    let out = p(&dir, "out.pem");
+    let junk = p(&dir, "junk.pem");
+    assert_eq!(code(&run(&["sign-keygen", &hex, &p(&dir, "pub.hex")])), 0);
+
+    let bad_kind = run(&["pem-export", "secret", &hex, &out]);
+    assert_eq!(code(&bad_kind), 2);
+
+    std::fs::write(&junk, "not a key\n").unwrap();
+    assert_eq!(code(&run(&["pem-import", &junk, &p(&dir, "x.hex")])), 2);
+
+    // A public key file cannot be used as a signing seed.
+    let pub_pem = p(&dir, "pub.pem");
+    assert_eq!(code(&run(&["pem-export", "public", &hex, &pub_pem])), 0);
+    let msg = p(&dir, "msg.txt");
+    std::fs::write(&msg, b"x").unwrap();
+    assert_eq!(code(&run(&["sign", &pub_pem, &msg, &p(&dir, "s.sig")])), 2);
+}
+
+#[cfg(unix)]
+#[test]
+fn pem_private_key_files_are_owner_only() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = scratch("pem-mode");
+    let seed = p(&dir, "seed.pem");
+    assert_eq!(
+        code(&run(&["sign-keygen", "--pem", &seed, &p(&dir, "pub.pem")])),
+        0
+    );
+    let mode = std::fs::metadata(&seed).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
+}
