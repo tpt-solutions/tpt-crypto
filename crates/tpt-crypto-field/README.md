@@ -11,8 +11,8 @@ use bitwise masks and `cmov`, never branches on secret data.
 
 - Core type [`FieldElement<P, LIMBS>`] — elements stored in Montgomery form,
   fully-unrolled arithmetic monomorphized per modulus (`FieldParams` trait).
-- Montgomery CIOS multiply/square, Montgomery/Barrett reduction,
-  `add` / `sub` / `neg` / `invert` (Fermat), `sqrt`, canonical
+- Montgomery CIOS multiply/square, `add` / `sub` / `neg` / `invert` (Fermat),
+  `sqrt`, canonical
   `to_bytes` / `from_bytes` with constant-time non-canonical rejection.
 - Parameter sets: P-256 and P-384 base + scalar fields, BLS12-381 `Fp` + `Fr`,
   Ed25519 field + scalar.
@@ -33,12 +33,14 @@ assert_eq!(a.mul(&a.invert().unwrap()), P256Base::one());
 
 | Feature | Effect |
 | --- | --- |
-| `alloc` | default; enables the big-integer helpers used by extension-tower setup |
+| `alloc` | default; enables the `Vec`-based byte encoding of the extension towers (`Fp2`, `Fp6`, `Fp12`) |
 
 ## Status
 
-Not audited. KATs are hand-computed and cross-checked against
-`tpt-math-exact` big-rational reference values. The Montgomery CIOS
+Not audited. KATs are computed from the prime definitions with Python's
+arbitrary-precision integers (see `tests/kat/PROVENANCE.md`). They have not yet
+been cross-checked against `tpt-math-exact`, which was not available offline.
+The Montgomery CIOS
 overflow-limb bug (6-limb moduli) is fixed and regression-tested.
 
 ## License

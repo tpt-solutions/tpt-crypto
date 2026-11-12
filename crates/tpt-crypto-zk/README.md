@@ -19,8 +19,12 @@ are constant-time.
 - [`prove_range`] / [`verify_range`] — Bulletproofs range proofs, single and
   aggregated (`n` ∈ {8, 16, 32, 64}, `n·m` a power of two), with
   `range_proof_to_bytes` / `range_proof_from_bytes`.
-- [`plonk`] — a minimal PLONK verifier (~500 LoC) built on inner-product
-  commitment opening.
+- [`SeedExpander`] — SHAKE256-based byte source; `prove_range` draws its
+  randomness from it.
+- [`plonk`] — a minimal PLONK verifier (GWC19 round structure) over
+  inner-product commitments, with gate and permutation checks and batched
+  openings. The crate has no PLONK prover; the test suite carries a reference
+  prover.
 
 ## Example
 
@@ -43,8 +47,11 @@ assert!(verify_range(&commitments, &proof, 64).is_ok());
 ## Status
 
 Not audited, research-grade. Property tests cover IPA soundness round-trips,
-range-proof completeness, and serialization; `specs/` carries
-`bulletproofs_verify.telos`.
+range-proof completeness, and serialization. `tests/kat/VECTORS.txt` pins range
+proof, IPA, Pedersen, transcript and PLONK outputs. These vectors were generated
+by this crate and cross-checked against an independent recomputation, so they
+are regression vectors, not third-party ones. `specs/` carries
+`bulletproofs_verify.spec`.
 
 ## License
 

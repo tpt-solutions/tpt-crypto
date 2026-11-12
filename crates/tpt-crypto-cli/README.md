@@ -18,6 +18,7 @@ tpt-crypto kem-keygen <seed-out> <pub-out>
 tpt-crypto kem-encap <pub-file> <ss-out> <ct-out>
 tpt-crypto kem-decap <seed-file> <ct-file> <ss-out>
 tpt-crypto bench [iterations]
+tpt-crypto help
 ```
 
 `kem-*` is the X25519 + ML-KEM-768 hybrid (X-Wing style, see `tpt-crypto-kem::xwing`).
@@ -28,7 +29,7 @@ implicit rejection requires.
 Key and signature files are hex text by default. Ed25519 keys can also be PEM
 (PKCS#8 private, SPKI public): `sign-keygen --pem` writes PEM, `sign` and `verify`
 accept either format, and `pem-export` / `pem-import` convert between them. PEM
-files are readable by OpenSSL. Output files are created new and never
+use the PKCS#8 and SPKI layouts that OpenSSL emits. Output files are created new and never
 overwritten. On Unix, secret key files are created with mode `0600`; on other
 platforms the default permissions apply.
 
@@ -41,8 +42,8 @@ ciphertext, then a 16-byte tag. No associated data is used by this CLI.
 `bench` gives quick timings only. For measurements that need to be compared, use the
 criterion suite in `benches/`.
 
-Scope: no PEM/DER import or export.
-Those need a design decision about file formats before they go in here.
+Scope: PEM applies to Ed25519 keys only. There is no DER support, and the `kem-*`
+keys are hex only.
 
 ## License
 

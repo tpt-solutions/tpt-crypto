@@ -15,11 +15,21 @@ hot paths.
 | SLH-DSA | `slh_dsa` | SLH-DSA (hash-based) | FIPS 205 |
 | Ed25519 | `ed25519` | edwards25519 | RFC 8032 |
 | ECDSA | `ecdsa` | P-256, P-384 | SEC1 / FIPS 186-5 |
+| RSA (verification only) | `rsa` | PKCS#1 v1.5 and RSASSA-PSS, SHA-256 / 384 / 512 | RFC 8017 |
+| BLS12-381 | `bls` | Basic, Aug and POP ciphersuites | draft-irtf-cfrg-bls-signature-04 |
+| Hybrid Ed25519 + ML-DSA-65 | `hybrid` | both signatures must verify | crate-defined wire format |
 
 - ML-DSA: lattice-based; NTT polynomial core, rejection sampling with a
   data-flow-independent trace, hedged and deterministic signing.
-- ECDSA / Ed25519: nonce generation is constant-time; `specs/ecdsa_nonce_ct.telos`
-  pins the "timing ⟂ nonce" contract.
+- ECDSA / Ed25519: nonce generation is constant-time; `specs/ecdsa_nonce_ct.spec`
+  pins the "timing ⟂ nonce" contract. ECDSA signing normalises to low-S.
+  `verify_prehash` rejects high-S, and `verify_prehash_allow_high_s` accepts it
+  for X.509 and TLS inputs that are not normalised.
+- Ed25519 verification rejects small-order public keys and commitments.
+- Key encodings: `encoding` (strict DER for SubjectPublicKeyInfo and PKCS#8,
+  PKCS#1 `RSAPublicKey`, and PEM) and `jwk` (public-key JWK, RFC 7517 / 8037 /
+  7518). Private-key members are never accepted by the JWK parser.
+- RSA is public-key verification only. It never handles a private key.
 
 ## Example
 
@@ -63,8 +73,10 @@ ChaCha20 under CNSA 2.0) is a policy decision that is not implemented here.
 ## Status
 
 Not audited. ML-DSA is checked against FIPS 204 KAT vectors; ECDSA and Ed25519
-have RFC / Wycheproof-style vector tests plus property tests. A fuzz target
-exercises signature verification on attacker-controlled input.
+have RFC / Wycheproof-style vector tests plus property tests. BLS12-381 is
+checked against the Ethereum `bls12-381-tests` vectors (`tests/bls_kat.rs`). A
+fuzz target exercises signature verification on attacker-controlled input, and
+other targets exercise DER, public-key and hybrid parsing.
 
 ## License
 

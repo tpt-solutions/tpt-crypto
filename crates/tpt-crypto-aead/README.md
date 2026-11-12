@@ -15,6 +15,8 @@ needed), `unsafe_code = "forbid"`.
 | XChaCha20-Poly1305 | `XChaCha20Poly1305` | draft-irtf-cfrg-xchacha |
 | AES-GCM-SIV (nonce-misuse resistant) | `Aes128GcmSiv`, `Aes256GcmSiv` | RFC 8452 |
 | AES-256 CTR-DRBG | `CtrDrbg` | NIST SP 800-90A |
+| Counter nonces | `NonceSequence` | construction of RFC 8446 §5.3 / RFC 9180 §5.2 |
+| Chunked AEAD (`alloc`) | `stream_seal`, `stream_open` | age-style STREAM framing over ChaCha20-Poly1305 |
 | Stream / MAC building blocks | `ChaCha20`, `Poly1305`, `poly1305_mac`, `Aes` | — |
 
 - The portable AES path is a **table-free, constant-time** S-box (algebraic
@@ -47,13 +49,14 @@ assert_eq!(buf, b"attack at dawn");
 | Feature | Effect |
 | --- | --- |
 | `std` | default; enables `std`/`alloc` on the core crates |
-| `alloc` | combined (non-detached) encrypt/decrypt helpers |
+| `alloc` | combined (non-detached) encrypt/decrypt helpers; STREAM `stream_seal` / `stream_open` |
 | `aead-trait` | implement the [`aead`](https://crates.io/crates/aead) 0.6 crate traits |
 
 ## Status
 
-Not audited. Inline KAT coverage is per-module (FIPS-197, NIST GCM Appendix B,
-RFC 8439 §2.5.2, RFC 8452 C.1).
+Not audited. Inline KAT coverage is per-module (FIPS-197 incl. C.3, SP 800-38A
+F.1.1, NIST GCM Appendix B, RFC 8439 §2.5.2, RFC 8452 C.1). The full RFC 8452
+Appendix C corpus runs from `tests/rfc8452.rs`.
 
 Known gaps:
 

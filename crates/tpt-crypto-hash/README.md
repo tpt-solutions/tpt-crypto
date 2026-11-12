@@ -6,7 +6,8 @@ Constant-time hash functions, XOFs, MACs and KDFs for the
 Layer: `hash` on `core + ct`. Pure Rust, `#![no_std]` (plus `alloc`),
 `unsafe_code = "forbid"`. Every compression / permutation routine is
 fixed-trace: no branch or index on secret data. MAC verification uses
-`ct_eq` from `tpt-crypto-ct`.
+`ct_eq` from `tpt-crypto-ct`. Argon2id's data-dependent block indexing after the
+first half of pass 0 is part of the Argon2 design (see the `argon2` module docs).
 
 ## What's inside
 
@@ -14,10 +15,11 @@ fixed-trace: no branch or index on secret data. MAC verification uses
 | --- | --- | --- |
 | SHA-2 (Merkle–Damgård) | `sha2` | SHA-224/256/384/512, SHA-512/224, SHA-512/256 |
 | SHA-3 / Keccak | `sha3` | SHA3-224/256/384/512, SHAKE128/256, cSHAKE, KMAC |
-| BLAKE | `blake2b`, `blake3` | BLAKE2b (+ keyed), BLAKE3 (chunked tree XOF) |
+| BLAKE | `blake2b`, `blake3` | BLAKE2b (+ keyed, + `blake2b_var` for runtime output lengths), BLAKE3 (chunked tree XOF) |
 | KangarooTwelve | `k12` | K12 over Keccak-p[1600, 12] |
 | MAC | `mac` | HMAC (generic over any `Hasher`) |
 | KDF | `kdf` | HKDF (extract / expand) |
+| Password hashing | `argon2` | Argon2id (RFC 9106, version 0x13; `alloc`) |
 | DRBG | — | `HmacDrbg` (NIST SP 800-90A), implements `DrbgCore` |
 
 ## API
@@ -40,13 +42,13 @@ assert_eq!(digest[0], 0xba);
 | Feature | Effect |
 | --- | --- |
 | `std` | default |
-| `alloc` | heap support without `std` |
+| `alloc` | heap support without `std`; required by `argon2` and `blake2b_var` |
 | `digest` | implement the [`digest`](https://crates.io/crates/digest) 0.10 crate traits |
 
 ## Status
 
 Not audited. Streaming-vs-one-shot equivalence is property-tested; `specs/`
-carries `sha256.telos` and `keccak_f.telos`.
+carries `sha256.spec` and `keccak_f.spec`.
 
 ## License
 

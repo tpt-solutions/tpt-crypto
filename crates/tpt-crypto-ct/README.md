@@ -19,10 +19,18 @@ It is `no_std`-first and provides:
 ## Guarantees
 
 - No secret-dependent branches or memory accesses in the public API.
-- The only `unsafe` is the platform `cmov`/`csel` in `arch` (documented with
-  `// SAFETY:` comments). The workspace forbids `unsafe` everywhere else.
+- The only `unsafe` is in `arch`: the platform `cmov`/`csel`, and the x86_64
+  AES-NI and PCLMULQDQ wrappers (documented with `// SAFETY:` comments). The
+  workspace forbids `unsafe` everywhere else.
 - Verified with `cargo xtask leakage` (dudect Welch t-test) and
   `cargo +nightly miri test -p tpt-crypto-ct`.
+
+## Features
+
+| Feature   | Effect                                                              |
+| --------- | ------------------------------------------------------------------- |
+| `std`     | Default. Enables the x86_64 AES-NI and PCLMULQDQ paths in `arch`.   |
+| `leakage` | Builds the dudect-style leakage test (`tests/leakage.rs`); implies `std`. |
 
 ## License
 

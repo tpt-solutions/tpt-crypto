@@ -40,8 +40,10 @@ reduced, never a value.
 ## Status
 
 Not audited, research-grade. Property tests cover share homomorphism, Beaver
-multiplication, and OT correctness; `specs/` carries
-`secret_share_reconstruct.telos`.
+multiplication, and OT correctness. `tests/kat.rs` holds regression vectors
+produced by this implementation; the base-OT wire format is re-derived in the
+test as an independent check. They are not third-party vectors. `specs/` carries
+`secret_share_reconstruct.spec`.
 
 ## License
 

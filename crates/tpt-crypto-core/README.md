@@ -14,8 +14,9 @@ depends on nothing internal and is `#![no_std]`.
 - [`SecretBox`] — an owned secret that *cannot* be printed, compared, hashed, or
   accidentally observed; reading it requires an explicit
   [`SecretBox::expose_secret`] call.
-- [`ct`] — constant-time comparison and selection: [`Choice`], plus the
-  [`ct_eq`] / [`ct_ne`] / [`ct_select`] facades.
+- [`Choice`] (module `choice`), the [`CtEq`] / [`ConstantTimeSelect`] traits,
+  and the [`ct_eq`] / [`ct_ne`] / [`ct_select`] facades (module `traits`,
+  re-exported at the crate root).
 - [`CryptoRng`] / [`DrbgCore`] — the RNG traits implemented by the DRBGs in
   `tpt-crypto-hash` / `tpt-crypto-aead`.
 - [`constant_time`] — a prose module describing exactly what "constant-time"
@@ -25,7 +26,7 @@ depends on nothing internal and is `#![no_std]`.
 
 ```rust
 use tpt_crypto_core::secret::SecretBox;
-use tpt_crypto_core::ct::{ct_eq, Choice};
+use tpt_crypto_core::{ct_eq, Choice};
 
 let key = SecretBox::new([0x42u8; 32]);
 // Reading the secret is an explicit, greppable action:
@@ -40,8 +41,8 @@ assert_eq!(key.expose_secret(), &[0x42u8; 32]);
 | ----------- | ------------------------------------------------------------- |
 | `std`       | `std::error::Error` impl for `Error` (on by default).         |
 | `alloc`     | Heap-buffer wipes (`Vec<T>: Zeroize`) and `extern crate alloc`. |
-| `serde`     | `Serialize`/`Deserialize` for `Error` and `Choice` (never for `SecretBox`). |
 | `rand_core` | Bridge adapters between `CryptoRng` and the `rand_core` ecosystem. |
+| `os-rng`    | `OsRng`, an operating-system CSPRNG via `getrandom`. Requires `std`; off by default. |
 
 ## License
 
