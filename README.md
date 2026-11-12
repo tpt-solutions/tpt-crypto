@@ -48,6 +48,14 @@ document and localize every `unsafe` block with a `// SAFETY:` comment.
 | `tpt-crypto-mpc` | Additive secret sharing, Beaver triples, OT primitives. |
 | `tpt-crypto` | Facade re-exporting the substrate behind feature gates. |
 
+### TLS (rustls)
+
+A rustls `CryptoProvider` built on this substrate lives in a separate repo,
+[tpt-crypto-rustls](https://github.com/tpt-solutions/tpt-crypto-rustls) (TLS 1.2 and 1.3,
+client-side only, not audited). It is pure Rust, so it can be used in place of rustls'
+`ring` or `aws-lc-rs` providers, with no C or `ring` dependency. This workspace also ships a minimal TLS 1.3 reference
+provider at [`examples/src/rustls_provider.rs`](./examples/src/rustls_provider.rs).
+
 ### Facade features
 
 Pick a subset or take everything with `full`:

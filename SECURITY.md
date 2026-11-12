@@ -57,3 +57,21 @@ workspace lints and re-declares only `unsafe_op_in_unsafe_fn = "deny"`, so any
 optimized into a branch by LLVM, and emitting one requires `unsafe` inline
 assembly. The portable fallback is also wrapped as `unsafe` for uniform
 call-sites. See `crates/tpt-crypto-ct/src/lib.rs` for the header note.
+
+## Proof Boundary
+
+No part of this workspace is machine-checked end to end. The checks that exist are:
+
+- **Exhaustive bounded-domain checks** (`cargo xtask exhaustive`): reductions and
+  constant-time helpers over their full small domains, and small-prime field arithmetic.
+- **Binary-level constant-time checks** (`cargo xtask ct-asm`): branch scans of the
+  compiled probe functions. Some probes are still report-only (see `todo.md` V3).
+- **Statistical leakage tests** (`cargo xtask leakage`, Welch t-test): evidence
+  against leakage, not a proof of its absence.
+- **Known-answer and property tests**, mutation testing (`cargo mutants`) for test strength.
+
+The formal claims stop at the Rust source and LLVM semantics. Anything below that
+(the code generated for the target machine, microarchitecture, the compiler's
+treatment of `write_volatile`, and cache or power side channels) is outside what
+these checks establish. A `specs/*.spec` contract is evidence-linked, not a proof.
+Kani, Cryptol/SAW, and Verus/hax proofs are not part of this workspace.
