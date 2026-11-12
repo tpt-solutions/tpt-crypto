@@ -414,3 +414,35 @@ fn p384_mul_debug() {
     }
     eprintln!("p384 mul debug OK");
 }
+
+/// Regression: P-384 products whose true value exceeds the limb width squared
+/// (first failure reported at `2^192 * 2^192`). Checks the integer product
+/// against the reference for boundary operands near `2^192`, `2^320` and `p - 1`.
+#[test]
+fn p384_mul_high_limb_regression() {
+    use tpt_crypto_field::params::P384BaseParams;
+    let p = P384BaseParams::MODULUS;
+    let p_minus_1 = lsub(&p, &one_int()).0;
+    let p_minus_2 = lsub(&p, &[2, 0, 0, 0, 0, 0]).0;
+    let two_192 = [0, 0, 0, 1, 0, 0];
+    let two_191 = [0, 0, 0, 0x8000_0000_0000_0000, 0, 0];
+    let two_320 = [0, 0, 0, 0, 0, 1];
+    let ops: [[u64; N]; 7] = [
+        two_192,
+        two_191,
+        two_320,
+        p_minus_1,
+        p_minus_2,
+        [1, 0, 0, 0, 0, 0],
+        [u64::MAX, u64::MAX, u64::MAX, 0, 0, 0],
+    ];
+    for a in ops.iter() {
+        for b in ops.iter() {
+            let fa = fe_from_int::<P384BaseParams>(a);
+            let fb = fe_from_int::<P384BaseParams>(b);
+            let actual = from_canon(&fa.mul(&fb).to_bytes());
+            let expected = ref_mul(a, b, &p);
+            assert_eq!(actual, expected, "mul wrong a={:?} b={:?}", a, b);
+        }
+    }
+}
