@@ -24,3 +24,10 @@ All notable changes to `tpt-crypto-ct` are documented here.
     `cargo xtask leakage`) covering `ct_select`, `ct_eq`, `ct_lookup`.
   - `proptest` coverage: `ct_select(c,a,b) == if c {a} else {b}`.
   - `specs/ct_select.spec`: `ensures: execution_trace ⟂ cond`.
+
+### Fixed
+- `ct_eq_slices` reported equal slices as unequal (it accumulated equality where
+  it needed inequality) and truncated the length difference to 8 bits, so slices
+  of length 0 and 256 compared equal. Direct tests added.
+- The x86_64 carry-less multiply path returned zeros when PCLMULQDQ was not
+  detected. A portable constant-time fallback is now used.

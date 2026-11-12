@@ -15,6 +15,9 @@ version `0.1.0` (unreleased) this pass.
   aggregated, ranges to `2^64`, with `range_proof_to_bytes` /
   `range_proof_from_bytes`.
 - `plonk` — minimal PLONK verifier built on inner-product commitment opening.
+- `SeedExpander` — SHAKE256 byte source used as the randomness for `prove_range`.
+- KAT fixture `tests/kat/VECTORS.txt` (range proof, IPA, Pedersen, transcript
+  and PLONK), a `range_proof_parse` fuzz target, and zk benches.
 - `specs/bulletproofs_verify.spec` and `tests/range_proof.rs`.
 
 ### Fixed

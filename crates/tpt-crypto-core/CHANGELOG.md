@@ -14,12 +14,15 @@ workspace version `0.1.0` (unreleased) this pass.
   traits (`Debug`/`Display`/`PartialEq`/`Hash`/`AsRef`/`Borrow`); reading
   requires the explicit `expose_secret` method. The contract is pinned by
   `trybuild` compile-fail tests.
-- `ct` module: `Choice`, `CtEq`, `ConstantTimeSelect`, and the `ct_eq` / `ct_ne`
-  / `ct_select` facades (portable, constant-time; `tpt-crypto-ct` adds optimized
-  variants).
+- `Choice` (`choice` module); the `CtEq` and `ConstantTimeSelect` traits and the
+  `ct_eq` / `ct_ne` / `ct_select` facades (`traits` module, re-exported at the
+  crate root; portable, constant-time; `tpt-crypto-ct` adds optimized variants).
 - `CryptoRng` and `DrbgCore` traits.
 - `rand_core` feature: `RandCoreRng` / `CoreRng` adapters between `CryptoRng`
   and the `rand_core` ecosystem.
+- `os-rng` feature (off by default, requires `std`): `OsRng`, a stateless
+  `CryptoRng` over `getrandom` 0.4. Failures map to `Error::RngFailure`; there is
+  no fallback to a weaker source.
 - `constant_time` doc module: guarantees, threat model, review checklist.
 - `specs/secret_no_branch.spec`: type-level contract that secret handling
   encodes no secret-dependent branch.

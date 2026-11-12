@@ -18,11 +18,14 @@ version `0.1.0` (unreleased) this pass.
   compressed/uncompressed encode + `from_sec1`. RFC 5903 §8.1/§8.2 ECDH
   vectors and `n·G = O` pass.
 - `specs/scalarmul_ct.spec` (timing ⟂ scalar).
+- BLS12-381 (`bls12_381`, `alloc`): `G1` and `G2` (identity, generator, add, neg,
+  constant-time 4-bit fixed-window `mul`, on-curve and subgroup checks,
+  compressed encodings), `Gt`, `pairing` and `multi_pairing`. Tests cover subgroup
+  structure, bilinearity and non-degeneracy.
+- RFC 9380 hash-to-curve (`hash_to_curve`): `expand_message_xmd`, the P-256 and
+  P-384 SSWU suites, the edwards25519 ELL2 suite, and the BLS12-381 G1 and G2
+  suites (`alloc`). KAT vectors are in `tests/hash_to_curve.rs`.
 
 ### Fixed
 - X25519 conditional-swap parity bookkeeping (was using an inversion trick that
   desynced from accumulated parity); now plain RFC 7748 §5 form.
-
-### Pending
-- BLS12-381 (G1/G2, Miller loop, final exponentiation, pairing).
-- RFC 9380 hash-to-curve.

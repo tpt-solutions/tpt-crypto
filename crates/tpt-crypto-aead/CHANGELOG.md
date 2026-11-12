@@ -5,6 +5,26 @@ version `0.1.0` (unreleased) this pass.
 
 ## 0.1.0 — unreleased
 
+### Added
+- Const-generic `Aead<NONCE_LEN, TAG_LEN>` trait: in-place and detached-tag
+  encrypt/decrypt, AAD, constant-time `Tag::ct_eq`, `Nonce` / `Tag` newtypes
+  (no `PartialEq` on `Tag`).
+- AES-GCM (`Aes128Gcm`, `Aes256Gcm`) — table-free constant-time AES S-box
+  (algebraic GF(2⁸) inversion) with an `x86_64` AES-NI dispatch through
+  `tpt-crypto-ct::arch`; branch-free GHASH with a `pclmulqdq` path.
+- ChaCha20-Poly1305 (RFC 8439) and XChaCha20-Poly1305; standard
+  poly1305-donna 5×26-bit arithmetic with cross-call buffering.
+- AES-GCM-SIV (RFC 8452) with POLYVAL; authenticates the plaintext, restores
+  the buffer on tag mismatch.
+- `CtrDrbg` (AES-256 CTR-DRBG, SP 800-90A).
+- `NonceSequence`: counter nonces (fixed prefix followed by a big-endian
+  64-bit counter). It returns `None` instead of wrapping.
+- STREAM chunked AEAD (`stream_seal` / `stream_open`, `alloc` feature):
+  age-style framing over ChaCha20-Poly1305. Reordering, truncation and
+  extension are rejected.
+- Wycheproof AES-GCM and ChaCha20-Poly1305 vector runs (`tests/wycheproof.rs`).
+- Optional `aead-trait` feature: `aead` 0.6 crate trait impls.
+
 ### Fixed
 - **Portable AES core (non-AES-NI targets) produced wrong ciphertext:**
   `shift_rows` rotated rows in the inverse direction (it implemented
@@ -20,7 +40,6 @@ version `0.1.0` (unreleased) this pass.
   encrypted first. The generator was therefore non-conformant with the
   spec (deterministic, but not interoperable with a reference no-DF
   CTR_DRBG).
-### Fixed
 - **RFC 8452 conformance:** the POLYVAL hash key was `E(K_mac, 0^16)` (the
   GCM GHASH convention); RFC 8452 §4 uses the raw derived
   message-authentication key directly, with no AES call. Every non-empty
@@ -30,23 +49,8 @@ version `0.1.0` (unreleased) this pass.
   RFC 8452 Appendix C corpus (`tests/kat/rfc8452.txt`, 50 vectors incl. the
   C.3 counter-wrap tests, driven by `tests/rfc8452.rs`) now passes in both
   directions.
-
-### Added
-### Added
-- Const-generic `Aead<NONCE_LEN, TAG_LEN>` trait: in-place and detached-tag
-  encrypt/decrypt, AAD, constant-time `Tag::ct_eq`, `Nonce` / `Tag` newtypes
-  (no `PartialEq` on `Tag`).
-- AES-GCM (`Aes128Gcm`, `Aes256Gcm`) — table-free constant-time AES S-box
-  (algebraic GF(2⁸) inversion) with an `x86_64` AES-NI dispatch through
-  `tpt-crypto-ct::arch`; branch-free GHASH with a `pclmulqdq` path.
-- ChaCha20-Poly1305 (RFC 8439) and XChaCha20-Poly1305; standard
-  poly1305-donna 5×26-bit arithmetic with cross-call buffering.
-- AES-GCM-SIV (RFC 8452) with POLYVAL; authenticates the plaintext, restores
-  the buffer on tag mismatch.
-- `CtrDrbg` (AES-256 CTR-DRBG, SP 800-90A).
-- Optional `aead-trait` feature: `aead` 0.6 crate trait impls.
-
-### Fixed
+- AES-NI path is gated on `std` as well as `x86_64`. Without this,
+  `cargo check --no-default-features` failed on x86_64.
 - Poly1305 limb layout (previously dropped high bits of several message bytes,
   hiding tampering) and multi-slice `update` handling; AEAD length block now
   uses byte counts per RFC 8439.
