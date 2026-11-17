@@ -11,7 +11,7 @@ publish = false
 [dependencies]
 
 [dev-dependencies]
-criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
 tpt-crypto-core = { path = "../crates/tpt-crypto-core", features = ["std"] }
 tpt-crypto-ct = { path = "../crates/tpt-crypto-ct", features = ["std"] }
 tpt-crypto-hash = { path = "../crates/tpt-crypto-hash", features = ["std"] }
